@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
 		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
-		<RootNamespace>Class Daily Land 2</RootNamespace>
+		<RootNamespace>ClassDailyLand</RootNamespace>
 		<AssemblyName>Class Daily Land 2</AssemblyName>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -39,13 +39,6 @@
 		<Content Include="Resources\config.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
-	</ItemGroup>
-
-	<ItemGroup>
-		<!-- 出厂默认配置：随构建复制到输出目录 settings\（仅当源文件比目标新时才覆盖） -->
-		<None Update="settings\**\*">
-			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</None>
 	</ItemGroup>
 
 	<ItemGroup>
