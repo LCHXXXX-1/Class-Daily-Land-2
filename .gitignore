@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/Class Daily Land 2/Class Daily Land 2.csproj
+/tests/ClassDailyLand.Core.Tests/ClassDailyLand.Core.Tests.csproj
