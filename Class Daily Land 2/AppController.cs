@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Threading;
 using ClassDailyLand.App.Plugins;
+using ClassDailyLand.App.Updates;
 using ClassDailyLand.App.Integrations.Audio;
 using ClassDailyLand.App.Integrations.Disaster;
 using ClassDailyLand.App.Theme;
@@ -24,7 +25,16 @@ namespace ClassDailyLand.App;
 /// </summary>
 public sealed class AppController
 {
-    public const string Version = "1.0.0-mvp";
+    /// <summary>
+    /// 当前版本号（例如 <c>1.0.0</c> / <c>1.1.0-beta.1</c>）。
+    ///
+    /// ★ 唯一真源是解决方案根 <c>Directory.Build.props</c> 的 <c>&lt;Version&gt;</c>；
+    ///   这里只是把 <see cref="Updates.AppVersion"/> 暴露成静态属性，
+    ///   关于页与插件宿主（<c>IPluginHost.HostVersion</c>）都从这里读。
+    ///   之前这里写死 <c>"1.0.0-mvp"</c>，与 <c>config.json</c> 的 <c>4.4</c>、程序集 <c>1.0.0.0</c>
+    ///   三方对不上，更新检查根本无从比较。
+    /// </summary>
+    public static string Version { get; } = ClassDailyLand.App.Updates.AppVersion.Current;
 
     public App App { get; }
     public DataPaths Paths { get; private set; } = null!;
@@ -50,6 +60,12 @@ public sealed class AppController
     public DisasterService Disaster { get; private set; } = null!;
 
     MediaCardWindow? _mediaCard;
+
+    /// <summary>检查更新编排（关于页与启动检查共用同一个实例）。</summary>
+    public UpdateService Updates { get; private set; } = null!;
+
+    // 资源包热刷新的命名事件（更新器装完资源会 Set 一下）—— P4 接入
+    // RegisteredWaitHandle? _resourcesRegistration;
 
     Views.SettingsWindow? _settingsWindow;
 
@@ -95,6 +111,12 @@ public sealed class AppController
         // 插件宿主：先建出来（注册表要能被窗口取数），窗口与托盘都接好后再真正加载，
         // 这样插件的 Initialize 里调 ShowMainWindow / OpenSettings 时窗口已经存在。
         Plugins = new PluginManager(this, Paths, Log);
+        Updates = new UpdateService(Settings, Paths, AppConfig.Load(), msg => Log.Info(msg));
+        Updates.StatusChanged += status =>
+            App.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (Tray is not null) Tray.PendingUpdateVersion = status.App?.Version.ToString();
+            }));
 
         // 内置集成：媒体（SMTC）与灾害预警。都只依赖 Paths/Settings/Dispatcher，
         // 所以放在窗口之前建好，窗口一出来就能拿到内容。
@@ -142,9 +164,17 @@ public sealed class AppController
 
         _tick.Tick += (_, _) => Tick();
         _tick.Start();
+
+        // 启动时静默检查（延迟 6s，先让窗口与托盘稳定）；成功结果写 last_update_check
+        if (Settings.Bool("check_update_on_startup")) _ = RunStartupCheckAsync();
+
+        // 上次更新的结果：有就弹一次气泡（consumed=true 后不再弹）
+        var lastMessage = LastUpdate.Consume(out var lastResult);
+        if (lastMessage is not null)
+            Tray?.Balloon("班级日常", lastMessage, 4);
         Tick();       // 立刻刷一次，不等 1 秒
 
-        if (Paths.UsedFallback) Tray.Balloon("数据目录已回退", Paths.FallbackNotice ?? "");
+        if (Paths.UsedFallback) Tray?.Balloon("数据目录已回退", Paths.FallbackNotice ?? "");
     }
 
     void SyncRemindersIntoSchedule()
@@ -197,6 +227,14 @@ public sealed class AppController
         Tray.IslandToggled += on => Settings.Set("show_island", on);
         Tray.SubToggled += on => Settings.Set("show_sub_island", on);
         Tray.SettingsRequested += ShowSettings;
+        Tray.CheckUpdateRequested += () =>
+        {
+            // 托盘点"检查更新"没有地方显示结果，所以直接把关于页打开，
+            // 让状态条（已是最新 / 发现新版本 / 失败）落在用户看得见的地方。
+            ShowSettings();
+            _settingsWindow?.NavigateTo(AppSettings.PageAbout);
+            CheckForUpdate();
+        };
         Tray.ExitRequested += Exit;
 
         // 插件菜单项：每次都现取，插件禁用后菜单立刻少一项
@@ -584,7 +622,68 @@ public sealed class AppController
     public void OpenHolidayEditor() => OpenDialog(vm => new HolidaysDialog(vm));
     public void OpenWeekendEditor() => OpenDialog(vm => new WeekendDialog(vm));
     public void OpenStatusTest() => OpenDialog(vm => new StatusTestDialog(vm));
-    public void CheckForUpdate() => NotReady("检查更新将在阶段 4 提供");
+    /// <summary>
+    /// 关于页「检查更新」按钮。状态变化由 <see cref="UpdateService.StatusChanged"/> 播给 UI。
+    /// </summary>
+    public void CheckForUpdate()
+    {
+        if (Updates is null) return;
+        _ = Updates.CheckAsync(silent: false);
+    }
+
+    /// <summary>用户在确认框里点「立即更新」：起更新器，然后退出本程序。</summary>
+    public async Task ApplyUpdateAsync(UpdateOffer offer)
+    {
+        if (Updates is null) return;
+
+        var result = await Updates.ApplyAsync(offer).ConfigureAwait(true);
+        if (!result.Ok)
+        {
+            Log?.Warn("启动更新失败：" + result.Message);
+            Tray?.Balloon("更新失败", result.Message, 5);
+            return;
+        }
+
+        // 稍等一下让更新器进程起来，再自己退出（它会等我们退出后才开始替换）
+        await Task.Delay(300).ConfigureAwait(true);
+        Exit();
+    }
+
+    /// <summary>启动时的静默检查：不弹窗、不改 UI，只在有新版本时给托盘气泡。</summary>
+    async Task RunStartupCheckAsync()
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(6)).ConfigureAwait(false);
+
+            // 源码运行保护：开发机上自动更新会把源码弄乱
+            if (Settings.Bool("block_update_on_source") &&
+                UpdateEnvironment.IsSourceRun(UpdateEnvironment.InstallDir))
+            {
+                Log.Info("启动检查跳过：源码运行");
+                return;
+            }
+
+            // 6 小时节流，避免每次启动都打一次网络
+            var last = Settings.Str("last_update_check");
+            if (DateTime.TryParse(last, out var when) && DateTime.Now - when < TimeSpan.FromHours(6))
+                return;
+
+            var updates = Updates;
+            if (updates is null) return;
+
+            var status = await updates.CheckAsync(silent: true).ConfigureAwait(false);
+            if (status.Stage == UpdateStage.Available && status.App is not null)
+            {
+                Tray?.Balloon("发现新版本 " + status.App.Version,
+                    "打开「设置 > 关于」查看更新内容", 5);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log?.Warn("启动检查更新异常：" + ex.Message);
+        }
+    }
 
     void NotReady(string message)
     {

@@ -50,6 +50,16 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<!--
+		  更新契约（job.json / version.json 的 DTO、SemVer、路径校验、哈希、替换计划）。
+		  ★ 用源码链接而不是 ProjectReference：这两个进程靠**文件**对话（job.json），
+		    不靠共享程序集；打成 dll 就得让它跟着更新包走，多一份要同步的东西。
+		  updater 工程用同样的 Include 引同一份源码，两边永远是同一个定义。
+		-->
+		<Compile Include="..\Shared\UpdateContract\*.cs" Link="Updates\Contract\%(Filename)%(Extension)" />
+	</ItemGroup>
+
+	<ItemGroup>
 	  <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
 	</ItemGroup>
 

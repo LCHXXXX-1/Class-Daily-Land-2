@@ -42,6 +42,25 @@ public sealed partial class SettingsViewModel : ObservableObject
 
     public AppController Ctx => _ctx;
     public string Version => AppController.Version;
+
+    // ————————————————————— 更新（关于页） —————————————————————
+
+    /// <summary>更新通道：stable / beta。绑定到关于页的分段选择器。</summary>
+    public string UpdateChannel
+    {
+        get
+        {
+            var value = S.Str("update_channel");
+            return string.Equals(value, "beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable";
+        }
+        set => Write("update_channel", string.Equals(value, "beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable");
+    }
+
+    /// <summary>上次检查更新的时间（空 = 还没检查过）。</summary>
+    public string LastUpdateCheck => S.Str("last_update_check");
+
+    /// <summary>已安装的资源包版本（空 = 只有内嵌资源）。</summary>
+    public string ResourcesVersion => S.Str("resources_version");
     public string ConfigPath => _ctx.DataRoot;
 
     /// <summary>实时预览通道：滑块每次变化都发（不落盘、不广播），由宿主直接刷主窗。</summary>

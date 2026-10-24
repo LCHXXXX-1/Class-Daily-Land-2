@@ -1,0 +1,29 @@
+<Project>
+
+  <!--
+    解决方案级构建属性。四个工程（主程序 / 插件契约 / 示例插件 / 测试 / 更新器）都会继承。
+
+    ★ 版本号唯一真源就是这里的 <Version>：发版只改这一行。
+      改完 `dotnet build` 之后，关于页、exe 文件属性、更新检查用的"当前版本"一起变。
+  -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+
+    <!--
+      AssemblyVersion 永久钉死：插件是按 1.0.0.0 编译的，跟着 Version 一起涨会让
+      已装插件在加载时对不上程序集标识（.NET 的强名称/绑定规则）。
+      FileVersion 跟随 Version，方便在资源管理器"属性 → 详细信息"里看。
+    -->
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+
+    <!--
+      默认是 true，会把 "-mvp+3f2a1b" 拼进 InformationalVersion。
+      我们的版本解析器只认语义化版本，多出来的 +sha 会让它判成"格式不合法"。
+    -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+
+    <Deterministic>true</Deterministic>
+  </PropertyGroup>
+
+</Project>

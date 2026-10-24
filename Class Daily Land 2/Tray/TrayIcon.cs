@@ -24,6 +24,9 @@ public sealed class TrayIcon : IDisposable
     public event Action<bool>? IslandToggled;
     public event Action<bool>? SubToggled;
     public event Action? SettingsRequested;
+
+    /// <summary>托盘「检查更新」。</summary>
+    public event Action? CheckUpdateRequested;
     public event Action? ExitRequested;
 
     /// <summary>插件注册的托盘菜单项（排在「设置」与「退出」之间）。每次弹菜单时现取。</summary>
@@ -120,6 +123,18 @@ public sealed class TrayIcon : IDisposable
             SubToggled?.Invoke(false);
         };
 
+        // 检查更新：有新版本时把版本号写进文案，用户不点也知道
+        var updateLabel = "检查更新";
+        try
+        {
+            var pending = PendingUpdateVersion;
+            if (!string.IsNullOrEmpty(pending)) updateLabel = $"检查更新（{pending} 可用）";
+        }
+        catch { /* 取不到就用默认文案 */ }
+
+        var miUpdate = new MenuItem { Header = updateLabel };
+        miUpdate.Click += (_, _) => CheckUpdateRequested?.Invoke();
+
         var miSettings = new MenuItem { Header = "设置…" };
         miSettings.Click += (_, _) => SettingsRequested?.Invoke();
 
@@ -157,6 +172,7 @@ public sealed class TrayIcon : IDisposable
             foreach (var mi in pluginItems) menu.Items.Add(mi);
         }
         menu.Items.Add(new Separator());
+        menu.Items.Add(miUpdate);
         menu.Items.Add(miSettings);
         menu.Items.Add(miExit);
         return menu;
@@ -191,6 +207,9 @@ public sealed class TrayIcon : IDisposable
             _log?.Warn("托盘气泡失败: " + ex.Message);
         }
     }
+
+    /// <summary>外部注入：有新版本时的版本号（菜单文案用）；null 表示没有待更新。</summary>
+    public string? PendingUpdateVersion { get; set; }
 
     public void Dispose()
     {

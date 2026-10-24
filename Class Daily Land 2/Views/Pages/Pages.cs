@@ -6,6 +6,7 @@ using ClassDailyLand.App.Integrations.Audio;
 using ClassDailyLand.App.Integrations.Disaster;
 using ClassDailyLand.App.Controls;
 using ClassDailyLand.App.Plugins;
+using ClassDailyLand.App.Updates;
 using ClassDailyLand.App.ViewModels;
 using ClassDailyLand.App.Views.Dialogs;
 
@@ -465,15 +466,131 @@ public partial class AdvancedPage : UserControl
 
 public partial class AboutPage : UserControl
 {
+    SettingsViewModel? _vm;
+    bool _hooked;
+    bool _spinning;
+
     public AboutPage()
     {
         InitializeComponent();
-        Loaded += (_, _) =>
+
+        // ★ 状态订阅只挂一次：页面会被 SettingsWindow 缓存，之前写在 Loaded 里
+        //   每次切回关于页都挂一次 Click，连点 5 次会发 5 个请求（见 AGENTS 坑清单）。
+        DataContextChanged += (_, _) => Hook();
+        Loaded += (_, _) => { Hook(); Render(); };
+    }
+
+    void Hook()
+    {
+        if (_hooked) return;
+        if (DataContext is not SettingsViewModel vm) return;
+        _vm = vm;
+        _hooked = true;
+
+        SourceNotice.Visibility = vm.BlockUpdateOnSource ? Visibility.Visible : Visibility.Collapsed;
+        ChannelHint.Text = vm.UpdateChannel == "beta" ? "测试版可能不稳定" : "";
+
+        vm.Ctx.Updates.StatusChanged += OnStatusChanged;
+
+        // 通道切换后要重新检查（同一个源的 stable/beta 是不同的块）
+        ChannelBar.SelectedChanged += _ =>
         {
-            if (DataContext is not SettingsViewModel vm) return;
-            SourceNotice.Visibility = vm.BlockUpdateOnSource ? Visibility.Visible : Visibility.Collapsed;
-            CheckUpdateButton.Click += (_, _) => vm.Ctx.CheckForUpdate();
+            ChannelHint.Text = vm.UpdateChannel == "beta" ? "测试版可能不稳定" : "";
+            vm.Ctx.CheckForUpdate();
         };
+    }
+
+    void OnStatusChanged(UpdateStatus status)
+    {
+        // CheckAsync 里 ConfigureAwait(false)，回调可能在后台线程
+        Dispatcher.BeginInvoke(() => Render(status));
+    }
+
+    void OnCheckUpdateClick(object sender, RoutedEventArgs e) => _vm?.Ctx.CheckForUpdate();
+
+    void OnUpdateDetailClick(object sender, RoutedEventArgs e)
+    {
+        var vm = _vm;
+        if (vm is null) return;
+
+        var offer = vm.Ctx.Updates.Status.App;
+        if (offer is null) return;
+
+        UpdateDialogs.ShowNewVersion(this, offer,
+            onInstall: () => _ = vm.Ctx.ApplyUpdateAsync(offer),
+            onLater: () => vm.Ctx.Updates.SkipVersion(offer));
+    }
+
+    void Render() => Render(_vm?.Ctx.Updates.Status ?? UpdateStatus.Idle);
+
+    void Render(UpdateStatus status)
+    {
+        if (status.Stage == UpdateStage.Checking)
+        {
+            CheckUpdateButton.IsEnabled = false;
+            CheckUpdateText.Text = "正在检查…";
+            StartSpin();
+        }
+        else
+        {
+            CheckUpdateButton.IsEnabled = true;
+            CheckUpdateText.Text = status.Stage == UpdateStage.Available ? "重新检查" : "检查更新";
+            StopSpin();
+        }
+
+        UpdateDetailButton.Visibility = status.App is not null ? Visibility.Visible : Visibility.Collapsed;
+
+        if (status.Stage is UpdateStage.Idle or UpdateStage.Checking)
+        {
+            UpdateBar.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        UpdateBar.Visibility = Visibility.Visible;
+        switch (status.Stage)
+        {
+            case UpdateStage.UpToDate:
+                UpdateBar.Severity = InfoBarSeverity.Information;
+                UpdateBar.Title = "已是最新";
+                UpdateBar.Message = status.Message;
+                break;
+
+            case UpdateStage.Available:
+                UpdateBar.Severity = status.App?.IsMandatory == true
+                    ? InfoBarSeverity.Warning
+                    : InfoBarSeverity.Success;
+                UpdateBar.Title = status.App?.IsMandatory == true ? "发现新版本（强制）" : "发现新版本";
+                UpdateBar.Message = status.Message;
+                break;
+
+            case UpdateStage.Failed:
+                UpdateBar.Severity = InfoBarSeverity.Warning;
+                UpdateBar.Title = "检查更新失败";
+                UpdateBar.Message = string.IsNullOrWhiteSpace(status.Error) ? status.Message : status.Error;
+                break;
+        }
+    }
+
+    void StartSpin()
+    {
+        if (_spinning) return;
+        _spinning = true;
+
+        var transform = new RotateTransform();
+        CheckIcon.RenderTransform = transform;
+        CheckIcon.RenderTransformOrigin = new System.Windows.Point(0.5, 0.5);
+        transform.BeginAnimation(RotateTransform.AngleProperty,
+            new System.Windows.Media.Animation.DoubleAnimation(0, 360, TimeSpan.FromSeconds(1))
+            {
+                RepeatBehavior = System.Windows.Media.Animation.RepeatBehavior.Forever,
+            });
+    }
+
+    void StopSpin()
+    {
+        if (!_spinning) return;
+        _spinning = false;
+        CheckIcon.RenderTransform = null;
     }
 }
 

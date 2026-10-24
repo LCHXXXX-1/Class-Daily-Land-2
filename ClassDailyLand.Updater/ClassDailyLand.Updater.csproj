@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    ClassDailyLand.Updater —— 独立更新器。
+
+    ★ 为什么是独立 exe：主程序退出后才能替换它自己的文件，所以"下载/备份/替换"
+      必须在**另一个进程**里完成。它很小（框架依赖下 ~2MB），跟着主程序一起装。
+
+    ★ 为什么程序集名不带空格：pack URI 要带程序集名，带空格得多层转义。
+      主程序那个 "Class Daily Land"（带空格）的教训不重复。
+
+    ★ 主题令牌不复制：直接 Link 主程序的 Tokens 四本字典（它们只依赖 WPF 自身，
+      没有 fl: 引用）。控件样式自己写一小份（Updater.Controls.xaml），
+      因为主程序的 Controls.xaml 引用了 fl: 自定义控件，链接过来编译不过。
+
+    ★ 契约也不复制：Shared\UpdateContract\*.cs 源码链接，与主程序是同一个定义。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>ClassDailyLand.Updater</RootNamespace>
+    <AssemblyName>ClassDailyLand.Updater</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <RollForward>LatestMajor</RollForward>
+    <SelfContained>false</SelfContained>
+    <ApplicationIcon>..\Class Daily Land 2\Resources\icon.ico</ApplicationIcon>
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 主题令牌（与主程序同一份源码，改一处两边同步） -->
+    <Page Include="..\Class Daily Land 2\Themes\Tokens.Base.xaml" Link="Themes\Tokens.Base.xaml" />
+    <Page Include="..\Class Daily Land 2\Themes\Tokens.Light.xaml" Link="Themes\Tokens.Light.xaml" />
+    <Page Include="..\Class Daily Land 2\Themes\Tokens.Dark.xaml" Link="Themes\Tokens.Dark.xaml" />
+    <Page Include="..\Class Daily Land 2\Themes\Icons.xaml" Link="Themes\Icons.xaml" />
+
+    <!-- 更新契约（job.json / SemVer / 路径校验 / 哈希 / 替换计划） -->
+    <Compile Include="..\Shared\UpdateContract\*.cs" Link="Contract\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

@@ -77,14 +77,48 @@
                             Message="检测到本地主入口源码，更新前会先提醒备份。"
                             IsClosable="False" Visibility="Collapsed" />
 
-                <Button x:Name="CheckUpdateButton" Style="{StaticResource AccentButton}"
-                        Margin="0,18,0,0" HorizontalAlignment="Left">
-                    <StackPanel Orientation="Horizontal">
-                        <fl:Icon Size="16" Data="{StaticResource Icon.Sync}" VerticalAlignment="Center"
-                                 Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                        <TextBlock Text="检查更新" Margin="8,0,0,0" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Button>
+                <!-- 检查更新：状态条 + 通道选择 + 操作按钮 -->
+                <fl:InfoBar x:Name="UpdateBar" Margin="0,16,0,0" IsClosable="False"
+                            Visibility="Collapsed" Title="" Message="" />
+
+                <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                    <TextBlock Text="更新通道"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center" />
+                    <fl:SelectorBar x:Name="ChannelBar" Margin="12,0,0,0"
+                                    SelectedValue="{Binding UpdateChannel, Mode=TwoWay}">
+                        <fl:SelectorItem Value="stable" Label="稳定版" />
+                        <fl:SelectorItem Value="beta" Label="测试版" />
+                    </fl:SelectorBar>
+                    <TextBlock x:Name="ChannelHint" Margin="12,0,0,0"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               VerticalAlignment="Center" Text="" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
+                    <Button x:Name="CheckUpdateButton" Style="{StaticResource AccentButton}"
+                            Click="OnCheckUpdateClick">
+                        <StackPanel Orientation="Horizontal">
+                            <fl:Icon x:Name="CheckIcon" Size="16" Data="{StaticResource Icon.Sync}"
+                                     VerticalAlignment="Center"
+                                     Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            <TextBlock x:Name="CheckUpdateText" Text="检查更新"
+                                       Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <!-- 只在"有新版本"时出现，点了弹窗口内的更新说明浮层 -->
+                    <Button x:Name="UpdateDetailButton" Style="{StaticResource SubtleButton}"
+                            Margin="8,0,0,0" Visibility="Collapsed"
+                            Click="OnUpdateDetailClick">
+                        <StackPanel Orientation="Horizontal">
+                            <fl:Icon Size="16" Data="{StaticResource Icon.Download}" VerticalAlignment="Center" />
+                            <TextBlock Text="查看更新" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
             </StackPanel>
         </fl:Card>
     </StackPanel>

@@ -44,6 +44,7 @@ public partial class SettingsWindow : Window
     RadioButton? _selectedNav;
     string _currentId = "";
     Action? _confirmOnOk;
+    Action? _confirmOnCancel;
     bool _subOpen;
 
     public SettingsViewModel Vm { get; }
@@ -106,7 +107,14 @@ public partial class SettingsWindow : Window
         PreviewKeyDown += (_, e) =>
         {
             if (e.Key != Key.Escape) return;
-            if (ConfirmHost.Visibility == Visibility.Visible) { CloseConfirm(); return; }
+            if (ConfirmHost.Visibility == Visibility.Visible)
+            {
+                // ESC 与点「取消」同义：确认框里可能有"稍后再说"这类需要留痕的动作
+                var callback = _confirmOnCancel;
+                CloseConfirm();
+                callback?.Invoke();
+                return;
+            }
             if (DialogHost.Visibility == Visibility.Visible) CloseOverlay();
         };
     }
@@ -500,8 +508,12 @@ public partial class SettingsWindow : Window
     /// 确认提示，画在设置窗口里（替代系统 MessageBox）。
     /// 危险操作前一律走这里 —— 用户的要求是"所有提示都在这个窗口里弹"。
     /// </summary>
+    /// <param name="onCancel">
+    /// 用户点「取消」/ ESC 时回调（可选）。用于「稍后再说」这类**需要留痕**的操作
+    /// —— 只是关闭不给回调的话，没法把"用户跳过这个版本"写进设置。
+    /// </param>
     public void Confirm(string title, string message, Action onOk,
-                        string okText = "确定", string cancelText = "取消")
+                        string okText = "确定", string cancelText = "取消", Action? onCancel = null)
     {
         CloseConfirm();
 
@@ -532,7 +544,12 @@ public partial class SettingsWindow : Window
             Style = (Style)FindResource("FluentButton"),
             MinWidth = 88,
         };
-        cancel.Click += (_, _) => CloseConfirm();
+        cancel.Click += (_, _) =>
+        {
+            var callback = _confirmOnCancel;
+            CloseConfirm();
+            callback?.Invoke();
+        };
 
         var ok = new Button
         {
@@ -566,6 +583,7 @@ public partial class SettingsWindow : Window
         ConfirmHost.Children.Add(card);
         ConfirmHost.Visibility = Visibility.Visible;
         _confirmOnOk = onOk;
+        _confirmOnCancel = onCancel;
 
         Slide(card, 0, 12, 0, 0, 180);
         ok.Focus();
@@ -574,6 +592,7 @@ public partial class SettingsWindow : Window
     public void CloseConfirm()
     {
         _confirmOnOk = null;
+        _confirmOnCancel = null;
         if (ConfirmHost.Visibility != Visibility.Visible) return;
         ConfirmHost.Children.Clear();
         ConfirmHost.Visibility = Visibility.Collapsed;

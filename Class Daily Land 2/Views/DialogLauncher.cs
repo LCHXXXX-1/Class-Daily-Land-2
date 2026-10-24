@@ -23,8 +23,8 @@ public static class DialogLauncher
 
     /// <summary>窗口内确认框（替代系统 MessageBox）。</summary>
     public static void Confirm(DependencyObject child, string title, string message, Action onOk,
-                               string okText = "确定", string cancelText = "取消")
-        => OwnerOf(child)?.Confirm(title, message, onOk, okText, cancelText);
+                               string okText = "确定", string cancelText = "取消", Action? onCancel = null)
+        => OwnerOf(child)?.Confirm(title, message, onOk, okText, cancelText, onCancel);
 
     public static bool IsConfirmOpen(DependencyObject child) => OwnerOf(child)?.IsConfirmOpen == true;
 

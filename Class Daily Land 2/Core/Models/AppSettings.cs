@@ -38,6 +38,11 @@ public sealed class AppSettings
         new("check_update_on_startup", ValueKind.Bool, false),
         new("block_update_on_source", ValueKind.Bool, true),          // 源码运行时保护更新
 
+        // —— 更新（关于页）——
+        new("update_channel", ValueKind.Str, "stable"),               // stable / beta
+        new("update_skipped_version", ValueKind.Str, ""),             // 「稍后再说」跳过的版本
+        new("resources_version", ValueKind.Str, ""),                  // 已装资源包版本（空 = 只有内嵌资源）
+
         // —— 外观 ——
         new("theme", ValueKind.Str, "system"),                        // system / light / dark
         new("fade_animation", ValueKind.Bool, true),
@@ -119,7 +124,8 @@ public sealed class AppSettings
         },
         [PageSchedule] = new[] { "schedule_advance_minutes", "schedule_time_offset_seconds" },
         [PageHomework] = new[] { "homework_show_date" },
-        [PageAbout] = Array.Empty<string>(),
+        // 关于页：更新通道、被跳过的版本、上次检查时间、已装资源包版本
+        [PageAbout] = new[] { "update_channel", "update_skipped_version", "last_update_check", "resources_version" },
         [PagePlugins] = Array.Empty<string>(),
         [PageMedia] = new[]
         {
