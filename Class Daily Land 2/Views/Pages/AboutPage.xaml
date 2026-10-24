@@ -109,13 +109,15 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- 只在"有新版本"时出现，点了弹窗口内的更新说明浮层 -->
-                    <Button x:Name="UpdateDetailButton" Style="{StaticResource SubtleButton}"
+                    <!-- 检查发现有新版本时才出现：点了直接拉起更新器
+                         （写 job.json → 暂存 updater.exe → 启动 → 主程序自己退出） -->
+                    <Button x:Name="UpdateInstallButton" Style="{StaticResource AccentButton}"
                             Margin="8,0,0,0" Visibility="Collapsed"
-                            Click="OnUpdateDetailClick">
+                            Click="OnUpdateInstallClick">
                         <StackPanel Orientation="Horizontal">
-                            <fl:Icon Size="16" Data="{StaticResource Icon.Download}" VerticalAlignment="Center" />
-                            <TextBlock Text="查看更新" Margin="8,0,0,0" VerticalAlignment="Center" />
+                            <fl:Icon Size="16" Data="{StaticResource Icon.Download}" VerticalAlignment="Center"
+                                     Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                            <TextBlock Text="立即更新" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
                 </StackPanel>

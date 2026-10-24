@@ -508,7 +508,12 @@ public partial class AboutPage : UserControl
 
     void OnCheckUpdateClick(object sender, RoutedEventArgs e) => _vm?.Ctx.CheckForUpdate();
 
-    void OnUpdateDetailClick(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// 「立即更新」：直接拉起更新器，不过确认框（用户明确要求的交互：
+    /// 检查更新过后 = 再次检查 + 立即更新，点了立即更新就把更新器拉起来）。
+    /// 更新期间程序会短暂关闭，设置与插件不受影响。
+    /// </summary>
+    void OnUpdateInstallClick(object sender, RoutedEventArgs e)
     {
         var vm = _vm;
         if (vm is null) return;
@@ -516,9 +521,8 @@ public partial class AboutPage : UserControl
         var offer = vm.Ctx.Updates.Status.App;
         if (offer is null) return;
 
-        UpdateDialogs.ShowNewVersion(this, offer,
-            onInstall: () => _ = vm.Ctx.ApplyUpdateAsync(offer),
-            onLater: () => vm.Ctx.Updates.SkipVersion(offer));
+        // ApplyUpdateAsync：写 job.json → 暂存 updater.exe → 启动更新器 → 主程序自己退出
+        _ = vm.Ctx.ApplyUpdateAsync(offer);
     }
 
     void Render() => Render(_vm?.Ctx.Updates.Status ?? UpdateStatus.Idle);
@@ -534,11 +538,16 @@ public partial class AboutPage : UserControl
         else
         {
             CheckUpdateButton.IsEnabled = true;
-            CheckUpdateText.Text = status.Stage == UpdateStage.Available ? "重新检查" : "检查更新";
+            // 检查跑完过一轮（无论有没有新版本）就变成"再次检查"
+            var checkedBefore = status.Stage is UpdateStage.UpToDate or UpdateStage.Available;
+            CheckUpdateText.Text = checkedBefore ? "再次检查" : "检查更新";
             StopSpin();
         }
 
-        UpdateDetailButton.Visibility = status.App is not null ? Visibility.Visible : Visibility.Collapsed;
+        // 有新版本才亮出「立即更新」；同时把检查按钮降级成次要样式，突出主操作
+        var hasUpdate = status.App is not null;
+        UpdateInstallButton.Visibility = hasUpdate ? Visibility.Visible : Visibility.Collapsed;
+        CheckUpdateButton.Style = (Style)FindResource(hasUpdate ? "SubtleButton" : "AccentButton");
 
         if (status.Stage is UpdateStage.Idle or UpdateStage.Checking)
         {
@@ -560,7 +569,11 @@ public partial class AboutPage : UserControl
                     ? InfoBarSeverity.Warning
                     : InfoBarSeverity.Success;
                 UpdateBar.Title = status.App?.IsMandatory == true ? "发现新版本（强制）" : "发现新版本";
-                UpdateBar.Message = status.Message;
+                // 更新内容直接贴在状态条上（没有确认框了，用户一眼能看到改了什么）
+                var preview = status.App is { Changelog.Count: > 0 } app
+                    ? "  · " + string.Join("  · ", app.Changelog.Take(3))
+                    : "";
+                UpdateBar.Message = (status.Message ?? "") + preview;
                 break;
 
             case UpdateStage.Failed:

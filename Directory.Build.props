@@ -1,13 +1,14 @@
 <Project>
 
   <!--
-    解决方案级构建属性。四个工程（主程序 / 插件契约 / 示例插件 / 测试 / 更新器）都会继承。
+    解决方案级构建属性。仓库内四个工程（主程序 / 插件契约 / 示例插件 / 测试）都会继承；
+    更新器不在仓库里（只发布二进制到 Class Daily Land 2\updater\），单独构建。
 
     ★ 版本号唯一真源就是这里的 <Version>：发版只改这一行。
       改完 `dotnet build` 之后，关于页、exe 文件属性、更新检查用的"当前版本"一起变。
   -->
   <PropertyGroup>
-    <Version>1.0.0</Version>
+    <Version>1.1.0</Version>
 
     <!--
       AssemblyVersion 永久钉死：插件是按 1.0.0.0 编译的，跟着 Version 一起涨会让

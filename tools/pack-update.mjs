@@ -14,6 +14,7 @@
 //
 //   --updater 可省略：默认取 <app>/updater（主工程把更新器二进制放在那儿，随构建进输出目录）。
 //   更新器只以二进制形式发布（exe / dll / deps.json / runtimeconfig.json），源码不在仓库里。
+//   --mandatory：标记为强制更新（version.json 里 is_mandatory=true），所有人都会收到。
 //
 // 做了四件事：
 //   1. 把 app 与 updater 整理到 staging（硬排除用户数据与构建产物）
@@ -68,6 +69,7 @@ const OUT_DIR = opt('--out', 'dist');
 const BASE_URL = opt('--base-url', '');
 const BASE_URL_FALLBACK = opt('--base-url-fallback', '');
 const MERGE = has('--merge');
+const MANDATORY = has('--mandatory');
 
 if (!VERSION || !APP_DIR) {
   console.error('用法：--version X.Y.Z --app <目录> [--updater <目录>] [--channel stable|beta|resources] [--out dist] [--notes file] [--base-url URL] [--base-url-fallback URL] [--merge]');
@@ -166,15 +168,19 @@ if (NOTES && fs.existsSync(NOTES)) {
 if (changelog.length === 0) changelog = ['更新到 ' + VERSION];
 
 // ─────────────────────────── version.json ───────────────────────────
+// 发布日期用**本地**日期：toISOString 是 UTC，东八区晚上发版会少算一天（看着像"昨天"）
+const today = new Date();
+const releaseDate = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+
 const downloadUrl = BASE_URL ? `${BASE_URL.replace(/\/$/, '')}/${zipName}` : '';
 const block = {
   version: VERSION,
-  release_date: new Date().toISOString().slice(0, 10),
+  release_date: releaseDate,
   download_url: downloadUrl,
   sha256,
   changelog,
 };
-if (!isResources) block.is_mandatory = false;
+if (!isResources) block.is_mandatory = MANDATORY;
 
 const versionPath = path.join(OUT_DIR, 'version.json');
 let root = {};
