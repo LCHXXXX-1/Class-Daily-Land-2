@@ -1,0 +1,37 @@
+{
+  "stable": {
+    "version": "1.0.0",
+    "release_date": "2026-10-24",
+    "download_url": "https://example.com/downloads/ClassDailyLand2_1.0.0.zip",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "changelog": [
+      "正式版发布",
+      "修复主窗口字体实时缩放问题",
+      "新增 Win11 风格右键菜单与托盘交互"
+    ],
+    "is_mandatory": false
+  },
+  "beta": {
+    "version": "1.1.0-beta.1",
+    "release_date": "2026-10-25",
+    "download_url": "https://example.com/downloads/ClassDailyLand2_1.1.0-beta.1.zip",
+    "sha256": "a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890a1b2c3d4e5f67890",
+    "changelog": [
+      "测试：全新插件系统架构",
+      "测试：支持 Mica 背景材质",
+      "优化：灵动岛倒计时动画性能"
+    ],
+    "is_mandatory": false
+  },
+  "resources": {
+    "version": "1.2.0",
+    "release_date": "2026-10-20",
+    "download_url": "https://example.com/downloads/resources_v1.2.0.zip",
+    "sha256": "f9e8d7c6b5a43210f9e8d7c6b5a43210f9e8d7c6b5a43210f9e8d7c6b5a43210",
+    "changelog": [
+      "更新默认图标集与主题色",
+      "更新 2027 年法定节假日数据",
+      "新增默认课表模板"
+    ]
+  }
+}
