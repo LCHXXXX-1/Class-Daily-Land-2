@@ -363,3 +363,9 @@ MigrationBackup/
 FodyWeavers.xsd
 /Class Daily Land 2/Class Daily Land 2.csproj
 /tests/ClassDailyLand.Core.Tests/ClassDailyLand.Core.Tests.csproj
+
+# 本地一键上传脚本（含仓库地址，不入库）
+/upload-gitee.bat
+
+# 运行期个人数据（设置/课表/作业/值日生），首次运行会自动生成
+/Class Daily Land 2/settings/*.json
