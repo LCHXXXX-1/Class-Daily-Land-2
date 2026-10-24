@@ -6,11 +6,14 @@
 //
 // 用法：
 //   node tools/pack-update.mjs --channel stable --version 1.1.0 \
-//     --app artifacts/app --updater artifacts/updater \
+//     --app artifacts/app \
 //     --notes notes/1.1.0.md --out dist \
 //     --base-url https://gitee.com/lchxxxx/class-daily-land-2/raw/update \
 //     --base-url-fallback https://raw.githubusercontent.com/LCHXXXX-1/Class-Daily-Land-2/update \
 //     --merge
+//
+//   --updater 可省略：默认取 <app>/updater（主工程把更新器二进制放在那儿，随构建进输出目录）。
+//   更新器只以二进制形式发布（exe / dll / deps.json / runtimeconfig.json），源码不在仓库里。
 //
 // 做了四件事：
 //   1. 把 app 与 updater 整理到 staging（硬排除用户数据与构建产物）
@@ -58,19 +61,20 @@ const has = (name) => args.includes(name);
 const CHANNEL = opt('--channel', 'stable');
 const VERSION = opt('--version', '');
 const APP_DIR = opt('--app', '');
-const UPDATER_DIR = opt('--updater', '');
+// 可省略：默认取 <app>/updater —— 主工程把更新器二进制放在那里，随构建复制进输出目录
+const UPDATER_DIR = opt('--updater', '') || path.join(APP_DIR, 'updater');
 const NOTES = opt('--notes', '');
 const OUT_DIR = opt('--out', 'dist');
 const BASE_URL = opt('--base-url', '');
 const BASE_URL_FALLBACK = opt('--base-url-fallback', '');
 const MERGE = has('--merge');
 
-if (!VERSION || !APP_DIR || !UPDATER_DIR) {
-  console.error('用法：--version X.Y.Z --app <目录> --updater <目录> [--channel stable|beta|resources] [--out dist] [--notes file] [--base-url URL] [--base-url-fallback URL] [--merge]');
+if (!VERSION || !APP_DIR) {
+  console.error('用法：--version X.Y.Z --app <目录> [--updater <目录>] [--channel stable|beta|resources] [--out dist] [--notes file] [--base-url URL] [--base-url-fallback URL] [--merge]');
   process.exit(1);
 }
 if (!fs.existsSync(APP_DIR)) { console.error('app 目录不存在：' + APP_DIR); process.exit(1); }
-if (!fs.existsSync(UPDATER_DIR)) { console.error('updater 目录不存在：' + UPDATER_DIR); process.exit(1); }
+if (!fs.existsSync(UPDATER_DIR)) { console.error('updater 目录不存在：' + UPDATER_DIR + '（可用 --updater 指定）'); process.exit(1); }
 
 // ─────────────────────────── 排除规则 ───────────────────────────
 // ★ settings/ 与 plugins/ 是用户的课表/作业/名单/设置与插件，绝对不能进包 ——

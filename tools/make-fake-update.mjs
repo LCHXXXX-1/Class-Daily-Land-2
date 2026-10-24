@@ -232,5 +232,5 @@ console.log('任务文件：' + jobPath);
 console.log('');
 console.log('下一步：');
 console.log(`  node tools/serve.mjs --dir ${fakeDir} --port ${PORT}`);
-console.log('  dotnet run --project ClassDailyLand.Updater -- --job ' + jobPath);
+console.log('  dotnet run --project ../ClassDailyLand.Updater-src -- --job ' + jobPath);
 console.log('  node tools/make-fake-update.mjs --verify --out ' + OUT);

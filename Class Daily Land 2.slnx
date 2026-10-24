@@ -1,7 +1,6 @@
 <Solution>
   <Project Path="ClassDailyLand.Plugin.Abstractions/ClassDailyLand.Plugin.Abstractions.csproj" />
   <Project Path="Class Daily Land 2/Class Daily Land 2.csproj" />
-  <Project Path="ClassDailyLand.Updater/ClassDailyLand.Updater.csproj" />
   <Project Path="samples/HelloPlugin/HelloPlugin.csproj" />
   <Project Path="tests/ClassDailyLand.Core.Tests/ClassDailyLand.Core.Tests.csproj" />
 </Solution>
