@@ -1,0 +1,57 @@
+<UserControl x:Class="ClassDailyLand.App.Views.Pages.PluginsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="插件" />
+        <TextBlock Style="{StaticResource PageLead}" Text="插件市场、第三方依赖与本地插件" />
+
+        <!-- 阶段 3 才接插件宿主，这里先把版式与状态摆出来（不留「点了没反应」的壳） -->
+        <fl:InfoBar x:Name="StageNotice" Severity="Warning" Title="插件系统尚未接入"
+                    Message="本版本还没有插件宿主：下面的列表会一直是空的。接入后这里会显示已安装插件、可更新项与运行日志。"
+                    IsClosable="False" Margin="0,0,0,20" />
+
+        <fl:SettingGroup Title="已安装插件" Icon="{StaticResource Icon.Puzzle}" TileColor="#FF0F6CBD">
+                    <ItemsControl x:Name="PluginList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Padding="18,12" BorderThickness="0,0,0,1"
+                                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" MinWidth="0" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Name}" FontSize="{DynamicResource FontSizeBody}" />
+                                                <fl:Badge Margin="8,0,0,0" Text="{Binding Version}" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Description}" Margin="0,2,0,0"
+                                                       FontSize="{DynamicResource FontSizeCaption}"
+                                                       TextWrapping="Wrap"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </StackPanel>
+                                        <fl:FluentToggle Grid.Column="1" VerticalAlignment="Center"
+                                                         IsChecked="{Binding Enabled}" Label="启用插件" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="EmptyHint" Style="{StaticResource EdEmpty}" Margin="18,16"
+                               Text="暂无插件" />
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="运行日志" Icon="{StaticResource Icon.Tune}" TileColor="#FF8661C5">
+                <TextBox x:Name="LogBox" IsReadOnly="True" MinHeight="120" MaxHeight="190"
+                         BorderThickness="0" Background="Transparent"
+                         FontFamily="{DynamicResource FontFamilyMono}"
+                         FontSize="{DynamicResource FontSizeCaption}"
+                         Padding="16,12" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto"
+                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                         Text="（还没有日志）" />
+        </fl:SettingGroup>
+    </StackPanel>
+</UserControl>

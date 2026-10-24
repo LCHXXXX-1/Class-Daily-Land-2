@@ -1,0 +1,37 @@
+<UserControl x:Class="ClassDailyLand.App.Views.Pages.AppearancePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="个性化" />
+        <TextBlock Style="{StaticResource PageLead}" Text="颜色主题与窗口材质" />
+
+        <!-- 颜色主题 -->
+        <fl:SettingGroup Title="颜色主题" Icon="{StaticResource Icon.Palette}" TileColor="#FFF7630C">
+                    <fl:SettingRow Title="颜色模式" Hint="跟随系统时会随 Windows 的浅色 / 深色实时切换">
+                        <fl:SelectorBar SelectedValue="{Binding ThemeMode, Mode=TwoWay}">
+                            <fl:SelectorItem Value="system" Label="跟随系统" />
+                            <fl:SelectorItem Value="light" Label="浅色" />
+                            <fl:SelectorItem Value="dark" Label="深色" />
+                        </fl:SelectorBar>
+                    </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <!-- 窗口材质 -->
+        <fl:SettingGroup Title="窗口材质" Icon="{StaticResource Icon.Shield}" TileColor="#FF038387"
+                         Note="{Binding MaterialNote}">
+                    <!-- 非 Win11：整行置灰 + 说明徽标（对位 web 版的 micaRow 两分支） -->
+                    <fl:SettingRow x:Name="MicaRow" Title="云母材质（Mica）"
+                                   Hint="Windows 11 的半透明云母背板，会跟着系统明暗变">
+                        <fl:FluentToggle x:Name="MicaToggle" IsChecked="{Binding SettingsMica, Mode=TwoWay}"
+                                         Label="云母材质" />
+                    </fl:SettingRow>
+                    <fl:SettingRow x:Name="MicaUnsupportedRow" Title="云母材质（Mica）"
+                                   Hint="云母材质需要 Windows 11，当前系统使用普通窗口。"
+                                   IsDisabled="True" Visibility="Collapsed">
+                        <fl:Badge Text="当前系统不支持" />
+                    </fl:SettingRow>
+        </fl:SettingGroup>
+    </StackPanel>
+</UserControl>

@@ -1,0 +1,115 @@
+<UserControl x:Class="ClassDailyLand.App.Views.Pages.HomePage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <UserControl.Resources>
+
+        <Style x:Key="HomeCard" TargetType="Border">
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+
+        <Style x:Key="HomeRow" TargetType="Button">
+            <Setter Property="Height" Value="62" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Grid>
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="3"
+                                    Padding="18,0">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="16"
+                                               Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1" Margin="14,0,0,0"
+                                               Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
+                                               FontSize="{DynamicResource FontSizeBody}"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="2"
+                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="12" Text="&#xE76C;"
+                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </Border>
+                            <Border x:Name="FocusRing" CornerRadius="3" BorderThickness="2"
+                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}"
+                                    Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+    </UserControl.Resources>
+
+    <StackPanel>
+        <TextBlock Text="首页" FontSize="28" FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+        <TextBlock Text="Class Daily Land" FontSize="28" FontWeight="SemiBold"
+                   Margin="0,48,0,0"
+                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+        <TextBlock Text="管理班级日常、课表、作业与桌面灵动岛。选择一个设置类别开始。"
+                   FontSize="{DynamicResource FontSizeBody}"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   TextWrapping="Wrap" Margin="0,12,0,0" />
+
+        <TextBlock Text="设置" FontSize="{DynamicResource FontSizeBody}"
+                   FontWeight="SemiBold"
+                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                   Margin="0,26,0,10" />
+
+        <Border Style="{StaticResource HomeCard}">
+            <Button Style="{StaticResource HomeRow}" Content="通用" Tag="&#xE713;"
+                    CommandParameter="general" Click="OnCardClick" />
+        </Border>
+        <Border Style="{StaticResource HomeCard}">
+            <Button Style="{StaticResource HomeRow}" Content="灵动岛" Tag="&#xE7F4;"
+                    CommandParameter="island" Click="OnCardClick" />
+        </Border>
+        <Border Style="{StaticResource HomeCard}">
+            <Button Style="{StaticResource HomeRow}" Content="个性化" Tag="&#xE790;"
+                    CommandParameter="appearance" Click="OnCardClick" />
+        </Border>
+        <Border Style="{StaticResource HomeCard}">
+            <Button Style="{StaticResource HomeRow}" Content="课表与提醒" Tag="&#xE787;"
+                    CommandParameter="schedule" Click="OnCardClick" />
+        </Border>
+        <Border Style="{StaticResource HomeCard}">
+            <Button Style="{StaticResource HomeRow}" Content="作业" Tag="&#xE8A5;"
+                    CommandParameter="homework" Click="OnCardClick" />
+        </Border>
+        <Border Style="{StaticResource HomeCard}">
+            <Button Style="{StaticResource HomeRow}" Content="插件" Tag="&#xE74C;"
+                    CommandParameter="plugins" Click="OnCardClick" />
+        </Border>
+    </StackPanel>
+</UserControl>

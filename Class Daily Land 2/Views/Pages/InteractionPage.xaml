@@ -1,0 +1,25 @@
+<UserControl x:Class="ClassDailyLand.App.Views.Pages.InteractionPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="交互" />
+        <TextBlock Style="{StaticResource PageLead}" Text="动画与反馈" />
+
+        <fl:SettingGroup Title="淡入淡出" Icon="{StaticResource Icon.Capsule}" TileColor="#FF8661C5">
+            <fl:SettingRow Title="窗口打开时渐显">
+                <fl:FluentToggle IsChecked="{Binding FadeAnimation, Mode=TwoWay}" Label="窗口打开时渐显" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="面板展开时渐显">
+                <fl:FluentToggle IsChecked="{Binding AnimFadePanel, Mode=TwoWay}" Label="面板展开时渐显" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="文字变化时渐显">
+                <fl:FluentToggle IsChecked="{Binding AnimFadeText, Mode=TwoWay}" Label="文字变化时渐显" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="动画时长" Hint="几何与文字切换的时长">
+                <fl:NumberBox Minimum="0" Maximum="2000" Step="10" Suffix=" ms"
+                              Value="{Binding AnimationDurationMs, Mode=TwoWay}" Label="动画时长" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+    </StackPanel>
+</UserControl>

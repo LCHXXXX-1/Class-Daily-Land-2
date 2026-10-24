@@ -1,0 +1,91 @@
+<UserControl x:Class="ClassDailyLand.App.Views.Pages.AboutPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="关于" />
+
+        <fl:Card Padding="18">
+            <StackPanel>
+                <!-- 品牌头 -->
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="48" Height="48" CornerRadius="12"
+                            Background="{DynamicResource AccentFillColorDefaultBrush}">
+                        <TextBlock Text="C" FontSize="22" FontWeight="SemiBold"
+                                   FontFamily="{DynamicResource FontFamilyDisplay}"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Class Daily Land" FontSize="{DynamicResource FontSizeSubtitle}"
+                                   FontFamily="{DynamicResource FontFamilyDisplay}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Version, StringFormat=版本 {0}}"
+                                   FontSize="{DynamicResource FontSizeCaption}" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- 键值表 -->
+                <Grid Margin="0,18,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="88" />
+                        <ColumnDefinition Width="*" MinWidth="0" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <Grid.Resources>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}" />
+                            <Setter Property="Margin" Value="0,3,0,3" />
+                            <Setter Property="TextWrapping" Value="Wrap" />
+                        </Style>
+                    </Grid.Resources>
+
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="简介"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="一个轻量级的班级日常管理小工具"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="作者"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="LCHXXXX、hexwisp72"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="系统"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SystemDescription}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <TextBlock Grid.Row="3" Grid.Column="0" Text="窗口材质"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding MaterialDescription}"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+
+                    <TextBlock Grid.Row="4" Grid.Column="0" Text="界面"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Row="4" Grid.Column="1" Text="原生 WPF XAML（设置中心）+ 自绘灵动岛"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                </Grid>
+
+                <fl:InfoBar x:Name="SourceNotice" Severity="Warning" Margin="0,16,0,0"
+                            Title="源码运行 · 自动更新已跳过"
+                            Message="检测到本地主入口源码，更新前会先提醒备份。"
+                            IsClosable="False" Visibility="Collapsed" />
+
+                <Button x:Name="CheckUpdateButton" Style="{StaticResource AccentButton}"
+                        Margin="0,18,0,0" HorizontalAlignment="Left">
+                    <StackPanel Orientation="Horizontal">
+                        <fl:Icon Size="16" Data="{StaticResource Icon.Sync}" VerticalAlignment="Center"
+                                 Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
+                        <TextBlock Text="检查更新" Margin="8,0,0,0" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </fl:Card>
+    </StackPanel>
+</UserControl>

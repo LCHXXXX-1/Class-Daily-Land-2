@@ -1,0 +1,32 @@
+<UserControl x:Class="ClassDailyLand.App.Views.Pages.AdvancedPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="高级" />
+        <TextBlock Style="{StaticResource PageLead}" Text="本地插件与日常维护" />
+
+        <fl:SettingGroup Title="本地插件" Icon="{StaticResource Icon.Puzzle}" TileColor="#FF0F6CBD"
+                         Note="程序启动时会加载这些插件">
+                    <fl:LinkRow x:Name="InstallLocalLink" Title="安装本地插件…" Hint="从 .cblplugin 文件安装"
+                                Icon="{StaticResource Icon.Download}" TileColor="#FF0F6CBD" />
+                    <fl:LinkRow x:Name="OpenPluginsLink" Title="打开插件文件夹" Hint="在文件资源管理器中打开"
+                                Icon="{StaticResource Icon.Folder}" TileColor="#FFB146C2" />
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="日常维护" Icon="{StaticResource Icon.Tune}" TileColor="#FF8661C5">
+                    <fl:LinkRow x:Name="OpenConfigLink" Title="打开配置文件夹" Hint="查看 settings.json 等配置文件"
+                                Icon="{StaticResource Icon.Folder}" TileColor="#FF038387" />
+                    <fl:LinkRow x:Name="ExportScheduleLink" Title="导出课表 JSON" Hint="把整份课表（含假期与调休）存成文件"
+                                Icon="{StaticResource Icon.Download}" TileColor="#FF107C10" />
+                    <fl:LinkRow x:Name="ImportScheduleLink" Title="从 JSON 导入课表" Hint="覆盖当前课表，导入前会先确认"
+                                Icon="{StaticResource Icon.Upload}" TileColor="#FF107C10" />
+                    <!-- 危险操作：标题用 critical 色（对位 web 版那条红色链接行） -->
+                    <fl:LinkRow x:Name="ResetLink" Title="恢复全部默认" Hint="将所有设置恢复为默认值"
+                                Icon="{StaticResource Icon.Restart}" TileColor="#FFC42B1C" />
+        </fl:SettingGroup>
+
+        <TextBlock Style="{StaticResource CaptionText}" Margin="4,0,0,0"
+                   Text="{Binding ConfigPath, StringFormat=配置文件位置：{0}}" />
+    </StackPanel>
+</UserControl>
