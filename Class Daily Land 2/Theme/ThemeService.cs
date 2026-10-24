@@ -10,8 +10,15 @@ namespace ClassDailyLand.App.Theme;
 /// </summary>
 public static class ThemeService
 {
-    const string LightSource = "pack://application:,,,/Themes/Tokens.Light.xaml";
-    const string DarkSource = "pack://application:,,,/Themes/Tokens.Dark.xaml";
+    // ★ 主题字典的 pack URI 必须带程序集名。
+    //   `pack://application:,,,/Themes/x.xaml` 是相对**入口程序集**解析的，
+    //   程序一旦被别的宿主加载（冒烟测试 / 内嵌宿主）就找不到资源，
+    //   表现是启动到 ThemeService.Apply 就抛 IOException。
+    static readonly string AsmPart =
+        Uri.EscapeDataString(typeof(ThemeService).Assembly.GetName().Name ?? "");
+
+    static readonly string LightSource = $"pack://application:,,,/{AsmPart};component/Themes/Tokens.Light.xaml";
+    static readonly string DarkSource = $"pack://application:,,,/{AsmPart};component/Themes/Tokens.Dark.xaml";
 
     /// <summary>当前是否为深色（跟随系统时按系统实际值）。</summary>
     public static bool IsDark { get; private set; }
@@ -59,7 +66,13 @@ public static class ThemeService
     static bool SameUri(string a, string b) =>
         string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);
 
-    static string Normalize(string uri) => uri.Replace("pack://application:,,,/", "").TrimStart('/');
+    static string Normalize(string uri)
+    {
+        var text = uri.Replace("pack://application:,,,/", "").TrimStart('/');
+        // 去掉 "程序集名;component/" 前缀，比较时只看 "Themes/Tokens.X.xaml"
+        var mark = text.IndexOf(";component/", StringComparison.OrdinalIgnoreCase);
+        return mark >= 0 ? text[(mark + ";component/".Length)..] : text;
+    }
 
     static bool IsSystemDark()
     {

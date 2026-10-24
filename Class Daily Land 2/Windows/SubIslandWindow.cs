@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ClassDailyLand.App.Theme;
 using ClassDailyLand.App.Win32;
@@ -24,8 +25,13 @@ public sealed record SubIslandContent(string Title, string Value, double Progres
 /// <summary>
 /// 副岛：贴在主岛右缘 +8px，高 40px；收起为 40×40 圆，可展开到 44~380px。
 /// 主岛不在 Compact/Countdown/Alert 时自动隐藏。
+///
+/// **原生化**：视觉树在 SubIslandWindow.xaml（Border 胶囊 + Ellipse 圆环/进度点 +
+/// TextBlock 文字），本文件只留状态机与动画驱动。位移/宽度用 WPF 的
+/// DoubleAnimation（缓动取 Themes/Tokens.Base.xaml 的 EaseOutCubic），
+/// 不再有 33ms 帧 timer + OnRender。
 /// </summary>
-public sealed class SubIslandWindow : Window
+public sealed partial class SubIslandWindow : Window
 {
     const double H = 40;
     const double CollapsedW = 40;
@@ -33,16 +39,8 @@ public sealed class SubIslandWindow : Window
     const double MaxExpandedW = 380;
     const double Gap = 8;
 
-    static readonly Typeface UiTypeface = new("Microsoft YaHei UI, Segoe UI");
-    static readonly Pen RingPen = MakeRingPen();
-    static readonly Brush RingBrush = MakeRingBrush();
-    FormattedText? _cachedFt;
-    string _cachedFtKey = "";
-
     double _curW = CollapsedW, _curX = 0, _curY = 0;
     double _tgtW = CollapsedW, _tgtX = 0, _tgtY = 0;
-    double _fromW = CollapsedW, _fromX = 0, _fromY = 0;
-    DateTime _animStart = DateTime.MinValue;
     double _animMs = 220;
     bool _fade = true;
     bool _expanded;
@@ -53,38 +51,41 @@ public sealed class SubIslandWindow : Window
     SubIslandContent? _content;
     double _pixelsPerDip = 1;
 
-    readonly DispatcherTimer _frameTimer = new(DispatcherPriority.Render)
-    {
-        Interval = TimeSpan.FromMilliseconds(33),
-    };
-    DateTime _lastFrame = DateTime.MinValue;
-
     Func<SubIslandContent?>? _provider;
 
     public bool Expanded => _expanded;
 
     public SubIslandWindow()
     {
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
-        Background = Brushes.Transparent;
-        ShowActivated = false;
-        Topmost = true;
-        ResizeMode = ResizeMode.NoResize;
-        ShowInTaskbar = false;
-        Focusable = false;
-        Width = CollapsedW;
-        Height = H;
+        InitializeComponent();
+
+        Capsule.Background = Palette.IslandBg;
+        RingOutline.Stroke = Palette.RingUpcoming;
+        ProgressDot.Fill = Palette.RingUpcoming;
+        Label.Foreground = Palette.IslandText;
+        Label.FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI");
+
+        // 先把几何属性落到具体值：WPF 的 Left/Top 默认是 NaN，
+        // 拿 NaN 当起点做 DoubleAnimation 会直接抛 AnimationException。
         Left = 0;
         Top = -80;
+        Width = CollapsedW;
+        Height = H;
 
-        _frameTimer.Tick += (_, _) => Step();
         SourceInitialized += (_, _) =>
         {
             Interop.MakeToolWindowNoActivate(this);
             _pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         };
-        Palette.Changed += (_, _) => InvalidateVisual();
+        Palette.Changed += (_, _) => ApplyPalette();
+    }
+
+    void ApplyPalette()
+    {
+        Capsule.Background = Palette.IslandBg;
+        RingOutline.Stroke = Palette.RingUpcoming;
+        ProgressDot.Fill = Palette.RingUpcoming;
+        Label.Foreground = Palette.IslandText;
     }
 
     public void ApplySettings(Core.Managers.SettingsManager s)
@@ -135,30 +136,12 @@ public sealed class SubIslandWindow : Window
         BeginAnim();
     }
 
-    static Pen MakeRingPen()
-    {
-        var p = new Pen(new SolidColorBrush(Color.FromRgb(0x4d, 0xa3, 0xff)), 2);
-        p.Freeze();
-        return p;
-    }
-
-    static Brush MakeRingBrush()
-    {
-        var b = new SolidColorBrush(Color.FromRgb(0x4d, 0xa3, 0xff));
-        b.Freeze();
-        return b;
-    }
-
-    /// <summary>FormattedText 只在内容/字号变化时重建（OnRender 内禁止 new 大对象）。</summary>
+    /// <summary>FormattedText 只用来量宽（不绘制），保持与原版一致的计算方式。</summary>
     FormattedText? BuildText(string text)
     {
         if (text.Length == 0) return null;
-        var key = text + "|" + _pixelsPerDip;
-        if (_cachedFt is not null && key == _cachedFtKey) return _cachedFt;
         var ft = new FormattedText(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
-            UiTypeface, 13, Palette.IslandText, _pixelsPerDip);
-        _cachedFt = ft;
-        _cachedFtKey = key;
+            new Typeface("Microsoft YaHei UI, Segoe UI"), 13, Palette.IslandText, _pixelsPerDip);
         return ft;
     }
 
@@ -182,41 +165,22 @@ public sealed class SubIslandWindow : Window
         {
             _curW = _tgtW; _curX = _tgtX; _curY = _tgtY;
             Apply();
-            InvalidateVisual();
             return;
         }
-        _fromW = _curW; _fromX = _curX; _fromY = _curY;
-        _animStart = DateTime.Now;
-        if (!_frameTimer.IsEnabled)
-        {
-            _lastFrame = DateTime.Now;
-            _frameTimer.Start();
-        }
+        var w = Slide(_tgtW); if (w is not null) BeginAnimation(WidthProperty, w);
+        var x = Slide(_tgtX); if (x is not null) BeginAnimation(LeftProperty, x);
+        var y = Slide(_tgtY); if (y is not null) BeginAnimation(TopProperty, y);
+        _curW = _tgtW; _curX = _tgtX; _curY = _tgtY;
     }
 
-    void Step()
-    {
-        var now = DateTime.Now;
-        _lastFrame = now;
-        var t = _animMs <= 0 ? 1 : Math.Clamp((now - _animStart).TotalMilliseconds / _animMs, 0, 1);
-        var k = Easing.OutCubic(t);
-        _curW = _fromW + (_tgtW - _fromW) * k;
-        _curX = _fromX + (_tgtX - _fromX) * k;
-        _curY = _fromY + (_tgtY - _fromY) * k;
-        if (t >= 1) { _curW = _tgtW; _curX = _tgtX; _curY = _tgtY; _frameTimer.Stop(); }
-        Apply();
-        InvalidateVisual();
-    }
+    DoubleAnimation? Slide(double to) => Anim.Slide(to, (int)_animMs);
 
     void Apply()
     {
-        if (Math.Abs(Width - _curW) > 0.4 || Math.Abs(Left - _curX) > 0.4 || Math.Abs(Top - _curY) > 0.4)
-        {
-            Width = _curW;
-            Height = H;
-            Left = _curX;
-            Top = _curY;
-        }
+        Width = _curW;
+        Height = H;
+        Left = _curX;
+        Top = _curY;
     }
 
     void Refresh()
@@ -224,7 +188,23 @@ public sealed class SubIslandWindow : Window
         var shouldShow = _enabledBySetting && _mainIslandVisible && _content is not null;
         if (shouldShow && !IsVisible) Show();
         if (!shouldShow && IsVisible) Hide();
-        InvalidateVisual();
+
+        var collapsed = _curW <= CollapsedW + 2;
+        RingOutline.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
+        ProgressDot.Visibility = collapsed && _content is not null && _content.Progress > 0
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (collapsed)
+        {
+            var d = Math.Clamp(_content?.Progress ?? 0, 0, 1) * 10;
+            ProgressDot.Width = d;
+            ProgressDot.Height = d;
+            Label.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            Label.Text = RenderText();
+            Label.Visibility = Visibility.Visible;
+        }
     }
 
     public void SetExpanded(bool expanded)
@@ -241,39 +221,5 @@ public sealed class SubIslandWindow : Window
     {
         base.OnMouseLeftButtonUp(e);
         SetExpanded(!_expanded);
-    }
-
-    protected override void OnRender(DrawingContext dc)
-    {
-        var w = ActualWidth;
-        var h = ActualHeight;
-        if (w <= 0.5 || _content is null) return;
-
-        var radius = h / 2;
-        var rect = new Rect(0.5, 0.5, w - 1, h - 1);
-        dc.DrawRoundedRectangle(Palette.IslandBg, null, rect, radius, radius);
-
-        if (w <= CollapsedW + 2)
-        {
-            // 收起态：小圆环 + 进度点
-            var c = new Point(w / 2, h / 2);
-            dc.DrawEllipse(null, RingPen, c, 9, 9);
-            var frac = Math.Clamp(_content.Progress, 0, 1);
-            if (frac > 0)
-                dc.DrawEllipse(RingBrush, null, c, 5 * frac, 5 * frac);
-            return;
-        }
-
-        var ft = BuildText(RenderText());
-        if (ft is null) return;
-        dc.PushClip(new RectangleGeometry(rect, radius, radius));
-        dc.DrawText(ft, new Point(15, (h - ft.Height) / 2));
-        dc.Pop();
-    }
-
-    protected override void OnClosed(EventArgs e)
-    {
-        _frameTimer.Stop();
-        base.OnClosed(e);
     }
 }

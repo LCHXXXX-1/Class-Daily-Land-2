@@ -220,18 +220,178 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => Write("settings_mica", value);
     }
 
-    /// <summary>非 Win11 时云母不可用（外观页那行会置灰并说明原因）。</summary>
+    /// <summary>Win11 才有云母 + 原生圆角。</summary>
     public bool IsWindows11 => Environment.OSVersion.Version.Build >= 22000;
+
+    /// <summary>Win10 1803+ 有亚克力模糊；更老的系统才真的没有背板。</summary>
+    public bool SupportsBackdrop => Environment.OSVersion.Version.Build >= 17134;
+
+    /// <summary>外观页那一行的标题：Win11 叫云母，Win10 叫亚克力。</summary>
+    public string MaterialRowTitle => IsWindows11 ? "云母材质（Mica）" : "亚克力模糊（Acrylic）";
+
+    /// <summary>外观页那一行的说明。</summary>
+    public string MaterialRowHint => IsWindows11
+        ? "Windows 11 的半透明云母背板，会跟着系统明暗变"
+        : "Windows 10 的半透明模糊背板，会跟着系统明暗变";
 
     /// <summary>关于页 / 外观页脚注用的系统描述。</summary>
     public string SystemDescription =>
         IsWindows11 ? "Windows 11" : $"Windows {Environment.OSVersion.Version.Major}.{Environment.OSVersion.Version.Minor}";
 
-    public string MaterialDescription =>
-        SettingsMica && IsWindows11 ? "Windows 11 云母（Mica）" : "普通";
+    public string MaterialDescription => !SettingsMica
+        ? "普通"
+        : IsWindows11 ? "Windows 11 云母（Mica）" : "Windows 10 亚克力（Acrylic）";
 
     /// <summary>外观页「窗口材质」分区的脚注。</summary>
     public string MaterialNote => "当前系统：" + SystemDescription;
+
+    // ————————————————————— 触屏 —————————————————————
+
+    /// <summary>
+    /// 触屏优化：加大点击目标（控件 32→44、设置行 62→82、导航项 40→54），
+    /// 并给设置页/下拉面板开手指拖动滚动。
+    /// 切换是即时的（<see cref="TouchMode"/> 改窗口资源，DynamicResource 立刻重解析）。
+    /// </summary>
+    public bool TouchOptimize
+    {
+        get => S.Bool("touch_optimize");
+        set => Write("touch_optimize", value);
+    }
+
+    /// <summary>这台机器有没有触摸屏（没有也能手动开，只是提示语不同）。</summary>
+    public bool HasTouchScreen => System.Windows.Input.Tablet.TabletDevices
+        .OfType<System.Windows.Input.TabletDevice>()
+        .Any(d => d.Type == System.Windows.Input.TabletDeviceType.Touch);
+
+    public string TouchOptimizeHint => HasTouchScreen
+        ? "已检测到触摸屏。开启后点击目标放大，手指更容易点中（上下滑动本来就支持，不需要开它）"
+        : "开启后点击目标放大（控件 32→44、设置行 62→82），手指更容易点中";
+
+    // ————————————————————— 媒体（内置集成） —————————————————————
+
+    public bool AudioEnabled
+    {
+        get => S.Bool("audio_enabled");
+        set => Write("audio_enabled", value);
+    }
+
+    public string AudioShowOn
+    {
+        get => S.Str("audio_show_on");
+        set => Write("audio_show_on", value);
+    }
+
+    public int AudioHideAfterSec
+    {
+        get => S.Int("audio_hide_after_sec");
+        set => WriteDelayed("audio_hide_after_sec", Math.Clamp(value, 0, 120));
+    }
+
+    public int AudioMaxWidth
+    {
+        get => S.Int("audio_max_width");
+        set => WriteDelayed("audio_max_width", Math.Clamp(value, 120, 400));
+    }
+
+    public bool AudioShowTitle
+    {
+        get => S.Bool("audio_show_title");
+        set => Write("audio_show_title", value);
+    }
+
+    // ————————————————————— 灾害预警（内置集成） —————————————————————
+
+    public bool DisasterEnabled
+    {
+        get => S.Bool("disaster_enabled");
+        set => Write("disaster_enabled", value);
+    }
+
+    public bool DisasterQuakeEnabled
+    {
+        get => S.Bool("disaster_quake_enabled");
+        set => Write("disaster_quake_enabled", value);
+    }
+
+    public bool DisasterWeatherEnabled
+    {
+        get => S.Bool("disaster_weather_enabled");
+        set => Write("disaster_weather_enabled", value);
+    }
+
+    public bool DisasterNotifyEnabled
+    {
+        get => S.Bool("disaster_notify_enabled");
+        set => Write("disaster_notify_enabled", value);
+    }
+
+    public bool DisasterBannerEnabled
+    {
+        get => S.Bool("disaster_banner_enabled");
+        set => Write("disaster_banner_enabled", value);
+    }
+
+    public bool DisasterShowStatusCard
+    {
+        get => S.Bool("disaster_show_status_card");
+        set => Write("disaster_show_status_card", value);
+    }
+
+    public int DisasterQuakeIntervalSec
+    {
+        get => S.Int("disaster_quake_interval_sec");
+        set => WriteDelayed("disaster_quake_interval_sec", Math.Clamp(value, 3, 120));
+    }
+
+    public int DisasterWeatherIntervalSec
+    {
+        get => S.Int("disaster_weather_interval_sec");
+        set => WriteDelayed("disaster_weather_interval_sec", Math.Clamp(value, 30, 3600));
+    }
+
+    public int DisasterSmallHoldSec
+    {
+        get => S.Int("disaster_small_hold_sec");
+        set => WriteDelayed("disaster_small_hold_sec", Math.Clamp(value, 0, 120));
+    }
+
+    /// <summary>烈度阈值 ×10（20 = 2.0；UI 里是整数下拉）。</summary>
+    public int DisasterThresholdX10
+    {
+        get => S.Int("disaster_threshold_x10");
+        set => Write("disaster_threshold_x10", Math.Clamp(value, 0, 120));
+    }
+
+    public string DisasterProvince => S.Str("disaster_province");
+    public string DisasterCity => S.Str("disaster_city");
+    public string DisasterDistrict => S.Str("disaster_district");
+    public string DisasterLat => S.Str("disaster_lat");
+    public string DisasterLon => S.Str("disaster_lon");
+
+    /// <summary>一次写入省市县三个键（只广播一次，避免连刷三遍界面）。</summary>
+    public void SetDisasterLocation(string province, string city, string district)
+    {
+        S.SetMany(new[]
+        {
+            new KeyValuePair<string, object?>("disaster_province", province ?? ""),
+            new KeyValuePair<string, object?>("disaster_city", city ?? ""),
+            new KeyValuePair<string, object?>("disaster_district", district ?? ""),
+        });
+        OnPropertyChanged(nameof(DisasterProvince));
+        OnPropertyChanged(nameof(DisasterCity));
+        OnPropertyChanged(nameof(DisasterDistrict));
+    }
+
+    public void SetDisasterCoord(string lat, string lon)
+    {
+        S.SetMany(new[]
+        {
+            new KeyValuePair<string, object?>("disaster_lat", lat ?? ""),
+            new KeyValuePair<string, object?>("disaster_lon", lon ?? ""),
+        });
+        OnPropertyChanged(nameof(DisasterLat));
+        OnPropertyChanged(nameof(DisasterLon));
+    }
 
     // ————————————————————— 灵动岛 —————————————————————
 

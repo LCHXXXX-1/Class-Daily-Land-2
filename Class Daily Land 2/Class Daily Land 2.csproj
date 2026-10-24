@@ -2,9 +2,9 @@
 
 	<PropertyGroup>
 		<OutputType>WinExe</OutputType>
-		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<TargetFramework>net10.0-windows</TargetFramework>
 		<RootNamespace>ClassDailyLand</RootNamespace>
-		<AssemblyName>Class Daily Land 2</AssemblyName>
+		<AssemblyName>Class Daily Land</AssemblyName>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
@@ -13,15 +13,13 @@
 		<LangVersion>latest</LangVersion>
 		<NoWarn>$(NoWarn);CA1416;CS8618</NoWarn>
 		<!--
-		  设置中心与二级浮层：原生 WPF XAML（样式与令牌在 Themes\ 下）。
+		  设置中心与二级浮层：原生 WPF XAML（样式与令牌在 Themes\ 下，逐条对位 ui\ 的设计）。
 		  灵动岛 / 副岛 / 主窗 / 下拉面板仍为 OnRender 自绘。
-		  界面只用 WPF 自身；CommunityToolkit.Mvvm 仅提供 INPC / 命令样板，不含任何控件。
-		  目标框架 net10.0-windows10.0.19041.0，需要 .NET 10 SDK / 桌面运行时。
+		  界面框架只用 WPF 自身；CommunityToolkit.Mvvm 仅提供 INPC / 命令样板，不含任何控件。
+		  目标框架 net8.0-windows（规范要求）；若本机未装 .NET 8 桌面运行时，
+		  允许前滚到已安装的更高版本桌面运行时（如 .NET 10）。
 		-->
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-	  <Optimize>False</Optimize>
+		<RollForward>LatestMajor</RollForward>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -36,13 +34,28 @@
 	<ItemGroup>
 		<Resource Include="Resources\icon.ico" />
 		<None Include="Resources\icon.ico" Link="icon.ico" CopyToOutputDirectory="PreserveNewest" />
+		<!-- 全国城市经纬度表：内嵌进程序集（不散落在输出目录） -->
+		<EmbeddedResource Include="Resources\cities.json" />
+
 		<Content Include="Resources\config.json">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</Content>
 	</ItemGroup>
 
 	<ItemGroup>
+		<!-- 出厂默认配置：随构建复制到输出目录 settings\（仅当源文件比目标新时才覆盖） -->
+		<None Update="settings\**\*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+	<ItemGroup>
 	  <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <!-- 插件契约：插件作者只引用这一个程序集，宿主与插件共享同一份副本 -->
+	  <ProjectReference Include="..\ClassDailyLand.Plugin.Abstractions\ClassDailyLand.Plugin.Abstractions.csproj" />
 	</ItemGroup>
 
 </Project>

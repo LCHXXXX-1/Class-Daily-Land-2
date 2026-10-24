@@ -26,6 +26,9 @@ public sealed class TrayIcon : IDisposable
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
 
+    /// <summary>插件注册的托盘菜单项（排在「设置」与「退出」之间）。每次弹菜单时现取。</summary>
+    public Func<IReadOnlyList<ClassDailyLand.Plugin.TrayActionSpec>>? PluginActions { get; set; }
+
     public TrayIcon(Logger? log = null)
     {
         _log = log;
@@ -123,10 +126,36 @@ public sealed class TrayIcon : IDisposable
         var miExit = new MenuItem { Header = "退出" };
         miExit.Click += (_, _) => ExitRequested?.Invoke();
 
+        // 插件菜单项：拿不到（或没插件）就什么都不加，菜单保持原样
+        var pluginItems = new List<MenuItem>();
+        try
+        {
+            foreach (var spec in PluginActions?.Invoke() ?? Array.Empty<ClassDailyLand.Plugin.TrayActionSpec>())
+            {
+                var mi = new MenuItem { Header = spec.Text };
+                var action = spec.Invoke;
+                mi.Click += (_, _) =>
+                {
+                    try { action(); }
+                    catch (Exception ex) { _log?.Warn($"插件托盘菜单「{spec.Text}」抛异常: {ex.Message}"); }
+                };
+                pluginItems.Add(mi);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log?.Warn("取插件托盘菜单失败: " + ex.Message);
+        }
+
         var menu = new ContextMenu();
         menu.Items.Add(miMain);
         menu.Items.Add(miIsland);
         menu.Items.Add(miSub);
+        if (pluginItems.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            foreach (var mi in pluginItems) menu.Items.Add(mi);
+        }
         menu.Items.Add(new Separator());
         menu.Items.Add(miSettings);
         menu.Items.Add(miExit);

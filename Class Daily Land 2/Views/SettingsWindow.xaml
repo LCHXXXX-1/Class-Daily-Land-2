@@ -4,7 +4,7 @@
         xmlns:fl="clr-namespace:ClassDailyLand.App.Controls"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="设置"
-        Width="1080" Height="720" MinWidth="860" MinHeight="560"
+        Width="1232" Height="762" MinWidth="1000" MinHeight="620"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" ResizeMode="CanResize"
         Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
@@ -16,16 +16,22 @@
 
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="48" ResizeBorderThickness="6"
-                            CornerRadius="0" GlassFrameThickness="0"
+                            CornerRadius="0" GlassFrameThickness="-1"
                             UseAeroCaptionButtons="False" />
     </shell:WindowChrome.WindowChrome>
 
     <Window.Resources>
 
-        <!-- 导航药丸：40 高 / 8 圆角 / 选中 3x16 强调条 + 淡色胶囊底 -->
+        <!--
+          导航药丸：40 高 / 8 圆角 / 选中淡色胶囊底 + 强调色文字。
+          ★ 强调条**不在这里**：QML 版是一条会滑动的独立强调条
+          （见 NavMarker），每个条目各画一条就成了"切页时旧的消失、新的凭空出现"，
+          没有位移感。这里同理删掉了原来的 Bar。
+        -->
         <Style x:Key="NavItem" TargetType="RadioButton">
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-            <Setter Property="Height" Value="40" />
+            <!-- 高度走资源：触屏优化开着时窗口会把 NavItemHeight 覆盖成 54（见 TouchMode） -->
+            <Setter Property="Height" Value="{DynamicResource NavItemHeight}" />
             <Setter Property="Margin" Value="0,2,0,0" />
             <Setter Property="Padding" Value="12,0" />
             <Setter Property="Cursor" Value="Hand" />
@@ -38,7 +44,7 @@
                                     Padding="{TemplateBinding Padding}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="20" />
                                         <ColumnDefinition Width="*" />
                                     </Grid.ColumnDefinitions>
                                     <TextBlock x:Name="Ico"
@@ -54,10 +60,6 @@
                                                Foreground="{TemplateBinding Foreground}" />
                                 </Grid>
                             </Border>
-                            <Border x:Name="Bar" Width="3" Height="16" CornerRadius="1.5"
-                                    HorizontalAlignment="Left" VerticalAlignment="Center"
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                    Visibility="Collapsed" />
                             <Border x:Name="FocusRing" CornerRadius="8" BorderThickness="2"
                                     BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}"
                                     Visibility="Collapsed" />
@@ -68,7 +70,6 @@
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource NavSelectedBrush}" />
-                                <Setter TargetName="Bar" Property="Visibility" Value="Visible" />
                                 <Setter TargetName="Ico" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 <Setter TargetName="Lbl" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 <Setter TargetName="Lbl" Property="FontWeight" Value="SemiBold" />
@@ -89,33 +90,6 @@
             </Setter>
         </Style>
 
-        <!-- 汉堡按钮：展开 260 / 收起 48 全靠 NavToggle.IsChecked -->
-        <Style x:Key="HamburgerButton" TargetType="ToggleButton">
-            <Setter Property="Width" Value="40" />
-            <Setter Property="Height" Value="40" />
-            <Setter Property="Margin" Value="8,6,0,6" />
-            <Setter Property="HorizontalAlignment" Value="Left" />
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="ToggleButton">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="6">
-                            <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                       FontSize="16" Text="&#xE700;"
-                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
     </Window.Resources>
 
     <Grid x:Name="RootGrid">
@@ -124,8 +98,8 @@
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-        <!-- 标题栏 -->
-        <Grid Grid.Row="0" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+        <!-- 标题栏（云母生效时透明，让背景透上来） -->
+        <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -159,47 +133,107 @@
             </StackPanel>
         </Grid>
 
-        <!-- 主体：可折叠侧栏 + 内容 -->
+        <!-- 主体：固定 288 侧栏（不可折叠，照 QML 版）+ 内容 -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="0" />
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="NavPane" Grid.Column="0" Width="260" ClipToBounds="True"
+            <Border x:Name="NavPane" Grid.Column="0" Width="288" ClipToBounds="True"
                     Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
                     BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
                     BorderThickness="0,0,1,0">
 
-                <DockPanel>
-                    <ToggleButton x:Name="NavToggle" DockPanel.Dock="Top"
-                                  Style="{StaticResource HamburgerButton}" />
+                <Grid>
+                    <DockPanel>
+                        <StackPanel x:Name="AboutPanel" DockPanel.Dock="Bottom"
+                                    Margin="8,0,8,10">
+                            <Border Height="1" Margin="0,0,0,8"
+                                    Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                        </StackPanel>
 
-                    <StackPanel x:Name="AboutPanel" DockPanel.Dock="Bottom"
-                                Margin="8,0,8,10">
-                        <Border Height="1" Margin="0,0,0,8"
-                                Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                    </StackPanel>
+                        <ScrollViewer x:Name="NavScroll" VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel x:Name="NavItemsPanel" Margin="8,0" />
+                        </ScrollViewer>
+                    </DockPanel>
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel x:Name="NavItemsPanel" Margin="8,0" />
-                    </ScrollViewer>
-                </DockPanel>
+                    <!-- 单条滑动强调条：3×17，跟着高亮项走（对位 QML 的 navMarker） -->
+                    <Canvas x:Name="MarkerCanvas" IsHitTestVisible="False">
+                        <Border x:Name="NavMarker" Width="3" Height="17" CornerRadius="1.5"
+                                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                Visibility="Collapsed"
+                                Canvas.Left="0" Canvas.Top="0">
+                            <Border.RenderTransform>
+                                <TranslateTransform x:Name="MarkerShift" />
+                            </Border.RenderTransform>
+                        </Border>
+                    </Canvas>
+                </Grid>
             </Border>
 
-            <Border Grid.Column="1" Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}">
-                <ScrollViewer x:Name="ContentScroll" VerticalScrollBarVisibility="Auto"
-                              Padding="24,40,24,64">
-                    <StackPanel MaxWidth="980">
-                        <StackPanel x:Name="ToastSlot" />
-                        <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch" />
-                    </StackPanel>
-                </ScrollViewer>
+            <!--
+              页面栈：两层，旧页留在下面往反方向整段移出、新页从反侧整段移入。
+              0.92 倍页宽/高，中间留一点重叠 → 换页时不出现两条空白。
+              透明度恒为 1（不做任何淡化），这是 QML 版明确的观感要求。
+            -->
+            <Border x:Name="ContentPane" Grid.Column="1" ClipToBounds="True"
+                    Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}">
+                <Grid x:Name="PageStack" ClipToBounds="True">
+
+                    <ScrollViewer x:Name="ScrollPrev" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="28,40,28,64">
+                        <StackPanel x:Name="PrevInner" MaxWidth="900" />
+                    </ScrollViewer>
+
+                    <ScrollViewer x:Name="ScrollCur"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="28,40,28,64">
+                        <StackPanel MaxWidth="900">
+                            <StackPanel x:Name="ToastSlot" />
+                            <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch" />
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <!--
+                      二级页（课表管理 / 周末作息 / 假期 / 作业编辑器 …）：
+                      QML 版是**整页推进来**、带面包屑、不是盖一张卡片。
+                      这里同构：面包屑 + 返回，内容区铺满，转场和其它页一套。
+                    -->
+                    <ScrollViewer x:Name="SubScroll" Visibility="Collapsed"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  Padding="28,32,28,64">
+                        <StackPanel MaxWidth="900">
+                            <Button x:Name="SubBackButton" Style="{StaticResource SubtleButton}"
+                                    HorizontalAlignment="Left" Padding="8,4,12,4"
+                                    Margin="0,0,0,12" Click="OnSubBack">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="14" Text="&#xE72B;" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="SubCrumb" Margin="8,0,0,0"
+                                               FontSize="{DynamicResource FontSizeCaption}"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                            <ContentControl x:Name="SubHost" HorizontalContentAlignment="Stretch" />
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
             </Border>
         </Grid>
 
+        <!-- 二级页曾经盖在遮罩上；现在改成页内推进（SubScroll），这个 host 只给插件原生宿主等少数场合留位 -->
         <Grid x:Name="DialogHost" Grid.RowSpan="2" Visibility="Collapsed"
+              Background="{DynamicResource SmokeBrush}" />
+
+        <!-- 窗口内确认框（替代系统 MessageBox，绝不另开窗） -->
+        <Grid x:Name="ConfirmHost" Grid.RowSpan="2" Visibility="Collapsed"
               Background="{DynamicResource SmokeBrush}" />
     </Grid>
 </Window>

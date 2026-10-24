@@ -1,5 +1,8 @@
 using System.Windows;
 using System.Windows.Threading;
+using ClassDailyLand.App.Plugins;
+using ClassDailyLand.App.Integrations.Audio;
+using ClassDailyLand.App.Integrations.Disaster;
 using ClassDailyLand.App.Theme;
 using ClassDailyLand.App.Tray;
 using ClassDailyLand.App.Win32;
@@ -10,6 +13,8 @@ using ClassDailyLand.Core.Engine;
 using ClassDailyLand.Core.Managers;
 using ClassDailyLand.Core.Models;
 using ClassDailyLand.Core.Storage;
+using ClassDailyLand.Core.Plugins;
+using ClassDailyLand.Plugin;
 
 namespace ClassDailyLand.App;
 
@@ -34,6 +39,18 @@ public sealed class AppController
     public DynamicIslandWindow? Island { get; private set; }
     public SubIslandWindow? SubIsland { get; private set; }
     public TrayIcon? Tray { get; private set; }
+
+    /// <summary>插件宿主。窗口只通过它的注册表取内容，不直接碰插件实例。</summary>
+    public PluginManager Plugins { get; private set; } = null!;
+
+    /// <summary>内置媒体集成（SMTC → 主岛媒体片段）。</summary>
+    public AudioService Audio { get; private set; } = null!;
+
+    /// <summary>内置灾害预警集成（地震倒计时 + 气象预警）。</summary>
+    public DisasterService Disaster { get; private set; } = null!;
+
+    MediaCardWindow? _mediaCard;
+
     Views.SettingsWindow? _settingsWindow;
 
     readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
@@ -75,6 +92,25 @@ public sealed class AppController
         SyncRemindersIntoSchedule();
         ThemeService.Apply(Settings.Str("theme"));
 
+        // 插件宿主：先建出来（注册表要能被窗口取数），窗口与托盘都接好后再真正加载，
+        // 这样插件的 Initialize 里调 ShowMainWindow / OpenSettings 时窗口已经存在。
+        Plugins = new PluginManager(this, Paths, Log);
+
+        // 内置集成：媒体（SMTC）与灾害预警。都只依赖 Paths/Settings/Dispatcher，
+        // 所以放在窗口之前建好，窗口一出来就能拿到内容。
+        // 触屏优化是全局的：主窗/面板在构造时就要读到，所以先落一次
+        TouchMode.SetGlobal(Settings.Bool("touch_optimize"));
+
+        Audio = new AudioService(Paths, Log);
+        Audio.ApplySettings(Settings);
+
+        Disaster = new DisasterService(
+            App.Dispatcher, Settings, Log,
+            Path.Combine(Paths.Root, "disaster-cache.json"),
+            isInClass: () => CurrentStatus.IsOngoing,
+            notify: (title, message) => Tray?.Balloon(title, message));
+        Disaster.ApplySettings();
+
         Main = new MainBoardWindow();
         Island = new DynamicIslandWindow();
         SubIsland = new SubIslandWindow();
@@ -84,10 +120,11 @@ public sealed class AppController
         Main.ApplySettings(Settings);
         Island.ApplySettings(Settings);
         SubIsland.ApplySettings(Settings);
-        SubIsland.SetProvider(BuiltInSubIslandContent);   // MVP：无插件时用内置内容源
+        SubIsland.SetProvider(PickSubIslandContent);   // 插件优先，没插件时用内置内容源
 
         WireEvents();
         WireWindows();
+        WirePlugins();
 
         if (Settings.Bool("show_island"))
         {
@@ -99,6 +136,9 @@ public sealed class AppController
         Tray = new TrayIcon(Log);
         WireTray();
         SyncTrayChecks();
+
+        // 托盘建好之后才加载插件：插件可能一上来就 Toast（需要托盘图标）
+        Plugins.LoadAll();
 
         _tick.Tick += (_, _) => Tick();
         _tick.Start();
@@ -132,6 +172,8 @@ public sealed class AppController
         if (Island is null || Main is null || SubIsland is null) return;
 
         Island.Clicked += OnIslandClicked;
+        Island.MediaPlayPauseRequested += () => Audio.TogglePlayPause();
+        Island.MediaExpandRequested += ToggleMediaCard;
         Island.IslandStateChanged += state => SubIsland.SetMainIslandVisible(
             state is IslandState.Compact or IslandState.Countdown or IslandState.Alert);
 
@@ -156,6 +198,45 @@ public sealed class AppController
         Tray.SubToggled += on => Settings.Set("show_sub_island", on);
         Tray.SettingsRequested += ShowSettings;
         Tray.ExitRequested += Exit;
+
+        // 插件菜单项：每次都现取，插件禁用后菜单立刻少一项
+        Tray.PluginActions = () => Plugins?.Registry.TrayActions() ?? Array.Empty<TrayActionSpec>();
+    }
+
+    /// <summary>
+    /// 把插件注册表接到各个显示位。
+    /// 窗口侧只拿到 <c>Func</c>，不引用 PluginManager ——
+    /// 这样窗口在没有插件的情况下也能独立跑（冒烟测试直接 new 一个就行）。
+    /// </summary>
+    void WirePlugins()
+    {
+        PluginIslandTextProvider = () => Plugins.Registry.IslandText();
+        PluginExtraWidthProvider = () => Plugins.Registry.IslandExtraWidth();
+
+        Main!.BoardSectionsProvider = () => Plugins.Registry.BoardSections();
+        Main.BoardBadgeProvider = () => Plugins.Registry.BoardBadgeValue();
+        Main.BoardActionsProvider = () => Plugins.Registry.BoardActions();
+
+        Panels.PluginPanelsProvider = () =>
+        {
+            var list = Plugins.Registry.Panels().ToList();
+            if (Disaster?.Panel is { } d)
+                list.Add(new PanelRender(new PanelSpec(d.Title, 250, () => d.Lines), d.Lines));
+            return list;
+        };
+
+        // 装/卸/启停插件后立刻把界面拉一遍，不用等下一秒 tick（也不用重启）
+        Plugins.Changed += () =>
+        {
+            if (App.Dispatcher.CheckAccess()) RefreshPluginSurfaces();
+            else App.Dispatcher.BeginInvoke(RefreshPluginSurfaces);
+        };
+    }
+
+    void RefreshPluginSurfaces()
+    {
+        Main?.RefreshPluginContent();
+        Tick();
     }
 
     void SyncTrayChecks() => Tray?.SetChecks(
@@ -179,8 +260,17 @@ public sealed class AppController
         var status = Schedule.Compute(now);
         CurrentStatus = status;
 
-        var text = ScheduleText.WithPlugin(ScheduleText.Core(status), GetPluginIslandText());
-        Island.SetText(text);
+        // 内置集成每秒跑一次：媒体决定片段，灾害预警决定是否红条接管
+        Audio.Tick(status.IsOngoing);
+        Disaster.Tick();
+
+        var emergency = Disaster.Emergency;
+        var media = Audio.Display;
+
+        // 灾害预警时文案由它接管，且不做逐字切换动画（每秒都在变）
+        var text = emergency?.Text
+                   ?? ScheduleText.WithPlugin(ScheduleText.Core(status), GetPluginIslandText());
+        Island.SetText(text, animate: emergency is null);
         Island.Update(new IslandInput(
             status,
             text,
@@ -189,9 +279,18 @@ public sealed class AppController
             HideOnFullscreen: Settings.Bool("island_hide_on_fullscreen"),
             IsFullscreen: Interop.IsForegroundFullscreen(),
             IsOfficeForeground: Interop.IsOfficeForeground(),
-            Visible: showIsland));
+            Visible: showIsland,
+            Badge: GetPluginIslandBadge(),
+            Media: media,
+            Emergency: emergency));
 
         SubIsland.Tick(Island.RightEdgeDip, Island.TopDip, status);
+        // 主窗的插件区块/徽标可能是动态的（倒计时、天气…），每秒给一次机会；
+        // RefreshPluginContent 内部比内容签名，没变就直接返回。
+        Main.RefreshPluginContent();
+
+        // 每秒把快照推给插件（插件在自己的回调里读，不再各自去摸 Manager）
+        Plugins.RaiseTick(BuildSnapshot(status, text));
 
         DetectEdges(status);
         _last = status;
@@ -246,6 +345,22 @@ public sealed class AppController
         // 新设置中心的 VM 自己订阅了 SettingsChanged，外部改动按属性名精确回刷，这里不用再做整页重建
         SyncTrayChecks();
 
+        // 插件也要知道设置变了（比如它跟着 theme 换配色）
+        try { Plugins?.RaiseSettingsChanged(e.Keys); }
+        catch (Exception ex) { Log?.Warn("通知插件设置变更失败: " + ex.Message); }
+
+        if (e.Keys.Any(k => k == "touch_optimize"))
+        {
+            TouchMode.SetGlobal(Settings.Bool("touch_optimize"));
+            // 主窗与下拉面板是常驻窗口，设置窗口关掉后也要保持新手感
+            if (Main is not null) Main.ApplyTouchMode();
+        }
+
+        if (e.Keys.Any(k => k.StartsWith("audio_", StringComparison.Ordinal)))
+            Audio?.ApplySettings(Settings);
+        if (e.Keys.Any(k => k.StartsWith("disaster_", StringComparison.Ordinal)))
+            Disaster?.ApplySettings();
+
         if (e.Keys.Contains("show_main_window"))
             Main?.SetVisible(Settings.Bool("show_main_window"));
         if (e.Keys.Contains("show_island"))
@@ -273,6 +388,43 @@ public sealed class AppController
     {
         try { return Math.Max(0, PluginExtraWidthProvider?.Invoke() ?? 0); }
         catch (Exception ex) { Log?.Warn("插件 island_extra 异常: " + ex.Message); return 0; }
+    }
+
+    /// <summary>主岛右侧徽标（插件竞争位，没有插件时为空）。</summary>
+    IslandBadge? GetPluginIslandBadge()
+    {
+        try { return Plugins?.Registry.IslandBadgeValue(); }
+        catch (Exception ex) { Log?.Warn("插件 island_badge 异常: " + ex.Message); return null; }
+    }
+
+    /// <summary>每秒推给插件的只读快照。</summary>
+    HostSnapshot BuildSnapshot(ScheduleStatus s, string text) => new(
+        Status: s.Status,
+        StatusText: text,
+        Course: s.Course,
+        Index: s.Index,
+        Start: s.Start,
+        End: s.End,
+        RemainMinutes: s.RemainMin,
+        UntilMinutes: s.UntilMin,
+        HolidayName: s.Name,
+        Now: DateTime.Now.AddSeconds(Schedule.OffsetSeconds));
+
+    /// <summary>副岛内容：插件优先（按 Priority 竞争），没有插件接管时用内置的当前课程。</summary>
+    SubIslandContent? PickSubIslandContent()
+    {
+        // 优先级：灾害预警 > 插件 > 媒体（显示位置设为副岛时）> 内置当前课程
+        if (Disaster?.SubIsland is { } d)
+            return new SubIslandContent(d.Title, d.Value, d.Progress);
+
+        var fromPlugin = Plugins?.Registry.SubIsland();
+        if (fromPlugin is not null)
+            return new SubIslandContent(fromPlugin.Title, fromPlugin.Value, fromPlugin.Progress);
+
+        if (Audio?.SubIsland is { } a)
+            return new SubIslandContent(a.Title, a.Value, 0);
+
+        return BuiltInSubIslandContent();
     }
 
     /// <summary>
@@ -331,6 +483,54 @@ public sealed class AppController
 
     public void ShowSettings() => EnsureSettings();
 
+    /// <summary>打开设置中心并跳到指定页（插件调 OpenSettings("plugins") 用）。</summary>
+    public void ShowSettings(string? pageKey)
+    {
+        var window = EnsureSettings();
+        if (!string.IsNullOrWhiteSpace(pageKey)) window.NavigateTo(pageKey!);
+    }
+
+    /// <summary>插件主动请求刷新的入口（IPluginHost.Invalidate）。</summary>
+    public void RequestPluginRefresh()
+    {
+        if (App.Dispatcher.CheckAccess()) Tick();
+        else App.Dispatcher.BeginInvoke(Tick);
+    }
+
+    /// <summary>点岛上媒体片段：展开/收起媒体卡（手机灵动岛那种展开）。</summary>
+    void ToggleMediaCard()
+    {
+        var media = Audio?.Display;
+        var island = Island;
+        if (media is null || island is null) return;
+
+        if (_mediaCard is { IsVisible: true })
+        {
+            _mediaCard?.Dismiss();
+            return;
+        }
+
+        var card = _mediaCard;
+        if (card is null)
+        {
+            var audio = Audio!;
+            card = new MediaCardWindow();
+            card.PlayPauseRequested += () => audio.TogglePlayPause();
+            _mediaCard = card;
+        }
+        card.Present(media, island.RightEdgeDip, island.TopDip + island.HeightDip);
+    }
+
+    /// <summary>宿主侧的"打开目录"（插件只能打开程序目录内部，校验在 PluginHostContext）。</summary>
+    public void OpenDirectory(string path)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = path,
+            UseShellExecute = true,
+        })?.Dispose();
+    }
+
     /// <summary>在设置中心里打开一个二级浮层（菜单项与设置页共用这条路径）。</summary>
     void OpenDialog(Func<ViewModels.SettingsViewModel, FrameworkElement> create)
     {
@@ -340,7 +540,18 @@ public sealed class AppController
 
     void OnIslandClicked()
     {
-        // 点击主岛：展开/收起「今日课程」下拉面板（阶段 3 插件面板继续走 specs）
+        // 灾害预警占着胶囊时，点一下 = 确认（收起红条，恢复上课显示）
+        if (Disaster?.Emergency is not null)
+        {
+            Disaster.DismissEmergency();
+            Tick();
+            return;
+        }
+
+        // 先通知插件（它们可能想在面板展开前更新内容），再展开/收起「今日课程」面板
+        try { Plugins?.RaiseIslandClicked(); }
+        catch (Exception ex) { Log?.Warn("通知插件岛点击失败: " + ex.Message); }
+
         Panels.Toggle();
     }
 
@@ -396,6 +607,11 @@ public sealed class AppController
     {
         _tick.Stop();
         _alertClear?.Stop();
+        try { Plugins?.ShutdownAll(); }
+        catch (Exception ex) { Log?.Error("卸载插件失败: " + ex); }
+        try { Audio?.Shutdown(); } catch { }
+        try { Disaster?.Dispose(); } catch { }
+        try { _mediaCard?.Close(); } catch { }
         try
         {
             Settings.Save();
@@ -410,6 +626,8 @@ public sealed class AppController
     public void Shutdown()
     {
         _tick.Stop();
+        try { Plugins?.ShutdownAll(); }
+        catch { /* 退出路径不抛 */ }
         Tray?.Dispose();
         Tray = null;
     }

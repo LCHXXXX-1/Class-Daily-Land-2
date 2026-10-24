@@ -4,54 +4,48 @@
              xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
     <StackPanel>
         <TextBlock Style="{StaticResource PageTitle}" Text="插件" />
-        <TextBlock Style="{StaticResource PageLead}" Text="插件市场、第三方依赖与本地插件" />
+        <TextBlock Style="{StaticResource PageLead}"
+                   Text="插件可以往灵动岛、副岛、下拉面板和「班级日常」主窗里加内容。这里管理已安装的插件。" />
 
-        <!-- 阶段 3 才接插件宿主，这里先把版式与状态摆出来（不留「点了没反应」的壳） -->
-        <fl:InfoBar x:Name="StageNotice" Severity="Warning" Title="插件系统尚未接入"
-                    Message="本版本还没有插件宿主：下面的列表会一直是空的。接入后这里会显示已安装插件、可更新项与运行日志。"
+        <!-- 一个都没有时给一条能照着做的提示，而不是空列表 -->
+        <fl:InfoBar x:Name="NoPluginNotice" Severity="Information" Title="还没有安装插件"
+                    Message="插件是一个文件夹（含 plugin.json 与 .dll）。用下面的「安装插件包」选 .cblplugin，或把文件夹放进 plugins 目录后点「重新扫描」。"
                     IsClosable="False" Margin="0,0,0,20" />
 
         <fl:SettingGroup Title="已安装插件" Icon="{StaticResource Icon.Puzzle}" TileColor="#FF0F6CBD">
-                    <ItemsControl x:Name="PluginList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="18,12" BorderThickness="0,0,0,1"
-                                        BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" MinWidth="0" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Name}" FontSize="{DynamicResource FontSizeBody}" />
-                                                <fl:Badge Margin="8,0,0,0" Text="{Binding Version}" />
-                                            </StackPanel>
-                                            <TextBlock Text="{Binding Description}" Margin="0,2,0,0"
-                                                       FontSize="{DynamicResource FontSizeCaption}"
-                                                       TextWrapping="Wrap"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                        </StackPanel>
-                                        <fl:FluentToggle Grid.Column="1" VerticalAlignment="Center"
-                                                         IsChecked="{Binding Enabled}" Label="启用插件" />
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                    <TextBlock x:Name="EmptyHint" Style="{StaticResource EdEmpty}" Margin="18,16"
-                               Text="暂无插件" />
+            <StackPanel x:Name="PluginHostPanel" />
+            <TextBlock x:Name="EmptyHint" Style="{StaticResource EdEmpty}" Margin="18,16"
+                       Text="暂无插件" />
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="安装与管理" Icon="{StaticResource Icon.Download}" TileColor="#FF107C10">
+            <fl:LinkRow x:Name="InstallPackageLink" Title="安装插件包…"
+                        Hint="支持 .cblplugin 与 .zip，source 里带 plugin.json 即可"
+                        Icon="{StaticResource Icon.Download}" TileColor="#FF107C10" />
+            <fl:LinkRow x:Name="InstallFolderLink" Title="从文件夹安装…"
+                        Hint="开发插件时直接选编译输出目录"
+                        Icon="{StaticResource Icon.Upload}" TileColor="#FFB146C2" />
+            <fl:LinkRow x:Name="RescanLink" Title="重新扫描插件目录"
+                        Hint="手工拷进 plugins 目录后点这里，不用重启"
+                        Icon="{StaticResource Icon.Restart}" TileColor="#FF8764B8" />
+            <fl:LinkRow x:Name="OpenFolderLink" Title="打开插件文件夹"
+                        Hint="在文件资源管理器中打开"
+                        Icon="{StaticResource Icon.Folder}" TileColor="#FF038387" />
         </fl:SettingGroup>
 
         <fl:SettingGroup Title="运行日志" Icon="{StaticResource Icon.Tune}" TileColor="#FF8661C5">
-                <TextBox x:Name="LogBox" IsReadOnly="True" MinHeight="120" MaxHeight="190"
-                         BorderThickness="0" Background="Transparent"
-                         FontFamily="{DynamicResource FontFamilyMono}"
-                         FontSize="{DynamicResource FontSizeCaption}"
-                         Padding="16,12" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto"
-                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                         Text="（还没有日志）" />
+            <TextBox x:Name="LogBox" IsReadOnly="True" MinHeight="150" MaxHeight="240"
+                     BorderThickness="0" Background="Transparent"
+                     FontFamily="{DynamicResource FontFamilyMono}"
+                     FontSize="{DynamicResource FontSizeCaption}"
+                     Padding="16,12" TextWrapping="Wrap"
+                     VerticalScrollBarVisibility="Auto"
+                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                     Text="（还没有日志）" />
+            <fl:LinkRow x:Name="ClearLogLink" Title="清空日志" Hint="只清界面上的记录，app.log 不受影响"
+                        Icon="{StaticResource Icon.Restart}" TileColor="#FF8661C5" />
         </fl:SettingGroup>
+
+        <TextBlock x:Name="SummaryText" Style="{StaticResource CaptionText}" Margin="4,0,0,0" />
     </StackPanel>
 </UserControl>

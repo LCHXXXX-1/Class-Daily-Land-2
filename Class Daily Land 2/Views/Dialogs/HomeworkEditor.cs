@@ -33,6 +33,9 @@ public sealed class HomeworkEditor : UserControl
     readonly List<Row> _items = new();
     readonly TextBlock _empty;
 
+    /// <summary>面包屑的父页（它不是 DialogPanel，单独给一个属性）。</summary>
+    public string ParentPageTitle => "作业";
+
     public HomeworkEditor(SettingsViewModel vm, bool embedded)
     {
         _hw = vm.Ctx.Homework;

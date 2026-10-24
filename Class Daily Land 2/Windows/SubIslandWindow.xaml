@@ -1,0 +1,40 @@
+<Window x:Class="ClassDailyLand.App.Windows.SubIslandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SubIsland"
+        Height="40" Width="40"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowActivated="False"
+        Topmost="True"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        Focusable="False">
+
+    <!--
+      副岛（原生化）：窗口本身就是胶囊，Border 铺满 + CornerRadius=20 得到 pill。
+      收起态 = 圆环 + 进度点；展开态 = 文字。窗口宽度 / 位置由代码里的 WPF 动画驱动
+      （见 SubIslandWindow.cs 的 FollowTo），不再有 OnRender 手绘。
+    -->
+    <Grid x:Name="Root">
+        <Border x:Name="Capsule" CornerRadius="20" SnapsToDevicePixels="True" />
+
+        <!-- 收起态：外圈 + 进度点 -->
+        <Ellipse x:Name="RingOutline"
+                 Width="18" Height="18"
+                 StrokeThickness="2"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+        <Ellipse x:Name="ProgressDot"
+                 Width="0" Height="0"
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+        <!-- 展开态：文字 -->
+        <TextBlock x:Name="Label"
+                   Margin="15,0,10,0"
+                   FontSize="13"
+                   VerticalAlignment="Center"
+                   TextTrimming="CharacterEllipsis"
+                   Visibility="Collapsed" />
+    </Grid>
+</Window>

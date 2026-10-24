@@ -22,6 +22,12 @@ public class DialogPanel : Border
     public SettingsViewModel Vm { get; }
     protected AppController Ctx => Vm.Ctx;
 
+    /// <summary>面板标题（二级页当成页标题用）。</summary>
+    public string Title => _title.Text;
+
+    /// <summary>这一页是从哪个顶层页进来的，用来画面包屑。</summary>
+    public virtual string ParentPageTitle => "课表与提醒";
+
     public DialogPanel(SettingsViewModel vm, string title, string subtitle, double width)
     {
         Vm = vm;
@@ -176,8 +182,11 @@ public class DialogPanel : Border
     public static void Tell(DependencyObject owner, string message, string title = "提示")
         => DialogLauncher.Toast(owner, InfoBarSeverity.Information, title, message);
 
-    /// <summary>确认框（危险操作前用）。</summary>
-    protected bool AskConfirm(string message, string title = "确认")
-        => System.Windows.MessageBox.Show(Window.GetWindow(this), message, title,
-               MessageBoxButton.OKCancel, MessageBoxImage.Warning) == MessageBoxResult.OK;
+    /// <summary>
+    /// 确认框（危险操作前用）。
+    /// ★ 画在设置窗口内部，不弹系统 MessageBox —— 用户要求"所有提示都在这个窗口里弹"。
+    /// 回调式是因为窗口内浮层是异步的（原来是同步 MessageBox）。
+    /// </summary>
+    protected void AskConfirm(string message, Action onOk, string title = "确认")
+        => DialogLauncher.Confirm(this, title, message, onOk);
 }
