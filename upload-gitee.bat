@@ -8,10 +8,11 @@ REM  一键上传源码到 Gitee
 REM  用法：
 REM    upload-gitee.bat                 使用默认提交信息
 REM    upload-gitee.bat "提交说明"       自定义提交信息
-REM  首次使用：把下面的 GITEE_URL 改成你自己的 Gitee 仓库地址
+REM  首次使用：把下面的 GITEE_URL 改成你自己的 Gitee 仓库地址（SSH 方式）
+REM  需已在 Gitee 添加公钥，可先用 ssh -T git@gitee.com 验证
 REM ============================================================
 set "GITEE_REMOTE=gitee"
-set "GITEE_URL=https://gitee.com/lchxxxx/class-daily-land-2.git"
+set "GITEE_URL=git@gitee.com:lchxxxx/class-daily-land-2.git"
 
 set "MSG=%~1"
 if "%MSG%"=="" set "MSG=chore: 同步源码 %date% %time%"
@@ -71,8 +72,8 @@ if errorlevel 1 (
     echo.
     echo [失败] 推送失败，请检查：
     echo   1. Gitee 仓库已创建，且 GITEE_URL 正确
-    echo   2. 账号有写权限；HTTPS 首次推送会弹出登录窗口
-    echo   3. 若用 SSH，把 GITEE_URL 改为 git@gitee.com:用户名/仓库.git
+    echo   2. 已把公钥添加到 Gitee，ssh -T git@gitee.com 能成功握手
+    echo   3. 账号对该仓库有写权限
     goto :fail
 )
 
