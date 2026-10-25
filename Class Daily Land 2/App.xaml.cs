@@ -1,7 +1,4 @@
-﻿using System.IO;
-using System.Threading;
-using System.Windows;
-using ClassDailyLand.Core;
+﻿using System.Windows;
 
 namespace ClassDailyLand.App;
 

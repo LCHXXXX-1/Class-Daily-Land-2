@@ -1,4 +1,3 @@
-using ClassDailyLand.Core;
 using ClassDailyLand.Core.Managers;
 using ClassDailyLand.Core.Models;
 using ClassDailyLand.Core.Storage;
@@ -47,12 +46,13 @@ public class SettingsCenterTests : IDisposable
 
         Assert.Equal(true, meta["anim_fade_panel"].Default);
         Assert.Equal(true, meta["anim_fade_text"].Default);
-        Assert.Equal(false, meta["settings_mica"].Default);
+        // 云母/亚克力背板默认开启（Win11 走云母，Win10 1803+ 走亚克力，更老的会回退成不透明）
+        Assert.Equal(true, meta["settings_mica"].Default);
         Assert.Equal(true, meta["block_update_on_source"].Default);
 
         var settings = new AppSettings();
         Assert.True(settings.GetBool("block_update_on_source"));
-        Assert.False(settings.GetBool("settings_mica"));
+        Assert.True(settings.GetBool("settings_mica"));
 
         // 越界要夹住，不能把非法值写进 JSON
         settings.Set("animation_duration_ms", 99999);

@@ -1,3 +1,8 @@
+using ClassDailyLand.App.Theme;
+using ClassDailyLand.App.Win32;
+using ClassDailyLand.Core.Managers;
+using ClassDailyLand.Core.Plugins;
+using ClassDailyLand.Plugin;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -5,9 +10,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core.Managers;
 
 namespace ClassDailyLand.App.Windows;
 
@@ -28,6 +30,9 @@ public sealed class MainBoardWindow : Window
     readonly TextBlock _dutyLabel = new();
     readonly TextBlock _attendanceLabel = new();
     readonly TextBlock _homeworkEmpty = new();
+    readonly WrapPanel _titleRow = new() { Orientation = Orientation.Horizontal };
+    readonly StackPanel _badgePanel = new() { Orientation = Orientation.Horizontal };
+    readonly StackPanel _pluginSections = new() { Orientation = Orientation.Vertical };
     readonly StackPanel _homeworkPanel = new() { Orientation = Orientation.Vertical };
     readonly ScrollViewer _homeworkScroll = new();
     readonly DispatcherTimer _scrollTimer = new();
@@ -53,6 +58,14 @@ public sealed class MainBoardWindow : Window
         return ease;
     }
 
+    // ——— 插件注入口（宿主只放 Func，窗口不认识 PluginManager） ———
+    public Func<IReadOnlyList<BoardSectionRender>>? BoardSectionsProvider { get; set; }
+    public Func<BoardBadge?>? BoardBadgeProvider { get; set; }
+    public Func<IReadOnlyList<BoardActionSpec>>? BoardActionsProvider { get; set; }
+
+    string _badgeKey = "\u0000";
+    string _sectionKey = "\u0000";
+
     public event Action? PrevDutyRequested;
     public event Action? NextDutyRequested;
     public event Action? AttendanceRequested;
@@ -69,7 +82,9 @@ public sealed class MainBoardWindow : Window
     {
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.NoResize;
-        ShowInTaskbar = true;
+        // 主窗是贴边的桌面挂件，不该占任务栏；托盘图标才是它的入口。
+        // （任务栏里应当只剩设置窗口一个条目。）
+        ShowInTaskbar = false;
         Title = "班级日常";
         MinHeight = 100;
         FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI");
@@ -91,11 +106,16 @@ public sealed class MainBoardWindow : Window
         _homeworkScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
         _homeworkScroll.HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
         _homeworkScroll.Content = _homeworkPanel;
+        // 手指上下滑：无条件开（自动滚动在手指按住时会暂停，见 MouseEnter/Leave）
+        TouchMode.EnableTouchScroll(_homeworkScroll);
         _homeworkScroll.MouseEnter += (_, _) => _pausedByHover = true;
         _homeworkScroll.MouseLeave += (_, _) => _pausedByHover = false;
         _homeworkScroll.Focusable = false;
 
-        _stack.Children.Add(_title);
+        // 标题行用 WrapPanel：窄窗口时插件徽标自动换到下一行，不会把标题挤没
+        _titleRow.Children.Add(_title);
+        _titleRow.Children.Add(_badgePanel);
+        _stack.Children.Add(_titleRow);
         _stack.Children.Add(Gap(Spacing));
         _stack.Children.Add(_dutyLabel);
         _stack.Children.Add(Gap(Spacing));
@@ -103,6 +123,7 @@ public sealed class MainBoardWindow : Window
         _stack.Children.Add(Gap(Spacing));
         _stack.Children.Add(_homeworkScroll);
         _stack.Children.Add(_homeworkEmpty);
+        _stack.Children.Add(_pluginSections);
         _root.Child = _stack;
         Content = _root;
 
@@ -210,6 +231,117 @@ public sealed class MainBoardWindow : Window
         _stack.UpdateLayout();
     }
 
+    /// <summary>设置里改了「触屏优化」后重新落一次滑动能力（幂等，尺寸在设置窗那边处理）。</summary>
+    public void ApplyTouchMode() => TouchMode.EnableTouchScroll(_homeworkScroll);
+
+    // ————————————————————— 插件内容 —————————————————————
+
+    /// <summary>
+    /// 重画插件贡献的区块与徽标。每秒都会被调一次，所以先比"内容签名"，
+    /// 没变就直接返回 —— 不然每秒重建一遍可视树，滚动条会一直被拉回顶部。
+    /// </summary>
+    public void RefreshPluginContent()
+    {
+        RefreshPluginBadges();
+        RefreshPluginSections();
+    }
+
+    void RefreshPluginBadges()
+    {
+        BoardBadge? badge = null;
+        try { badge = BoardBadgeProvider?.Invoke(); }
+        catch { /* 插件异常按"没有徽标"处理 */ }
+
+        var key = badge is null ? "" : badge.Text + "|" + badge.Tone;
+        if (key == _badgeKey) return;
+        _badgeKey = key;
+
+        _badgePanel.Children.Clear();
+        if (badge is null) return;
+
+        var (fg, bg) = BoardBadgeColors(badge.Tone);
+        _badgePanel.Children.Add(new Border
+        {
+            Background = bg,
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(6, 1, 6, 2),
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = badge.Text,
+                FontSize = Math.Max(10, _fontSize - 5),
+                Foreground = fg,
+                TextWrapping = TextWrapping.NoWrap,
+            },
+        });
+    }
+
+    void RefreshPluginSections()
+    {
+        IReadOnlyList<BoardSectionRender> sections;
+        try { sections = BoardSectionsProvider?.Invoke() ?? Array.Empty<BoardSectionRender>(); }
+        catch { return; }
+
+        var key = string.Join("\u0001", sections.Select(s =>
+            s.Section.Title + "\u0002" + string.Join("\u0003", s.Section.Lines)));
+        if (key == _sectionKey) return;
+        _sectionKey = key;
+
+        _pluginSections.Children.Clear();
+        foreach (var item in sections)
+        {
+            if (!string.IsNullOrWhiteSpace(item.Section.Title))
+            {
+                _pluginSections.Children.Add(new TextBlock
+                {
+                    Text = item.Section.Title,
+                    FontSize = _fontSize,
+                    FontWeight = FontWeights.Bold,
+                    Foreground = Palette.Text,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, Spacing * 2, 0, 2),
+                });
+            }
+            foreach (var line in item.Section.Lines)
+            {
+                if (line is null) continue;
+                _pluginSections.Children.Add(new TextBlock
+                {
+                    Text = "  " + line,
+                    FontSize = _fontSize,
+                    Foreground = Palette.Text,
+                    TextWrapping = TextWrapping.Wrap,
+                    LineHeight = _fontSize * 1.35,
+                });
+            }
+        }
+
+        // 内容变高/变矮了，窗口要跟着重新贴边
+        if (IsVisible) Reposition();
+    }
+
+    static (Brush Foreground, Brush Background) BoardBadgeColors(BadgeTone tone)
+    {
+        var dark = Palette.IsDark;
+        Brush fg = tone switch
+        {
+            BadgeTone.Accent => Palette.Accent,
+            BadgeTone.Success => Frozen(dark ? Color.FromRgb(0x4C, 0xD9, 0x6A) : Color.FromRgb(0x10, 0x7C, 0x10)),
+            BadgeTone.Warning => Frozen(dark ? Color.FromRgb(0xFF, 0xC8, 0x3D) : Color.FromRgb(0x9D, 0x5D, 0x00)),
+            BadgeTone.Danger => Frozen(dark ? Color.FromRgb(0xFF, 0x6B, 0x5E) : Color.FromRgb(0xC4, 0x2B, 0x1C)),
+            _ => Palette.TextDim,
+        };
+        return (fg, Palette.CardAlt);
+    }
+
+    static Brush Frozen(Color c)
+    {
+        var brush = new SolidColorBrush(c);
+        brush.Freeze();
+        return brush;
+    }
+
     // ————————————————————— 外观与尺寸 —————————————————————
 
     public void ApplySettings(SettingsManager s)
@@ -264,6 +396,11 @@ public sealed class MainBoardWindow : Window
         _title.FontSize = newFont + 4;
         _dutyLabel.FontSize = _attendanceLabel.FontSize = _homeworkEmpty.FontSize = newFont;
         foreach (var tb in _homeworkPanel.Children.OfType<TextBlock>())
+        {
+            tb.FontSize = newFont;
+            if (!double.IsNaN(tb.LineHeight)) tb.LineHeight = newFont * 1.35;
+        }
+        foreach (var tb in _pluginSections.Children.OfType<TextBlock>())
         {
             tb.FontSize = newFont;
             if (!double.IsNaN(tb.LineHeight)) tb.LineHeight = newFont * 1.35;
@@ -325,6 +462,10 @@ public sealed class MainBoardWindow : Window
         _homeworkEmpty.Foreground = Palette.Text;
         foreach (var tb in _homeworkPanel.Children.OfType<TextBlock>())
             tb.Foreground = Palette.Text;
+        // 插件区块/徽标是按当时的色板造出来的，换主题后必须重建一次
+        _badgeKey = "\u0000";
+        _sectionKey = "\u0000";
+        RefreshPluginContent();
         foreach (var tb in new[] { _title, _dutyLabel, _attendanceLabel, _homeworkEmpty })
             tb.TextWrapping = TextWrapping.Wrap;
     }
@@ -429,6 +570,24 @@ public sealed class MainBoardWindow : Window
         Item("假期与调休", () => HolidayRequested?.Invoke());
         Item("周末作息", () => WeekendRequested?.Invoke());
         menu.Items.Add(new Separator());
+        // 插件菜单项：排在「设置」前面，各自夹一层 try（插件回调不能拖垮菜单）
+        IReadOnlyList<BoardActionSpec> pluginActions = Array.Empty<BoardActionSpec>();
+        try { pluginActions = BoardActionsProvider?.Invoke() ?? Array.Empty<BoardActionSpec>(); }
+        catch { /* 拿不到就当没有 */ }
+        if (pluginActions.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            foreach (var spec in pluginActions)
+            {
+                var action = spec.Invoke;
+                Item(spec.Text, () =>
+                {
+                    try { action(); }
+                    catch (Exception ex) { Console.Error.WriteLine($"插件菜单「{spec.Text}」异常: {ex.Message}"); }
+                });
+            }
+        }
+
         Item("设置", () => SettingsRequested?.Invoke());
         menu.Items.Add(new Separator());
         Item("随机点名", () => RollCallRequested?.Invoke());

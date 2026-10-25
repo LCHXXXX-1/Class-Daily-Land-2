@@ -1,135 +1,131 @@
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Threading;
+using ClassDailyLand.App.Theme;
 using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core;
 using ClassDailyLand.Core.Engine;
+using ClassDailyLand.Core.Plugins;
+using System.Windows;
+using System.Windows.Threading;
 
 namespace ClassDailyLand.App.Windows;
 
 /// <summary>
 /// 单个下拉面板：从高度 0（+6px）展开到目标高度（OutCubic），收起反向。
 /// 视觉对齐原版 panel_window.py：底色 #1c1c1e、圆角 8、文字 13px #e6e6e6、边距 12。
+///
+/// **原生化**：视觉树在 PanelWindow.xaml（Border 卡片 + ScrollViewer + ItemsControl），
+/// 本文件只留展开/收起动画与内容装载。滚动交给原生 ScrollViewer，
+/// 底部渐隐是原生 Rectangle + 渐变。
 /// </summary>
-public sealed class PanelWindow : Window
+public sealed partial class PanelWindow : Window
 {
-    static readonly Brush Bg = MakeSolid(0x1c, 0x1c, 0x1e);
-    static readonly Brush Fg = MakeSolid(0xe6, 0xe6, 0xe6);
-    static readonly Typeface Tf = new("Microsoft YaHei UI");
-
     const double MarginAll = 12;
     const double Radius = 8;
+    const double LineHeight = 22;
 
-    readonly List<TextChunk> _chunks = new();          // 预排版文字（避免每帧 new）
-    readonly DispatcherTimer _anim = new() { Interval = TimeSpan.FromMilliseconds(16) };
     readonly bool _fade;
     readonly int _durationMs;
 
     double _baseX, _baseY;          // 落位（收起后回这里）
-    double _curH = 0;               // 当前视觉高度（动画用）
     double _targetH;
-    double _scroll;                 // 内容滚动偏移
-    bool _open;
     bool _closed;
-    DateTime _animStart;
+    bool _busy;                     // 展开/收起动画进行中
 
-    public bool Idle => !_anim.IsEnabled;
+    public bool Idle => !_busy;
 
     public PanelWindow(double x, double yTop, double width, double height, double durationMs, bool fade)
     {
+        InitializeComponent();
+
         _baseX = x;
         _baseY = yTop;
         _targetH = Math.Max(24, height);
         _durationMs = Math.Max(80, (int)durationMs);
         _fade = fade;
 
-        WindowStyle = WindowStyle.None;
-        AllowsTransparency = true;
-        Background = Brushes.Transparent;
-        ShowActivated = false;
-        Topmost = true;
-        ShowInTaskbar = false;
-        Focusable = false;
-        ResizeMode = ResizeMode.NoResize;
+        Card.Background = Palette.PanelBg;
+        Lines.Foreground = Palette.PanelText;
+        BottomFade.Visibility = Visibility.Collapsed;
 
         Width = width;
         Height = 1;
         Left = x;
         Top = yTop;
 
-        SnapsToDevicePixels = true;
-        _anim.Tick += (_, _) => StepFrame();
+        // 交错展开时先 Show 出来再等 70ms 做动画；透明着等，避免屏幕边缘闪一条 1px 的线
+        Opacity = 0;
 
         SourceInitialized += (_, _) => Interop.MakeToolWindowNoActivate(this);
-        MouseWheel += (_, e) => Scroll(-e.Delta / 3.0);
+
+        // 面板是 NOACTIVATE 窗口，通常不会触发；保留作为普通窗口/特殊桌面环境下的兜底
+        Deactivated += (_, _) => DismissRequested?.Invoke();
+
+        // 任何路径关闭后都不再允许动画/写入，避免迟到的交错定时器碰到已关闭窗口
+        Closed += (_, _) => _closed = true;
+
+        MouseWheel += (_, e) =>
+        {
+            Scroll.ScrollToVerticalOffset(Scroll.VerticalOffset - e.Delta / 3.0);
+            UpdateFade();
+        };
+        Scroll.ScrollChanged += (_, _) => UpdateFade();
+        // 手指上下滑：无条件开（默认 PanningMode=None，手指按住是一点都不动的）
+        TouchMode.EnableTouchScroll(Scroll);
     }
 
-    static Brush MakeSolid(byte r, byte g, byte b)
-    {
-        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
-        brush.Freeze();
-        return brush;
-    }
-
-    /// <summary>设置纯文本内容（\n 换行时按行高 22 预排版）。</summary>
+    /// <summary>设置纯文本内容（一行一项）。</summary>
     public void SetLines(IEnumerable<string> lines)
     {
-        _chunks.Clear();
-        foreach (var line in lines)
-        {
-            var text = line ?? "";
-            var ft = new FormattedText(
-                text, System.Globalization.CultureInfo.CurrentUICulture,
-                FlowDirection.LeftToRight, Tf, 13, Fg, 1.0);
-            _chunks.Add(new TextChunk(ft, text));
-        }
-        InvalidateVisual();
+        Lines.ItemsSource = lines.Select(l => l ?? "").ToList();
+        UpdateFade();
     }
 
-    readonly record struct TextChunk(FormattedText Formatted, string Source);
-
-    /// <summary>展开动画。</summary>
+    /// <summary>展开动画：高度 0 → 目标，Top 从 y+6 落到 y，从主岛下方展开。</summary>
     public void AnimateIn()
     {
         if (_closed) return;
-        _open = true;
-        SetHeight(0);
-        _animStart = DateTime.Now;
-        _anim.Start();
+        Opacity = 1;
+        BeginAnimation(HeightProperty, null);
+        BeginAnimation(TopProperty, null);
+        Height = 0;
+        Top = Math.Round(_baseY + 6);
+        UpdateFade();
+        Play(_targetH, Math.Round(_baseY));
     }
 
     public void AnimateOut()
     {
-        _open = false;
-        _animStart = DateTime.Now;
-        _anim.Start();
+        if (_closed) return;
+
+        // 与 Python 原版一致：从当前位置直接收高度，顶边保持不动（不再整窗上滑）
+        var top = double.IsNaN(Top) ? _baseY : Top;
+
+        BeginAnimation(HeightProperty, null);
+        BeginAnimation(TopProperty, null);
+        Play(0, top, closeWhenDone: true);
     }
 
-    void StepFrame()
+    /// <summary>高度与 Top 用同一条缓动同步跑（时长/曲线来自 Anim 统一入口）。</summary>
+    void Play(double h, double top, bool closeWhenDone = false)
     {
-        var t = Math.Clamp((DateTime.Now - _animStart).TotalMilliseconds / _durationMs, 0, 1);
-        var k = Easing.OutCubic(t);
-        if (_open)
+        _busy = true;
+        // 设置里关掉动画时 durationMs 传 0，Anim.Slide 返回 null → 直接落位
+        var anim = Anim.Slide(h, _fade ? _durationMs : 0);
+        if (anim is null)
         {
-            SetHeight(Lerp(0, _targetH, k));
-            if (t >= 1) _anim.Stop();
+            Height = h;
+            Top = top;
+            _busy = false;
+            UpdateFade();
+            if (closeWhenDone) CloseIfDone();
+            return;
         }
-        else
+        anim.Completed += (_, _) =>
         {
-            SetHeight(Lerp(_targetH, 0, k));
-            if (t >= 1) { _anim.Stop(); CloseIfDone(); }
-        }
-    }
-
-    static double Lerp(double a, double b, double t) => a + (b - a) * t;
-
-    void SetHeight(double h)
-    {
-        _curH = h;
-        Height = Math.Max(1, Math.Round(h));
-        Top = Math.Round(_baseY + 6 - h);   // 对齐原版：起点在 y+6，向上长出 6px 更顺势
+            _busy = false;
+            UpdateFade();
+            if (closeWhenDone) CloseIfDone();
+        };
+        BeginAnimation(HeightProperty, anim);
+        BeginAnimation(TopProperty, Anim.Slide(top, _fade ? _durationMs : 0)!);
     }
 
     void CloseIfDone()
@@ -142,48 +138,19 @@ public sealed class PanelWindow : Window
 
     public event Action? ClosedByAnim;
 
-    void Scroll(double delta)
+    /// <summary>窗口失活时请求宿主收起全部面板（NoActivate 下主要靠全局鼠标钩子）。</summary>
+    public event Action? DismissRequested;
+
+    /// <summary>内容比视口高、且还没滚到底时，底部渐隐提示。</summary>
+    void UpdateFade()
     {
-        var maxScroll = Math.Max(0, ContentHeight() - _targetH + MarginAll);
-        var before = _scroll;
-        _scroll = Math.Clamp(_scroll - delta, 0, maxScroll);
-        if (Math.Abs(_scroll - before) > 0.5) InvalidateVisual();
-    }
-
-    double ContentHeight() => MarginAll + _chunks.Count * 22 + 8;
-
-    protected override void OnRender(DrawingContext dc)
-    {
-        var w = ActualWidth;
-        var h = ActualHeight;
-        if (h <= 1.5) return;
-
-        var rect = new Rect(0, 0, w, h);
-        dc.DrawRoundedRectangle(Bg, null, rect, Radius, Radius);
-
-        dc.PushClip(new RectangleGeometry(rect, Radius, Radius));
-        var y = MarginAll - _scroll;
-        foreach (var chunk in _chunks)
+        if (Scroll.ExtentHeight <= 0 || ActualHeight <= 1.5)
         {
-            if (y > h) break;
-            if (y + chunk.Formatted.Height > 0)
-                dc.DrawText(chunk.Formatted, new Point(MarginAll, y));
-            y += 22;
+            BottomFade.Visibility = Visibility.Collapsed;
+            return;
         }
-
-        // 内容超高时画底部渐隐（提示继续滚动）
-        var maxScroll = Math.Max(0, ContentHeight() - _targetH + MarginAll);
-        if (_scroll < maxScroll && y > h)
-        {
-            dc.PushOpacity(0.85);
-            var grad = new LinearGradientBrush(
-                Color.FromArgb(0, 28, 28, 30),
-                Color.FromArgb(0xff, 28, 28, 30),
-                new Point(0, 0), new Point(0, 1));
-            dc.DrawRectangle(grad, null, new Rect(0, h - 22, w, 22));
-            dc.Pop();
-        }
-        dc.Pop();
+        var more = Scroll.ExtentHeight - Scroll.ViewportHeight - Scroll.VerticalOffset;
+        BottomFade.Visibility = more > 1 ? Visibility.Visible : Visibility.Collapsed;
     }
 }
 
@@ -198,25 +165,53 @@ public sealed class IslandPanelHost
     const int HoldMs = 3000;
     const double SchedulePanelWidth = 240;
     const double MaxHeightRatio = 1.0 / 3.0;
+    const double LineHeight = 22;      // 与 XAML 里 TextBlock 的行高一致
 
     readonly AppController _ctx;
     readonly List<PanelWindow> _panels = new();
     DispatcherTimer? _hold;
+    GlobalMouseHook? _mouseHook;
     bool _open;
     int _generation;
 
     public IslandPanelHost(AppController ctx) => _ctx = ctx;
 
+    /// <summary>插件面板（排在「今日课程」右側；总宽超限时先丢它们）。</summary>
+    public Func<IReadOnlyList<PanelRender>>? PluginPanelsProvider { get; set; }
+
     public void Toggle()
     {
-        if (_open) { Collapse(); return; }
-        PullDown();
+        try
+        {
+            if (_open) { Collapse(); return; }
+            PullDown();
+        }
+        catch (Exception ex)
+        {
+            // 连续快速点击时任何一步失败，都不能留下“半开”的状态
+            _ctx.Log?.Warn("切换下拉面板失败: " + ex.Message);
+            _open = false;
+            _hold?.Stop();
+            DisposeMouseHook();
+            ClosePanels();
+            _ctx.Island?.SetPanelWidth(0);
+        }
     }
 
     void PullDown()
     {
+        // ① 上一次的面板可能还在收起动画里：先作废旧代数，再强行关掉所有旧实例。
+        //    不清理的话新旧两批窗口会叠在一起，_open 也会被旧的 Closed 回调改错。
+        _generation++;
+        _hold?.Stop();
+        DisposeMouseHook();
+        ClosePanels();
+
+        var island = _ctx.Island;
+        if (island is null) { _open = false; return; }
+
         var specs = BuildSpecs().ToList();
-        if (specs.Count == 0) return;
+        if (specs.Count == 0) { _open = false; island.SetPanelWidth(0); return; }
 
         // 总宽若超过屏幕 80% 则收窄/丢弃（对齐原版 MAX_TOTAL_RATIO）
         var work = WindowUtil.WorkAreaDip();
@@ -229,10 +224,13 @@ public sealed class IslandPanelHost
         }
 
         var startX = Math.Round((work.Width - total) / 2);
-        var yTop = Math.Round(work.Top + _ctx.Island!.TopDip + _ctx.Island.HeightDip + PanelGap);
+        var yTop = Math.Round(work.Top + island.TopDip + island.HeightDip + PanelGap);
 
+        // 主岛宽度跟随下方所有面板的总宽，展开时平滑拉长
+        island.SetPanelWidth(total);
+
+        // 先置位再建窗口：这期间即使有 Closed 回调，代次也已经更新，不会把 _open 改错
         _open = true;
-        _generation++;
         var gen = _generation;
 
         for (var i = 0; i < specs.Count; i++)
@@ -242,8 +240,32 @@ public sealed class IslandPanelHost
             startX += (int)spec.Width + (int)PanelGap;
             var pw = new PanelWindow(x, yTop, spec.Width, spec.Height, 320, fade: true);
             pw.SetLines(spec.Lines);
-            pw.Closed += (_, _) => { _panels.Remove(pw); if (gen == _generation && _panels.Count == 0) _open = false; };
+
+            pw.DismissRequested += () => { if (gen == _generation) Collapse(); };
+            pw.Closed += (_, _) =>
+            {
+                _panels.Remove(pw);
+                if (gen != _generation || _panels.Count != 0) return;
+
+                // 只有所有面板都真正关闭了，才清掉展开状态与全局钩子
+                _open = false;
+                _hold?.Stop();
+                DisposeMouseHook();
+                _ctx.Island?.SetPanelWidth(0);
+            };
+
             _panels.Add(pw);
+
+            // Window 必须先 Show 才会渲染；XAML 里 ShowActivated=False + NOACTIVATE 不抢焦点
+            pw.Show();
+
+            // Show 期间若被收起（失活/异常），立刻中止本次展开，别留下透明鬼影
+            if (gen != _generation || !_open)
+            {
+                ClosePanels();
+                _open = false;
+                return;
+            }
 
             // 交错展开（70ms 间隔）
             var delay = i * StaggerMs;
@@ -256,11 +278,20 @@ public sealed class IslandPanelHost
             timer.Start();
         }
 
-        // 3 秒无操作自动收起
+        // 3 秒无操作自动收起。
+        // Tick 里捕获这一只 timer：极快重新展开时，上一只 timer 已排队的 Tick
+        // 不能把新的 _hold 停掉、更不能把刚展开的面板又收起。
         _hold?.Stop();
-        _hold = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoldMs) };
-        _hold.Tick += (_, _) => { _hold!.Stop(); if (_open) Collapse(); };
-        _hold.Start();
+        var hold = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(HoldMs) };
+        hold.Tick += (_, _) =>
+        {
+            hold.Stop();
+            if (ReferenceEquals(_hold, hold) && _open) Collapse();
+        };
+        _hold = hold;
+        hold.Start();
+
+        EnsureMouseHook();
     }
 
     public void Collapse()
@@ -268,9 +299,75 @@ public sealed class IslandPanelHost
         _open = false;
         _generation++;
         _hold?.Stop();
+        DisposeMouseHook();
+        _ctx.Island?.SetPanelWidth(0);
+
         // 拷贝一份再遍历：面板收起/关闭时 Closed 回调会从 _panels 里移除自己，
         // 直接 foreach 原集合会抛 InvalidOperationException。
-        foreach (var p in _panels.ToList()) p.AnimateOut();
+        foreach (var p in _panels.ToList())
+        {
+            try { p.AnimateOut(); }
+            catch (Exception ex) { _ctx.Log?.Warn("收起下拉面板失败: " + ex.Message); }
+        }
+    }
+
+    /// <summary>强制关闭所有旧面板（不做收起动画），用于重新展开前清理残留实例。</summary>
+    void ClosePanels()
+    {
+        if (_panels.Count == 0) return;
+
+        foreach (var p in _panels.ToList())
+        {
+            try { p.Close(); }
+            catch { /* 已经关闭 / 句柄还没建好：反正要从列表里丢掉 */ }
+        }
+
+        _panels.Clear();
+    }
+
+    void EnsureMouseHook()
+    {
+        _mouseHook ??= new GlobalMouseHook();
+        _mouseHook.MouseDown -= OnGlobalMouseDown;
+        _mouseHook.MouseDown += OnGlobalMouseDown;
+
+        if (_mouseHook.Start()) return;
+
+        // 钩子装不上（极少数受限环境）：退回 3 秒自动收起，至少不会卡在展开态
+        _mouseHook.MouseDown -= OnGlobalMouseDown;
+        _mouseHook.Dispose();
+        _mouseHook = null;
+    }
+
+    void DisposeMouseHook()
+    {
+        if (_mouseHook is null) return;
+
+        _mouseHook.MouseDown -= OnGlobalMouseDown;
+        _mouseHook.Dispose();
+        _mouseHook = null;
+    }
+
+    void OnGlobalMouseDown(int x, int y)
+    {
+        if (!_open) return;
+        if (ContainsScreenPoint(x, y)) return;
+
+        // 钩子回调里直接关窗容易和 WPF 的输入处理重入，转到下一次消息再收起
+        var dispatcher = Application.Current?.Dispatcher ?? _ctx.Island?.Dispatcher;
+        if (dispatcher is null) { Collapse(); return; }
+
+        dispatcher.BeginInvoke(new Action(() => { if (_open) Collapse(); }));
+    }
+
+    bool ContainsScreenPoint(int x, int y)
+    {
+        if (_ctx.Island is { } island && Interop.WindowContainsScreenPoint(island, x, y)) return true;
+
+        foreach (var p in _panels.ToList())
+            if (Interop.WindowContainsScreenPoint(p, x, y)) return true;
+
+        return false;
     }
 
     record PanelSpec(double Width, double Height, IReadOnlyList<string> Lines);
@@ -300,8 +397,22 @@ public sealed class IslandPanelHost
 
         var work = WindowUtil.WorkAreaDip();
         var maxH = work.Height * MaxHeightRatio;
-        var height = Math.Min(20 + lines.Count * 22 + 14, maxH);
+        var height = Math.Min(20 + lines.Count * LineHeight + 14, maxH);
         yield return new PanelSpec(SchedulePanelWidth, height, lines);
+
+        // 插件面板接在课程面板右边（和原版一样：内置在中间，插件从右往左排）
+        IReadOnlyList<PanelRender> extra;
+        try { extra = PluginPanelsProvider?.Invoke() ?? Array.Empty<PanelRender>(); }
+        catch { yield break; }
+
+        foreach (var item in extra)
+        {
+            var ratio = item.Spec.MaxHeightRatio <= 0
+                ? MaxHeightRatio
+                : Math.Clamp(item.Spec.MaxHeightRatio, 0.1, 0.6);
+            var h = Math.Min(20 + item.Lines.Count * LineHeight + 14, work.Height * ratio);
+            yield return new PanelSpec(item.Spec.Width, h, item.Lines);
+        }
     }
 
     /// <summary>显示用的开始时间要叠加全局时间偏移（原版 offset_time_str）。</summary>

@@ -1,6 +1,6 @@
+using ClassDailyLand.App.Controls;
 using System.Diagnostics;
 using System.Windows;
-using ClassDailyLand.App.Controls;
 
 namespace ClassDailyLand.App.Views;
 
@@ -20,6 +20,13 @@ public static class DialogLauncher
 
     public static void Toast(DependencyObject child, InfoBarSeverity severity, string title, string message)
         => OwnerOf(child)?.Toast(severity, title, message);
+
+    /// <summary>窗口内确认框（替代系统 MessageBox）。</summary>
+    public static void Confirm(DependencyObject child, string title, string message, Action onOk,
+                               string okText = "确定", string cancelText = "取消", Action? onCancel = null)
+        => OwnerOf(child)?.Confirm(title, message, onOk, okText, cancelText, onCancel);
+
+    public static bool IsConfirmOpen(DependencyObject child) => OwnerOf(child)?.IsConfirmOpen == true;
 
     /// <summary>在资源管理器里打开一个目录（不存在时先建）。</summary>
     public static void OpenFolder(string path)

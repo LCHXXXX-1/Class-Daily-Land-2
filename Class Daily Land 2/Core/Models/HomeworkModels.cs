@@ -9,7 +9,8 @@ public sealed class HomeworkItem
     [JsonPropertyName("content")] public string Content { get; set; } = "";
     [JsonPropertyName("date")] public string Date { get; set; } = "";
 
-    [JsonIgnore] public string Display
+    [JsonIgnore]
+    public string Display
     {
         get
         {

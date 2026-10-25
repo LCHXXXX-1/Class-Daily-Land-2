@@ -1,13 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
-    <!-- 与主工程一致：本机未装 .NET 8 时允许前滚到更高版本桌面运行时 -->
-    <RollForward>LatestMajor</RollForward>
+    <!--
+      与主程序保持一致（x64）：本项目直接引用主程序工程，被引用方是 x64 而这里是 AnyCPU 时
+      MSB3270 会告警，测试宿主也要按 x64 起才加载得动。
+    -->
+    <Platforms>AnyCPU;x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
   </PropertyGroup>
 
   <ItemGroup>

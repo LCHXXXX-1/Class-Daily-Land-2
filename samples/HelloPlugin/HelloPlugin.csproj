@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    示例插件。照着这个项目改就能做出自己的插件。
+
+    ★ 只引用契约程序集，而且必须 Private=false / ExcludeAssets=runtime：
+      契约 DLL 由宿主提供，插件目录里不要再放一份，否则两边类型对不上。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>HelloPlugin</RootNamespace>
+    <AssemblyName>HelloPlugin</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\ClassDailyLand.Plugin.Abstractions\ClassDailyLand.Plugin.Abstractions.csproj">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- plugin.json 跟着输出走，装的时候直接整个输出目录就行 -->
+    <None Update="plugin.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

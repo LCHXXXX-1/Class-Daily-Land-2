@@ -21,5 +21,16 @@
                               Value="{Binding AnimationDurationMs, Mode=TwoWay}" Label="动画时长" />
             </fl:SettingRow>
         </fl:SettingGroup>
+        <fl:SettingGroup Title="触屏" Icon="{StaticResource Icon.Tune}" TileColor="#FF0F7B0F">
+            <fl:SettingRow Title="触屏优化" Hint="{Binding TouchOptimizeHint}">
+                <fl:FluentToggle IsChecked="{Binding TouchOptimize, Mode=TwoWay}" Label="触屏优化" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="手指上下滑动" Hint="始终可用：设置页、下拉面板、作业列表都可以用手指拖动滚动，不需要开上面的开关">
+                <fl:Badge Text="默认开启" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="开关只影响" Hint="点击目标大小：控件 32→44、小控件 28→38、设置行 62→82、导航项 40→54">
+                <fl:Badge Text="即时生效" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
     </StackPanel>
 </UserControl>

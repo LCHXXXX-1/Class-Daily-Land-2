@@ -1,0 +1,102 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <OutputType>WinExe</OutputType>
+    <!-- TargetFramework 已显式声明；版本号真源是主程序 Updates\VersionInfo.cs -->
+    <RootNamespace>DeveloperIDE</RootNamespace>
+    <AssemblyName>DeveloperIDE</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>True</UseWindowsForms>
+    <!-- WinForms 与 WPF 同用：对话框一律显式写全名，避免 MessageBox / OpenFileDialog 二义 -->
+    <NoWarn>$(NoWarn);CS8618</NoWarn>
+    <!-- 只要简中与英文：NuGet 包里的其余几十个语种目录不进输出，也不进发布包 -->
+    <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+
+    <!-- 独立发布：运行库一起打进包，目标机没装 .NET 也不会报错（WPF 单文件只在 self-contained 下可用） -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+
+    <ApplicationIcon>Resources\icon.ico</ApplicationIcon>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- WinForms 与 WPF 同用时，避免全局 using 造成 MessageBox / Orientation 等二义 -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+    <!-- WPF 模板默认从隐式 using 里移除了 System.IO / System.Threading，这里补回 -->
+    <Using Include="System.IO" />
+    <Using Include="System.Threading" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.14.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 契约程序集：IDE 要靠它做语义分析（找 IPlugin 实现类），并保证引用解析一致 -->
+    <ProjectReference Include="..\ClassDailyLand.Plugin.Abstractions\ClassDailyLand.Plugin.Abstractions.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 进程查询（判断主程序是否还在跑）：纯 P/Invoke，不引 System.Diagnostics.Process -->
+    <Compile Include="..\Shared\NativeProcess.cs" Link="Shared\NativeProcess.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 版本号与主程序共用同一份硬编码常量（Updates\VersionInfo.cs） -->
+    <Compile Include="..\Class Daily Land 2\Updates\VersionInfo.cs" Link="VersionInfo.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 部署配置：项目根 config.json，启动时 AppConfig.Load() 读它 -->
+    <None Update="config.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\icon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+	  update\ 是独立的更新器工程。父工程默认通配会把它的 .cs / .xaml 一起收走
+	  （表现为 App 类重复、app.baml 重名），这里显式划清界限。
+	-->
+    <Compile Remove="update\**" />
+    <Page Remove="update\**" />
+    <ApplicationDefinition Remove="update\**" />
+    <None Remove="update\**" />
+    <EmbeddedResource Remove="update\**" />
+  </ItemGroup>
+
+  <!-- 先把更新器编出来（失败只警告，不拦 IDE 本体构建），再复制进输出的 Update\ -->
+  <Target Name="BuildUpdater" BeforeTargets="CopyUpdater"
+          Condition="'$(DesignTimeBuild)' != 'true' And '$(BuildingProject)' != 'false'">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)update\ClassDailyLand.DeveloperIDE.Updater.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration)"
+             ContinueOnError="WarnAndContinue" />
+  </Target>
+
+  <!--
+    只搬 IDEUpdater.* 这一组文件：更新器现在带 RID + SelfContained，
+    整个输出目录里还躺着全套运行库（几百个文件），全复制过来会把 IDE 的输出撑爆。
+    单文件发布时产物只有 IDEUpdater.exe；普通 build 时是 exe + dll + deps + runtimeconfig，通配都能兜住。
+    落点改到输出根目录：与 DeveloperIDE.exe 并排，AboutWindow 直接按 BaseDirectory\IDEUpdater.exe 找。
+  -->
+  <Target Name="CopyUpdater" AfterTargets="Build">
+    <ItemGroup>
+      <UpdaterFiles Include="$(MSBuildThisFileDirectory)update\bin\$(Configuration)\net10.0-windows10.0.19041.0\IDEUpdater.*" />
+      <UpdaterFiles Include="$(MSBuildThisFileDirectory)update\bin\$(Configuration)\net10.0-windows10.0.19041.0\win-x64\IDEUpdater.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(UpdaterFiles)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

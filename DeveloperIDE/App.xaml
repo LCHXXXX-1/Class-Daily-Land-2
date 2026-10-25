@@ -1,0 +1,16 @@
+﻿<Application x:Class="DeveloperIDE.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:DeveloperIDE"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <!-- 第一本：配色（App.ApplyTheme 整本替换这一项） -->
+                <ResourceDictionary Source="Themes/DarkTheme.xaml" />
+                <!-- 第二本：控件样式，颜色全走 DynamicResource，换主题不用重合并 -->
+                <ResourceDictionary Source="Themes/Controls.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

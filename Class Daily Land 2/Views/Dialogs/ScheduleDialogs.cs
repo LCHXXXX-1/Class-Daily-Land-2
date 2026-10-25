@@ -1,6 +1,6 @@
+using ClassDailyLand.Core.Models;
 using System.Windows;
 using System.Windows.Controls;
-using ClassDailyLand.Core.Models;
 
 namespace ClassDailyLand.App.Views.Dialogs;
 

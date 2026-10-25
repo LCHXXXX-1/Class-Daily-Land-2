@@ -1,0 +1,70 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	  独立的更新器：**框架依赖 + 单文件夹**（exe + 依赖 dll），不是单文件自包含。
+	  主程序同样是框架依赖，两者共用本机 .NET 10 桌面运行时。
+
+	  目标框架显式声明为 net10.0-windows10.0.19041.0，这里与其它工程保持一致。
+
+	  ★ 整个文件夹由主程序 csproj 的 CopyUpdater 目标拷到安装目录的 Update\ 下，
+	    运行时按 Update\Updater.exe 找（见 Updates\UpdateEnvironment）。
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<OutputType>WinExe</OutputType>
+		<UseWPF>true</UseWPF>
+		<RootNamespace>ClassDailyLand.Updater</RootNamespace>
+		<AssemblyName>Updater</AssemblyName>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<LangVersion>latest</LangVersion>
+		<ApplicationIcon>..\Class Daily Land 2\Resources\icon.ico</ApplicationIcon>
+
+		<!--
+		  框架依赖 + 单文件夹：不再自带运行库。
+		  单文件自包含的代价是**每次启动都要把几十 MB 运行时解压到 temp**，秒开变成十几秒；
+		  改成"exe + 一堆 dll"的普通输出后，启动就是一次正常的程序集加载。
+		  代价：目标机必须有 .NET 10 桌面运行时（主程序本身也要，所以不算新增要求）。
+		-->
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<PublishSingleFile>false</PublishSingleFile>
+		<!-- 不裁剪：更新器里有反射/COM/JSON 序列化，裁掉哪个成员都是运行期才炸 -->
+		<PublishTrimmed>false</PublishTrimmed>
+
+		<NoWarn>$(NoWarn);CA1416</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+		  ★ 真正的坑在这里：开了 UseWPF 之后，SDK 的隐式 using 里**没有** System.IO 与
+		    System.Threading（WinForms/WPF 模板历来如此），所以 File / Path / Directory /
+		    FileStream / FileMode / FileShare / FileAccess / IOException / StreamWriter /
+		    CancellationTokenSource 会集体报"找不到类型"。
+		    补法跟主程序、DeveloperIDE 完全一致：用 csproj 的 Using Include 一次性补回来，
+		    而不是在十来个 .cs 顶部各贴一行 using（漏一个就是又一轮编译错误）。
+		-->
+		<Using Include="System.IO" />
+		<Using Include="System.Threading" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+		  更新契约（job.json / version.json 的 DTO、SemVer、路径校验、哈希、替换计划）。
+		  ★ 与主程序一样用源码链接，而不是引用主程序程序集：更新器是独立进程，
+		    只靠**文件**（job.json）跟主程序对话，两边各自把契约编进自己的程序集。
+		-->
+		<Compile Include="..\Shared\UpdateContract\*.cs" Link="Contract\%(Filename)%(Extension)" />
+
+		<!-- 与主程序共用同一份版本 / exe 名常量（Updates\VersionInfo.cs） -->
+		<Compile Include="..\Class Daily Land 2\Updates\VersionInfo.cs" Link="VersionInfo.cs" />
+
+		<!--
+		  进程查询（等主程序退出 / 判断是否还在跑）：纯 P/Invoke 实现。
+		  不用 System.Diagnostics.Process —— 它在进程刚退出或无权访问时抛 Win32Exception，
+		  而更新器恰好只在"主程序正在退出"这个时间点工作，异常率最高。
+		-->
+		<Compile Include="..\Shared\NativeProcess.cs" Link="Shared\NativeProcess.cs" />
+	</ItemGroup>
+
+</Project>

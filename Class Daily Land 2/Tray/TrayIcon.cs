@@ -1,9 +1,9 @@
+using ClassDailyLand.Core;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using WinForms = System.Windows.Forms;
-using ClassDailyLand.Core;
 
 namespace ClassDailyLand.App.Tray;
 
@@ -24,7 +24,13 @@ public sealed class TrayIcon : IDisposable
     public event Action<bool>? IslandToggled;
     public event Action<bool>? SubToggled;
     public event Action? SettingsRequested;
+
+    /// <summary>托盘「检查更新」。</summary>
+    public event Action? CheckUpdateRequested;
     public event Action? ExitRequested;
+
+    /// <summary>插件注册的托盘菜单项（排在「设置」与「退出」之间）。每次弹菜单时现取。</summary>
+    public Func<IReadOnlyList<ClassDailyLand.Plugin.TrayActionSpec>>? PluginActions { get; set; }
 
     public TrayIcon(Logger? log = null)
     {
@@ -117,17 +123,56 @@ public sealed class TrayIcon : IDisposable
             SubToggled?.Invoke(false);
         };
 
+        // 检查更新：有新版本时把版本号写进文案，用户不点也知道
+        var updateLabel = "检查更新";
+        try
+        {
+            var pending = PendingUpdateVersion;
+            if (!string.IsNullOrEmpty(pending)) updateLabel = $"检查更新（{pending} 可用）";
+        }
+        catch { /* 取不到就用默认文案 */ }
+
+        var miUpdate = new MenuItem { Header = updateLabel };
+        miUpdate.Click += (_, _) => CheckUpdateRequested?.Invoke();
+
         var miSettings = new MenuItem { Header = "设置…" };
         miSettings.Click += (_, _) => SettingsRequested?.Invoke();
 
         var miExit = new MenuItem { Header = "退出" };
         miExit.Click += (_, _) => ExitRequested?.Invoke();
 
+        // 插件菜单项：拿不到（或没插件）就什么都不加，菜单保持原样
+        var pluginItems = new List<MenuItem>();
+        try
+        {
+            foreach (var spec in PluginActions?.Invoke() ?? Array.Empty<ClassDailyLand.Plugin.TrayActionSpec>())
+            {
+                var mi = new MenuItem { Header = spec.Text };
+                var action = spec.Invoke;
+                mi.Click += (_, _) =>
+                {
+                    try { action(); }
+                    catch (Exception ex) { _log?.Warn($"插件托盘菜单「{spec.Text}」抛异常: {ex.Message}"); }
+                };
+                pluginItems.Add(mi);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log?.Warn("取插件托盘菜单失败: " + ex.Message);
+        }
+
         var menu = new ContextMenu();
         menu.Items.Add(miMain);
         menu.Items.Add(miIsland);
         menu.Items.Add(miSub);
+        if (pluginItems.Count > 0)
+        {
+            menu.Items.Add(new Separator());
+            foreach (var mi in pluginItems) menu.Items.Add(mi);
+        }
         menu.Items.Add(new Separator());
+        menu.Items.Add(miUpdate);
         menu.Items.Add(miSettings);
         menu.Items.Add(miExit);
         return menu;
@@ -162,6 +207,9 @@ public sealed class TrayIcon : IDisposable
             _log?.Warn("托盘气泡失败: " + ex.Message);
         }
     }
+
+    /// <summary>外部注入：有新版本时的版本号（菜单文案用）；null 表示没有待更新。</summary>
+    public string? PendingUpdateVersion { get; set; }
 
     public void Dispose()
     {

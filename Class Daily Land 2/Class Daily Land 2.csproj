@@ -1,27 +1,52 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<OutputType>WinExe</OutputType>
 		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<OutputType>WinExe</OutputType>
 		<RootNamespace>ClassDailyLand</RootNamespace>
 		<AssemblyName>Class Daily Land 2</AssemblyName>
+		<Version>1.0</Version>
+		<AssemblyVersion>1.0.0.0</AssemblyVersion>
+		<FileVersion>1.0</FileVersion>
+		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<UseWPF>true</UseWPF>
 		<UseWindowsForms>true</UseWindowsForms>
 		<ApplicationIcon>Resources\icon.ico</ApplicationIcon>
 		<LangVersion>latest</LangVersion>
-		<NoWarn>$(NoWarn);CA1416;CS8618</NoWarn>
 		<!--
-		  设置中心与二级浮层：原生 WPF XAML（样式与令牌在 Themes\ 下）。
+		  显式钉死 x64：这里全是 WPF / WinForms / P-Invoke 的 Windows 专用代码，发布的 RID 也是 win-x64。
+		  不写的话 Debug 下的 AnyCPU 产物在引用与被引用之间会报 MSB3270 架构不匹配（警告刷屏且真假难辨）。
+		-->
+		<Platforms>AnyCPU;x64</Platforms>
+		<PlatformTarget>x64</PlatformTarget>
+		<NoWarn>$(NoWarn);CA1416;CS8618</NoWarn>
+		<!-- 只要简中与英文：NuGet 包里的其余几十个语种目录既不进 Debug 输出，也不进发布包 -->
+		<SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+		<!--
+		  设置中心与二级浮层：原生 WPF XAML（样式与令牌在 Themes\ 下，逐条对位 ui\ 的设计）。
 		  灵动岛 / 副岛 / 主窗 / 下拉面板仍为 OnRender 自绘。
-		  界面只用 WPF 自身；CommunityToolkit.Mvvm 仅提供 INPC / 命令样板，不含任何控件。
-		  目标框架 net10.0-windows10.0.19041.0，需要 .NET 10 SDK / 桌面运行时。
+		  界面框架只用 WPF 自身；CommunityToolkit.Mvvm 仅提供 INPC / 命令样板，不含任何控件。
+		  目标框架在每个 .csproj 中显式声明（net10.0-windows10.0.19041.0），版本号真源是 update\VersionInfo.cs。
 		-->
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-	  <Optimize>False</Optimize>
+	<!--
+	  发布形态：轻量**单目录**、framework-dependent —— 只带程序自己的 exe / dll / deps.json /
+	  runtimeconfig.json，运行库依赖目标机器上装好的 .NET 桌面运行时；不打包单文件、不自带运行库，
+	  所以也没有 IncludeNativeLibrariesForSelfExtract（那个只有单文件发布才用得上）。
+	  Debug 不受影响：照常 build / run，输出目录不多一层 win-x64。
+
+	  独立更新器（updater\ClassDailyLand.Updater.exe）是另一个进程、单独发布并自带运行库，
+	  与这里的主程序发布形态无关，不要跟着一起改。
+	-->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<PublishSingleFile>false</PublishSingleFile>
+		<!-- 只定了 net10.0：允许目标机器装了更高大版本（11/12…）的桌面运行时也直接跑 -->
+		<RollForward>LatestMajor</RollForward>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -36,13 +61,78 @@
 	<ItemGroup>
 		<Resource Include="Resources\icon.ico" />
 		<None Include="Resources\icon.ico" Link="icon.ico" CopyToOutputDirectory="PreserveNewest" />
-		<Content Include="Resources\config.json">
+		<!-- 全国城市经纬度表：内嵌进程序集（不散落在输出目录） -->
+		<EmbeddedResource Include="Resources\cities.json" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- 出厂默认配置：随构建复制到输出目录 settings\（仅当源文件比目标新时才覆盖） -->
+		<None Update="settings\**\*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-		</Content>
+		</None>
+
+		<!--
+		  独立更新器是仓库里的 ClassDailyLand.Updater 工程，框架依赖 + 单文件夹，
+		  由下面的 CopyUpdater 目标整目录拷到输出目录的 Update\ 下。
+		  updater\ 子目录只剩 1.1.0 及以前的老二进制，StageUpdater 仍会回退去那里找。
+		-->
+	</ItemGroup>
+
+	<!--
+	  把更新器**整个输出文件夹**复制到主程序的 $(OutputPath)Update\。
+
+	  ★ 更新器是"框架依赖 + 单文件夹"：exe 旁边必须有一堆 dll、Updater.deps.json、
+	    Updater.runtimeconfig.json。只拷 exe 会得到"找不到依赖"的坏更新器。
+	  ★ 构建交给下面的 ProjectReference（ReferenceOutputAssembly=false）：
+	    MSBuild 会按正常构建图 Restore + Build 它，顺序与并行都安全。
+	    以前这里用嵌套 <MSBuild Targets="Restore;Build"> 手搓，在 Build 期间跑 Restore
+	    会让 MSBuild 引擎状态错乱，典型症状就是那条含糊的
+	    "未知的生成错误：值不在预期的范围内"。
+	-->
+	<Target Name="CopyUpdater" AfterTargets="Build">
+		<PropertyGroup>
+			<_UpdaterOutDir>..\ClassDailyLand.Updater\bin\$(Configuration)\$(TargetFramework)\win-x64</_UpdaterOutDir>
+		</PropertyGroup>
+
+		<Error Condition="!Exists('$(_UpdaterOutDir)\Updater.exe')" Text="更新器没有编译出 Updater.exe：$(_UpdaterOutDir) 不存在或为空。请先构建 ClassDailyLand.Updater 工程。" />
+
+		<!-- 上一版把单文件 Updater.exe 放在输出根目录：清掉，免得旧的坏更新器被优先找到 -->
+		<Delete Files="$(OutputPath)Updater.exe;$(OutputPath)Updater.dll;$(OutputPath)Updater.deps.json;$(OutputPath)Updater.runtimeconfig.json" />
+
+		<ItemGroup>
+			<!-- 递归搬，但排除 publish（历史上 publish 过就会留一大坨）与调试符号 -->
+			<_UpdaterFiles Include="$(_UpdaterOutDir)\**\*.*" Exclude="$(_UpdaterOutDir)\publish\**\*.*;$(_UpdaterOutDir)\**\*.pdb;$(_UpdaterOutDir)\**\*.xml" />
+		</ItemGroup>
+
+		<Copy SourceFiles="@(_UpdaterFiles)" DestinationFiles="@(_UpdaterFiles->'$(OutputPath)Update\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+	</Target>
+
+	<ItemGroup>
+		<!--
+		  更新契约（job.json / version.json 的 DTO、SemVer、路径校验、哈希、替换计划）。
+		  ★ 用源码链接而不是 ProjectReference：更新器是独立进程，靠**文件**（job.json）与主程序对话，
+		    不靠共享程序集；契约源码分别编进两边各自的程序集（更新器工程里也有一份同样的链接）。
+		-->
+		<Compile Include="..\Shared\UpdateContract\*.cs" Link="Updates\Contract\%(Filename)%(Extension)" />
 	</ItemGroup>
 
 	<ItemGroup>
 	  <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <!-- 插件契约：插件作者只引用这一个程序集，宿主与插件共享同一份副本 -->
+	  <ProjectReference Include="..\ClassDailyLand.Plugin.Abstractions\ClassDailyLand.Plugin.Abstractions.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+		  更新器只作为"构建依赖"引用：不进编译引用（ReferenceOutputAssembly=false）、
+		  也不往输出目录复制（Private=false）。
+		  这样 MSBuild 会按正常图先构建它（含 Restore），CopyUpdater 才有东西可搬。
+		  双方都是框架依赖，不会再触发"self-contained 工程不能引用"的 NETSDK1150。
+		-->
+		<ProjectReference Include="..\ClassDailyLand.Updater\ClassDailyLand.Updater.csproj" ReferenceOutputAssembly="false" Private="false" />
 	</ItemGroup>
 
 </Project>

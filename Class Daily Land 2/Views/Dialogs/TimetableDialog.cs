@@ -1,9 +1,9 @@
+using ClassDailyLand.Core.Models;
+using Microsoft.Win32;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using ClassDailyLand.Core.Models;
-using Microsoft.Win32;
 
 namespace ClassDailyLand.App.Views.Dialogs;
 
@@ -144,9 +144,11 @@ public sealed class TimetableDialog : DialogPanel
             Tell(this, "至少保留一张课表。", "删除");
             return;
         }
-        if (!AskConfirm($"确定删除课表「{name}」吗？")) return;
-        Ctx.Schedule.DeleteTimetable(name);
-        RebuildList();
+        AskConfirm($"确定删除课表「{name}」吗？", () =>
+        {
+            Ctx.Schedule.DeleteTimetable(name);
+            RebuildList();
+        }, "删除课表");
     }
 
     // ————————————————————— 明细 —————————————————————
@@ -292,18 +294,20 @@ public sealed class TimetableDialog : DialogPanel
             Filter = "JSON 文件 (*.json)|*.json|所有文件 (*.*)|*.*",
         };
         if (dlg.ShowDialog(Window.GetWindow(this)) != true) return;
-        if (!AskConfirm("导入会覆盖当前全部课表（含假期与调休），确定继续吗？")) return;
-        try
+        AskConfirm("导入会覆盖当前全部课表（含假期与调休），确定继续吗？", () =>
         {
-            if (!Ctx.Schedule.ImportJson(System.IO.File.ReadAllText(dlg.FileName, System.Text.Encoding.UTF8)))
-                Tell(this, "文件内容不是有效的课表 JSON。", "导入课表");
-            else _status.Text = "导入完成。";
-        }
-        catch (Exception ex)
-        {
-            Tell(this, "导入失败：" + ex.Message, "导入课表");
-        }
-        RebuildList();
+            try
+            {
+                if (!Ctx.Schedule.ImportJson(System.IO.File.ReadAllText(dlg.FileName, System.Text.Encoding.UTF8)))
+                    Tell(this, "文件内容不是有效的课表 JSON。", "导入课表");
+                else _status.Text = "导入完成。";
+            }
+            catch (Exception ex)
+            {
+                Tell(this, "导入失败：" + ex.Message, "导入课表");
+            }
+            RebuildList();
+        }, "导入课表");
     }
 
     static string Norm(string s)

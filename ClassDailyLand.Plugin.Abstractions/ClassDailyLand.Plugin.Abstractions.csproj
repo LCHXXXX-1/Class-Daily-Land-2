@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    插件契约（插件作者唯一需要引用的程序集）。
+
+    这里刻意**不引 WPF**：插件只声明"给我一块地方、我给你内容"，
+    具体怎么画由宿主决定，插件不必关心宿主的视觉树。
+
+    改这个程序集等于改契约：加成员出新版本，改已有成员必须同步
+    PluginManager 里的 ApiVersion 与 docs/plugins.md。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RootNamespace>ClassDailyLand.Plugin</RootNamespace>
+    <AssemblyName>ClassDailyLand.Plugin.Abstractions</AssemblyName>
+    <Version>1.1.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

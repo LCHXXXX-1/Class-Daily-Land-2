@@ -1,13 +1,12 @@
-using System.IO;
-using System.Text;
-using System.Text.Json;
-using System.Windows;
-using System.Windows.Controls;
 using ClassDailyLand.App.ViewModels;
 using ClassDailyLand.Core.Managers;
 using ClassDailyLand.Core.Models;
 using ClassDailyLand.Core.Storage;
 using Microsoft.Win32;
+using System.Text;
+using System.Text.Json;
+using System.Windows;
+using System.Windows.Controls;
 
 namespace ClassDailyLand.App.Views.Dialogs;
 
@@ -32,6 +31,9 @@ public sealed class HomeworkEditor : UserControl
     readonly StackPanel _rows = new();
     readonly List<Row> _items = new();
     readonly TextBlock _empty;
+
+    /// <summary>面包屑的父页（它不是 DialogPanel，单独给一个属性）。</summary>
+    public string ParentPageTitle => "作业";
 
     public HomeworkEditor(SettingsViewModel vm, bool embedded)
     {

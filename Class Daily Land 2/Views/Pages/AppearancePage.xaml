@@ -22,13 +22,14 @@
         <fl:SettingGroup Title="窗口材质" Icon="{StaticResource Icon.Shield}" TileColor="#FF038387"
                          Note="{Binding MaterialNote}">
                     <!-- 非 Win11：整行置灰 + 说明徽标（对位 web 版的 micaRow 两分支） -->
-                    <fl:SettingRow x:Name="MicaRow" Title="云母材质（Mica）"
-                                   Hint="Windows 11 的半透明云母背板，会跟着系统明暗变">
+                    <fl:SettingRow x:Name="MicaRow"
+                                   Title="{Binding MaterialRowTitle}"
+                                   Hint="{Binding MaterialRowHint}">
                         <fl:FluentToggle x:Name="MicaToggle" IsChecked="{Binding SettingsMica, Mode=TwoWay}"
-                                         Label="云母材质" />
+                                         Label="窗口材质" />
                     </fl:SettingRow>
-                    <fl:SettingRow x:Name="MicaUnsupportedRow" Title="云母材质（Mica）"
-                                   Hint="云母材质需要 Windows 11，当前系统使用普通窗口。"
+                    <fl:SettingRow x:Name="MicaUnsupportedRow" Title="窗口材质"
+                                   Hint="半透明背板需要 Windows 10 1803 或更高，当前系统使用普通窗口。"
                                    IsDisabled="True" Visibility="Collapsed">
                         <fl:Badge Text="当前系统不支持" />
                     </fl:SettingRow>

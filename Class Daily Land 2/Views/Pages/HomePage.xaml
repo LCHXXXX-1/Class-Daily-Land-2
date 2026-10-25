@@ -73,7 +73,7 @@
         <TextBlock Text="首页" FontSize="28" FontWeight="SemiBold"
                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-        <TextBlock Text="Class Daily Land" FontSize="28" FontWeight="SemiBold"
+        <TextBlock Text="Class Daily Land 2" FontSize="28" FontWeight="SemiBold"
                    Margin="0,48,0,0"
                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 

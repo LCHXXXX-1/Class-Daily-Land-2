@@ -1,0 +1,32 @@
+<Window x:Class="DeveloperIDE.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="IDE 设置"
+        Width="320" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
+        FontSize="13">
+
+    <StackPanel Margin="18">
+        <TextBlock Text="IDE 设置" FontSize="16" FontWeight="SemiBold" />
+
+        <Border Style="{StaticResource HairLine}" Margin="0,12" />
+
+        <TextBlock Text="外观" HorizontalAlignment="Left" Margin="0,0,0,6"
+                   Style="{StaticResource SectionHeader}" />
+
+        <ComboBox x:Name="ThemeCombo" Style="{StaticResource ThemeComboBox}"
+                  SelectionChanged="OnThemeSelection">
+            <ComboBoxItem Content="深色主题" Tag="dark" />
+            <ComboBoxItem Content="浅色主题" Tag="light" />
+        </ComboBox>
+
+        <TextBlock x:Name="HintText" Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource DimTextBrush}" />
+    </StackPanel>
+</Window>

@@ -1,8 +1,8 @@
+using ClassDailyLand.App.Controls;
+using ClassDailyLand.Core.Engine;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using ClassDailyLand.App.Controls;
-using ClassDailyLand.Core.Engine;
 
 namespace ClassDailyLand.App.Views.Dialogs;
 

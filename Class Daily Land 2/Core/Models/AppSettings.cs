@@ -20,6 +20,8 @@ public sealed class AppSettings
     public const string PageHomework = "homework";
     public const string PageAbout = "about";
     public const string PagePlugins = "plugins";
+    public const string PageMedia = "media";
+    public const string PageDisaster = "disaster";
 
     /// <summary>全部设置键与默认值（与需求文档第五节对应）。</summary>
     public static readonly IReadOnlyList<SettingMeta> All = new List<SettingMeta>
@@ -36,13 +38,18 @@ public sealed class AppSettings
         new("check_update_on_startup", ValueKind.Bool, false),
         new("block_update_on_source", ValueKind.Bool, true),          // 源码运行时保护更新
 
+        // —— 更新（关于页）——
+        new("update_channel", ValueKind.Str, "stable"),               // stable / beta
+        new("update_skipped_version", ValueKind.Str, ""),             // 「稍后再说」跳过的版本
+        new("resources_version", ValueKind.Str, ""),                  // 已装资源包版本（空 = 只有内嵌资源）
+
         // —— 外观 ——
         new("theme", ValueKind.Str, "system"),                        // system / light / dark
         new("fade_animation", ValueKind.Bool, true),
         new("animation_duration_ms", ValueKind.Int, 220, 0, 2000),
         new("anim_fade_panel", ValueKind.Bool, true),                 // 面板展开渐显
         new("anim_fade_text", ValueKind.Bool, true),                  // 文字变化渐显
-        new("settings_mica", ValueKind.Bool, false),                  // 设置窗云母材质（Win11）
+        new("settings_mica", ValueKind.Bool, true),                   // 设置窗云母材质（Win11，默认开）
 
         // —— 灵动岛 ——
         new("show_island", ValueKind.Bool, true),
@@ -56,12 +63,40 @@ public sealed class AppSettings
         new("sub_island_default_collapsed", ValueKind.Bool, true),
         new("sub_island_auto_collapse_sec", ValueKind.Int, 8, 0, 600),
 
+        // —— 交互（触屏）——
+        new("touch_optimize", ValueKind.Bool, false),
+
         // —— 课表与提醒 ——
         new("schedule_advance_minutes", ValueKind.Int, 2, 0, 60),     // 提前提醒
         new("schedule_time_offset_seconds", ValueKind.Int, 0, -3600, 3600), // 时间偏移
 
         // —— 作业 ——
         new("homework_show_date", ValueKind.Bool, true),
+
+        // —— 媒体（内置集成：主岛媒体片段）——
+        new("audio_enabled", ValueKind.Bool, true),
+        new("audio_show_on", ValueKind.Str, "main"),                  // main / sub
+        new("audio_hide_after_sec", ValueKind.Int, 5, 0, 120),
+        new("audio_max_width", ValueKind.Int, 240, 120, 400),
+        new("audio_show_title", ValueKind.Bool, true),
+
+        // —— 灾害预警（内置集成：地震倒计时 + 气象预警）——
+        new("disaster_enabled", ValueKind.Bool, true),
+        new("disaster_quake_enabled", ValueKind.Bool, true),
+        new("disaster_weather_enabled", ValueKind.Bool, true),
+        new("disaster_province", ValueKind.Str, "四川省"),
+        new("disaster_city", ValueKind.Str, ""),
+        new("disaster_district", ValueKind.Str, ""),
+        new("disaster_lat", ValueKind.Str, ""),                       // 留空则按省市查表
+        new("disaster_lon", ValueKind.Str, ""),
+        new("disaster_threshold_x10", ValueKind.Int, 20, 0, 120),      // 烈度阈值 ×10（20 = 2.0）
+        new("disaster_quake_interval_sec", ValueKind.Int, 5, 3, 120),
+        new("disaster_weather_interval_sec", ValueKind.Int, 60, 30, 3600),
+        new("disaster_throttle_sec", ValueKind.Int, 30, 5, 600),
+        new("disaster_notify_enabled", ValueKind.Bool, true),
+        new("disaster_banner_enabled", ValueKind.Bool, true),
+        new("disaster_small_hold_sec", ValueKind.Int, 5, 0, 120),
+        new("disaster_show_status_card", ValueKind.Bool, true),
 
         // —— 关于 ——
         new("last_update_check", ValueKind.Str, ""),
@@ -79,7 +114,7 @@ public sealed class AppSettings
         [PageAppearance] = new[]
         {
             "theme", "fade_animation", "animation_duration_ms",
-            "anim_fade_panel", "anim_fade_text", "settings_mica",
+            "anim_fade_panel", "anim_fade_text", "settings_mica", "touch_optimize",
         },
         [PageIsland] = new[]
         {
@@ -89,8 +124,23 @@ public sealed class AppSettings
         },
         [PageSchedule] = new[] { "schedule_advance_minutes", "schedule_time_offset_seconds" },
         [PageHomework] = new[] { "homework_show_date" },
-        [PageAbout] = Array.Empty<string>(),
+        // 关于页：更新通道、被跳过的版本、上次检查时间、已装资源包版本
+        [PageAbout] = new[] { "update_channel", "update_skipped_version", "last_update_check", "resources_version" },
         [PagePlugins] = Array.Empty<string>(),
+        [PageMedia] = new[]
+        {
+            "audio_enabled", "audio_show_on", "audio_hide_after_sec",
+            "audio_max_width", "audio_show_title",
+        },
+        [PageDisaster] = new[]
+        {
+            "disaster_enabled", "disaster_quake_enabled", "disaster_weather_enabled",
+            "disaster_province", "disaster_city", "disaster_district",
+            "disaster_lat", "disaster_lon", "disaster_threshold_x10",
+            "disaster_quake_interval_sec", "disaster_weather_interval_sec",
+            "disaster_throttle_sec", "disaster_notify_enabled", "disaster_banner_enabled",
+            "disaster_small_hold_sec", "disaster_show_status_card",
+        },
     };
 
     static readonly Dictionary<string, SettingMeta> Meta = All.ToDictionary(m => m.Key, StringComparer.Ordinal);

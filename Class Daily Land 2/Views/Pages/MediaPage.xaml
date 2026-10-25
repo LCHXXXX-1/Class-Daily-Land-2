@@ -1,0 +1,54 @@
+<UserControl x:Class="ClassDailyLand.App.Views.Pages.MediaPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="媒体" />
+        <TextBlock Style="{StaticResource PageLead}"
+                   Text="把正在播放的音乐显示到灵动岛上（走 Windows 媒体控制，不需要装任何驱动）" />
+
+        <fl:InfoBar x:Name="UnavailableNotice" Severity="Warning" Title="媒体桥不可用"
+                    Message="找不到 Windows PowerShell，媒体片段无法工作。请确认 C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe 存在。"
+                    IsClosable="False" Margin="0,0,0,20" Visibility="Collapsed" />
+
+        <fl:SettingGroup Title="媒体片段" Icon="{StaticResource Icon.Capsule}" TileColor="#FF0F6CBD">
+            <fl:SettingRow Title="显示正在播放的媒体" Hint="胶囊右侧会加长一段，显示封面、歌名与播放状态">
+                <fl:FluentToggle IsChecked="{Binding AudioEnabled, Mode=TwoWay}" Label="媒体片段" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="显示位置" Hint="主岛：在胶囊右侧加长；副岛：替换副岛内容">
+                <ComboBox x:Name="ShowOnBox" Width="190" SelectionChanged="OnShowOnChanged">
+                    <ComboBoxItem Content="主岛（右侧加长）" Tag="main" />
+                    <ComboBoxItem Content="副岛" Tag="sub" />
+                </ComboBox>
+            </fl:SettingRow>
+            <fl:SettingRow Title="暂停/停止后隐藏" Hint="0 表示立刻隐藏">
+                <fl:NumberBox Minimum="0" Maximum="120" Step="1" Suffix=" 秒"
+                              Value="{Binding AudioHideAfterSec, Mode=TwoWay}" Label="暂停后隐藏" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="片段宽度" Hint="越宽显示的歌名越完整">
+                <fl:NumberBox Minimum="120" Maximum="400" Step="10" Suffix=" px"
+                              Value="{Binding AudioMaxWidth, Mode=TwoWay}" Label="片段宽度" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="显示歌名 / 歌手" Hint="关掉后只显示「正在播放」">
+                <fl:FluentToggle IsChecked="{Binding AudioShowTitle, Mode=TwoWay}" Label="显示歌名" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="状态" Icon="{StaticResource Icon.Tune}" TileColor="#FF8661C5"
+                         Note="上课期间会自动停止后台轮询，下课后自动恢复">
+            <StackPanel Orientation="Horizontal" Margin="18,12,18,0">
+                <Button x:Name="InjectButton" Content="注入测试媒体"
+                        Style="{StaticResource SubtleButton}" Padding="12,4,12,5" />
+                <Button x:Name="ClearInjectButton" Content="清除测试"
+                        Style="{StaticResource SubtleButton}" Padding="12,4,12,5" Margin="8,0,0,0" />
+            </StackPanel>
+            <TextBlock x:Name="StatusText" Margin="18,12" TextWrapping="Wrap"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="正在检测…" />
+        </fl:SettingGroup>
+
+        <TextBlock Style="{StaticResource CaptionText}" Margin="4,0,0,0"
+                   Text="点灵动岛上的媒体片段可以展开成大卡片（封面 + 歌名 + 播放/暂停）。" />
+    </StackPanel>
+</UserControl>

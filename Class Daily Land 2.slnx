@@ -1,4 +1,19 @@
 <Solution>
-  <Project Path="Class Daily Land 2/Class Daily Land 2.csproj" />
-  <Project Path="tests/ClassDailyLand.Core.Tests/ClassDailyLand.Core.Tests.csproj" />
+  <Project Path="Class Daily Land 2/Class Daily Land 2.csproj">
+    <BuildDependency Project="ClassDailyLand.Updater/ClassDailyLand.Updater.csproj" />
+  </Project>
+  <Project Path="ClassDailyLand.Plugin.Abstractions/ClassDailyLand.Plugin.Abstractions.csproj" />
+  <Project Path="ClassDailyLand.Updater/ClassDailyLand.Updater.csproj" />
+  <Project Path="ClassDailyLand.Installer.Online/ClassDailyLand.Installer.Online.csproj">
+    <Build Solution="Release|*" Project="false" />
+  </Project>
+  <Project Path="DeveloperIDE/DeveloperIDE.csproj" Id="7d1e72cb-a726-4a85-ae6a-08b98fde16e8">
+    <Build Solution="Release|*" Project="false" />
+  </Project>
+  <Project Path="DeveloperIDE/update/ClassDailyLand.DeveloperIDE.Updater.csproj">
+    <Build Solution="Release|*" Project="false" />
+  </Project>
+  <Project Path="tests/ClassDailyLand.Core.Tests/ClassDailyLand.Core.Tests.csproj">
+    <Build Solution="Release|*" Project="false" />
+  </Project>
 </Solution>
