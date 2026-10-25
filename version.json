@@ -1,0 +1,7 @@
+{
+  "version": "1.2.0",
+  "release_notes": "1. 新增打开项目功能\n2. 优化编译速度\n3. 修复部分UI显示问题",
+  "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/v1.2.0/update.zip",
+  "sha256": "请替换为zip的哈希值",
+  "is_mandatory": false
+}
