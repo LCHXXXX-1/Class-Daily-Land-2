@@ -378,3 +378,16 @@ DeveloperIDE/
 ClassDailyLand.Installer.Offline/ 
 ClassDailyLand.Installer.Online/ 
 *.bat 
+ 
+# 自动排除的目录与脚本 
+ClassDailyLand.Plugin.Abstractions/ 
+ClassDailyLand.Updater/ 
+Shared/ 
+DeveloperIDE/ 
+ClassDailyLand.Installer.Offline/ 
+ClassDailyLand.Installer.Online/ 
+ClassDailyLand2.Installer.Online/ 
+ClassDailyLand2.Updater/ 
+samples/ 
+output/ 
+*.bat 
