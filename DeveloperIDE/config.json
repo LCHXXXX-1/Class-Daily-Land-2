@@ -1,9 +1,0 @@
-{
-  "app_name": "Class Daily Land 2 插件 IDE",
-  "version": "1.2.0",
-  "exe_name": "DeveloperIDE.exe",
-  "version_url": "https://cdn.jsdelivr.net/gh/LCHXXXX-1/Class-Daily-Land-2@developerIDE/version.json",
-  "version_url_fallback": "https://raw.githubusercontent.com/LCHXXXX-1/Class-Daily-Land-2/developerIDE/version.json",
-  "home_url": "https://gitee.com/lchxxxx/class-daily-land-2",
-  "home_url_fallback": "https://github.com/LCHXXXX-1/Class-Daily-Land-2"
-}

@@ -369,3 +369,12 @@ FodyWeavers.xsd
 
 # 运行期个人数据（设置/课表/作业/值日生），首次运行会自动生成
 /Class Daily Land 2/settings/*.json
+ 
+# 自动排除的旧组件与脚本 
+ClassDailyLand.Plugin.Abstractions/ 
+ClassDailyLand.Updater/ 
+Shared/ 
+DeveloperIDE/ 
+ClassDailyLand.Installer.Offline/ 
+ClassDailyLand.Installer.Online/ 
+*.bat 
