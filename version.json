@@ -1,9 +1,9 @@
 {
   "stable": {
     "version": "1.1",
-    "release_date": "2026-10-25",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.0.zip",
-    "sha256": "CCDE354185FD42BCAAE55C848300F0EA34BD9E075EB2CAA750E07E5B086764DD",
+    "release_date": "2026-10-26",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.1.zip",
+    "sha256": "A8335E3572E86934CC4F068A7511F64EAF4F86E5134931DF579E2058943AF457",
     "changelog": [
       "- 首个正式版：设置中心「关于」页检查更新，稳定/测试版通道切换，有新版本时一键「立即更新」",
       "- 独立更新器 —— 下载校验、自动备份、失败自动回滚",
@@ -12,6 +12,6 @@
       "- 修复：更新时被其他运行中实例误判为「程序仍在运行」的问题",
       "- 修复：安装包解压失败的问题"
     ],
-    "is_mandatory": true
+    "is_mandatory": false
   }
 }
