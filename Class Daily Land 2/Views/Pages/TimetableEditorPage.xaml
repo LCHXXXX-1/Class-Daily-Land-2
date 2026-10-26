@@ -1,0 +1,187 @@
+<UserControl x:Class="ClassDailyLand2.App.Views.Pages.TimetableEditorPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:pages="clr-namespace:ClassDailyLand2.App.Views.Pages">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Style="{StaticResource PageTitle}" Text="课表编辑器" />
+
+        <TextBlock Grid.Row="1"
+                   x:Name="SubtitleText"
+                   Style="{StaticResource PageLead}"
+                   Text="课表：— · 双击格子改课程，时间用下拉框选择" />
+
+        <!-- 表格：节次 / 开始 / 结束 / 周一~周日，双击格子直接改 -->
+        <Border Grid.Row="2"
+                Margin="0,12,0,0"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+            <DataGrid x:Name="RowsGrid"
+                      Margin="4"
+                      AutoGenerateColumns="False"
+                      CanUserAddRows="False"
+                      CanUserDeleteRows="False"
+                      CanUserReorderColumns="False"
+                      CanUserResizeRows="False"
+                      HeadersVisibility="Column"
+                      RowHeaderWidth="0"
+                      SelectionMode="Single"
+                      SelectionUnit="FullRow"
+                      GridLinesVisibility="Horizontal"
+                      HorizontalGridLinesBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                      Background="Transparent"
+                      BorderThickness="0"
+                      RowBackground="Transparent"
+                      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                      ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                      ScrollViewer.VerticalScrollBarVisibility="Auto"
+                      ScrollViewer.PanningMode="VerticalOnly"
+                      ScrollViewer.PanningDeceleration="0.001">
+                <DataGrid.Resources>
+                    <Style TargetType="DataGridCell">
+                        <Setter Property="BorderThickness" Value="0" />
+                        <Setter Property="Padding" Value="6,4" />
+                        <Setter Property="VerticalContentAlignment" Value="Center" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Setter Property="Background" Value="Transparent" />
+                    </Style>
+                    <Style TargetType="DataGridColumnHeader">
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                        <Setter Property="Padding" Value="6,6,6,8" />
+                        <Setter Property="BorderThickness" Value="0,0,0,1" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                        <Setter Property="HorizontalAlignment" Value="Left" />
+                    </Style>
+                    <Style TargetType="TextBox">
+                        <Setter Property="Padding" Value="4,2" />
+                        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Setter Property="BorderBrush" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                    </Style>
+                </DataGrid.Resources>
+
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="节次" Width="150"
+                                        Binding="{Binding Name, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridTemplateColumn Header="开始时" Width="62">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox Width="48" Height="26" FontSize="12" Padding="2,0"
+                                          VerticalAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          ItemsSource="{Binding Source={x:Static pages:TimetableEditorPage.Hours}}"
+                                          SelectedItem="{Binding StartHour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="开始分" Width="62">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox Width="48" Height="26" FontSize="12" Padding="2,0"
+                                          VerticalAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          ItemsSource="{Binding Source={x:Static pages:TimetableEditorPage.Minutes}}"
+                                          SelectedItem="{Binding StartMinute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="结束时" Width="62">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox Width="48" Height="26" FontSize="12" Padding="2,0"
+                                          VerticalAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          ItemsSource="{Binding Source={x:Static pages:TimetableEditorPage.Hours}}"
+                                          SelectedItem="{Binding EndHour, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTemplateColumn Header="结束分" Width="62">
+                        <DataGridTemplateColumn.CellTemplate>
+                            <DataTemplate>
+                                <ComboBox Width="48" Height="26" FontSize="12" Padding="2,0"
+                                          VerticalAlignment="Center"
+                                          VerticalContentAlignment="Center"
+                                          ItemsSource="{Binding Source={x:Static pages:TimetableEditorPage.Minutes}}"
+                                          SelectedItem="{Binding EndMinute, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                            </DataTemplate>
+                        </DataGridTemplateColumn.CellTemplate>
+                    </DataGridTemplateColumn>
+                    <DataGridTextColumn Header="周一" Width="*"
+                                        Binding="{Binding Mon, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridTextColumn Header="周二" Width="*"
+                                        Binding="{Binding Tue, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridTextColumn Header="周三" Width="*"
+                                        Binding="{Binding Wed, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridTextColumn Header="周四" Width="*"
+                                        Binding="{Binding Thu, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridTextColumn Header="周五" Width="*"
+                                        Binding="{Binding Fri, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridTextColumn Header="周六" Width="*"
+                                        Binding="{Binding Sat, UpdateSourceTrigger=PropertyChanged}" />
+                    <DataGridTextColumn Header="周日" Width="*"
+                                        Binding="{Binding Sun, UpdateSourceTrigger=PropertyChanged}" />
+                </DataGrid.Columns>
+            </DataGrid>
+        </Border>
+
+        <!-- 底部工具栏：左（操作）/ 中（计数 + 状态）/ 右（取消、保存） -->
+        <Grid Grid.Row="3" Margin="0,14,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="+ 加一节" Height="32" MinWidth="92"
+                        Style="{StaticResource SubtleButton}"
+                        Click="AddPeriod_Click" />
+                <Button Content="删除选中课节" Height="32" MinWidth="110" Margin="8,0,0,0"
+                        Style="{StaticResource SubtleButton}"
+                        Click="DeletePeriod_Click" />
+                <Button Content="导出课表…" Height="32" MinWidth="100" Margin="8,0,0,0"
+                        Style="{StaticResource SubtleButton}"
+                        Click="Export_Click" />
+                <Button Content="导入课表…" Height="32" MinWidth="100" Margin="8,0,0,0"
+                        Style="{StaticResource SubtleButton}"
+                        Click="Import_Click" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock x:Name="CountText"
+                           Text="共 0 节"
+                           HorizontalAlignment="Center"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <TextBlock x:Name="StatusText"
+                           Text=""
+                           Margin="0,2,0,0"
+                           FontSize="12"
+                           HorizontalAlignment="Center"
+                           TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="取消" Width="96" Height="32"
+                        Style="{StaticResource SubtleButton}"
+                        Click="Cancel_Click" />
+                <Button Content="保存" Width="96" Height="32" Margin="8,0,0,0"
+                        Style="{StaticResource AccentButton}"
+                        Click="Save_Click" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

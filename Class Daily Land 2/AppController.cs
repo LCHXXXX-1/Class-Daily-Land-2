@@ -1,23 +1,23 @@
-using ClassDailyLand.App.Integrations.Audio;
-using ClassDailyLand.App.Integrations.Disaster;
-using ClassDailyLand.App.Plugins;
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.Tray;
-using ClassDailyLand.App.Updates;
-using ClassDailyLand.App.Views.Dialogs;
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.App.Windows;
-using ClassDailyLand.Core;
-using ClassDailyLand.Core.Engine;
-using ClassDailyLand.Core.Managers;
-using ClassDailyLand.Core.Models;
-using ClassDailyLand.Core.Plugins;
-using ClassDailyLand.Core.Storage;
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.App.Integrations.Audio;
+using ClassDailyLand2.App.Integrations.Disaster;
+using ClassDailyLand2.App.Plugins;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.Tray;
+using ClassDailyLand2.App.Updates;
+using ClassDailyLand2.App.Views.Dialogs;
+using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.App.Windows;
+using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Engine;
+using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Models;
+using ClassDailyLand2.Core.Plugins;
+using ClassDailyLand2.Core.Storage;
+using ClassDailyLand2.Plugin;
 using System.Windows;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App;
+namespace ClassDailyLand2.App;
 
 /// <summary>
 /// 应用装配器：唯一同时持有 Manager 与窗口的地方。窗口只读数据、发请求，彼此不引用。
@@ -34,7 +34,7 @@ public sealed class AppController
     ///   之前这里写死 <c>"1.0.0-mvp"</c>，与程序集 <c>1.0.0.0</c> 对不上，
     ///   更新检查根本无从比较。
     /// </summary>
-    public static string Version { get; } = ClassDailyLand.App.Updates.AppVersion.Current;
+    public static string Version { get; } = ClassDailyLand2.App.Updates.AppVersion.Current;
 
     public App App { get; }
     public DataPaths Paths { get; private set; } = null!;
@@ -87,7 +87,7 @@ public sealed class AppController
     {
         Paths = DataPaths.Create();
         Log = new Logger(Paths);
-        Log.Info("===== ClassDailyLand 启动 =====");
+        Log.Info("===== ClassDailyLand2 启动 =====");
         if (Paths.UsedFallback) Log.Warn(Paths.FallbackNotice ?? "");
 
         Settings = new SettingsManager(Paths);
@@ -165,9 +165,6 @@ public sealed class AppController
         _tick.Tick += (_, _) => Tick();
         _tick.Start();
 
-        // 启动时静默检查（延迟 6s，先让窗口与托盘稳定）；成功结果写 last_update_check
-        if (Settings.Bool("check_update_on_startup")) _ = RunStartupCheckAsync();
-
         // 上次更新的结果：有就弹一次气泡（consumed=true 后不再弹）
         var lastMessage = LastUpdate.Consume(out var lastResult);
         if (lastMessage is not null)
@@ -175,6 +172,9 @@ public sealed class AppController
         Tick();       // 立刻刷一次，不等 1 秒
 
         if (Paths.UsedFallback) Tray?.Balloon("数据目录已回退", Paths.FallbackNotice ?? "");
+
+        // 启动自动检查更新：延迟 3 秒后检查，有 App 更新就弹置顶窗口；所有异常都必须落日志。
+        StartAutoUpdateCheck();
     }
 
     void SyncRemindersIntoSchedule()
@@ -211,7 +211,6 @@ public sealed class AppController
         Main.NextDutyRequested += () => { Duty.Next(); Tick(); };
         Main.AttendanceRequested += OpenAttendanceEditor;
         Main.EditHomeworkRequested += OpenHomeworkEditor;
-        Main.TimetableManagerRequested += OpenTimetableManager;
         Main.TempAdjustRequested += OpenTempAdjust;
         Main.HolidayRequested += OpenHolidayEditor;
         Main.WeekendRequested += OpenWeekendEditor;
@@ -373,6 +372,11 @@ public sealed class AppController
                 case "schedule_advance_minutes":
                 case "schedule_time_offset_seconds":
                     SyncRemindersIntoSchedule();
+                    break;
+                case "start_with_windows":
+                    // 设置一改就立刻落到注册表：用户不用重启程序，也不用再点一次"应用"
+                    if (!StartupManager.SetStartup(Settings.Bool("start_with_windows")))
+                        Log?.Warn("开机自启写入注册表失败（可能被组策略拦住）");
                     break;
             }
         }
@@ -615,10 +619,33 @@ public sealed class AppController
     RollCallWindow? _rollCall;
 
     public void OpenTempAdjust() => OpenDialog(vm => new TempAdjustDialog(vm));
-    public void OpenHomeworkEditor() => OpenDialog(vm => new HomeworkDialog(vm));
+
+    /// <summary>
+    /// 「编辑作业」：独立窗口（不再是设置中心的页内浮层）—— 作业多的时候 760px 的浮层太窄，
+    /// 分组列表挤成一条。窗口是模态的，关掉就回主界面。
+    /// </summary>
+    public void OpenHomeworkEditor()
+    {
+        if (_homeworkEditor is not null)
+        {
+            _homeworkEditor.Activate();
+            return;
+        }
+
+        var window = new Views.HomeworkEditorWindow(Homework)
+        {
+            Owner = Main?.IsVisible == true ? Main : null,
+        };
+
+        _homeworkEditor = window;
+        window.Closed += (_, _) => _homeworkEditor = null;
+
+        window.ShowDialog();
+    }
+
+    Views.HomeworkEditorWindow? _homeworkEditor;
+
     public void OpenDutyEditor() => OpenDialog(vm => new DutyDialog(vm));
-    public void OpenTimetableManager() => OpenDialog(vm => new TimetableDialog(vm));
-    public void OpenTimetableEditor() => OpenTimetableManager();
     public void OpenHolidayEditor() => OpenDialog(vm => new HolidaysDialog(vm));
     public void OpenWeekendEditor() => OpenDialog(vm => new WeekendDialog(vm));
     public void OpenStatusTest() => OpenDialog(vm => new StatusTestDialog(vm));
@@ -655,44 +682,84 @@ public sealed class AppController
 
         _updateLaunched = true;
 
-        Log?.Info("更新器已启动，主程序保持运行（替换前由更新器关闭）");
+        HideForUpdater();
+
+        Log?.Info("更新器已启动，主程序已隐藏并保持后台运行（替换前由更新器关闭）");
         Tray?.Balloon("正在更新", "更新器正在下载，安装时会自动关闭程序", 5);
     }
 
-    /// <summary>启动时的静默检查：不弹窗、不改 UI，只在有新版本时给托盘气泡。</summary>
-    async Task RunStartupCheckAsync()
+    /// <summary>
+    /// 更新器启动后的隐藏处理：只藏起可见窗口，不退出进程、不 Shutdown、不 Dispose 托盘。
+    /// 更新器会在真正替换文件前强杀主程序；这里提前退出反而会让文件句柄/进程关系失控。
+    /// </summary>
+    public void HideForUpdater()
     {
-        try
+        _updateLaunched = true;
+
+        try { Panels?.Collapse(); } catch (Exception ex) { Log?.Warn("隐藏下拉面板失败：" + ex.Message); }
+        try { _settingsWindow?.Hide(); } catch { }
+        try { _homeworkEditor?.Hide(); } catch { }
+        try { _rollCall?.Hide(); } catch { }
+        try { _mediaCard?.Hide(); } catch { }
+        try { SubIsland?.Hide(); } catch { }
+        try { Island?.Hide(); } catch { }
+        try { Main?.Hide(); } catch { }
+    }
+
+    int _autoUpdateCheckStarted;
+
+    /// <summary>启动自动检查更新：延迟 3 秒，强制把异常写进日志，避免任务被吞掉导致无提示。</summary>
+    void StartAutoUpdateCheck()
+    {
+        if (Interlocked.Exchange(ref _autoUpdateCheckStarted, 1) == 1) return;
+
+        _ = Task.Delay(3000).ContinueWith(_ =>
         {
-            await Task.Delay(TimeSpan.FromSeconds(6)).ConfigureAwait(false);
-
-            // 源码运行保护：开发机上自动更新会把源码弄乱
-            if (Settings.Bool("block_update_on_source") &&
-                UpdateEnvironment.IsSourceRun(UpdateEnvironment.InstallDir))
+            try
             {
-                Log.Info("启动检查跳过：源码运行");
-                return;
+                App.Dispatcher.InvokeAsync(async () =>
+                {
+                    try
+                    {
+                        var updates = Updates;
+                        if (updates is null)
+                        {
+                            Log?.Info("[自动更新] UpdateService 未初始化");
+                            return;
+                        }
+
+                        var status = await updates.CheckAsync(silent: false).ConfigureAwait(true);
+
+                        // 预复制更新器失败不应该让弹窗消失：再跑一次静默检查，只负责“有没有新版本”。
+                        if (status.App is null && status.Stage == UpdateStage.Failed)
+                        {
+                            Log?.Info("[自动更新] 首次检查失败，改用静默检查再试一次...");
+                            status = await updates.CheckAsync(silent: true).ConfigureAwait(true);
+                        }
+
+                        Log?.Info($"[自动更新] 检查完成，状态：{status.Stage}，是否有更新：{status.HasAnyUpdate}，App：{status.App?.Version.ToString() ?? "null"}");
+
+                        if (status.Stage == UpdateStage.Failed)
+                            Log?.Error("[自动更新] 检查失败：" + (status.Error ?? status.Message));
+
+                        if (status.HasAnyUpdate && status.App != null)
+                        {
+                            Log?.Info($"[自动更新] 发现新版本 {status.App.Version}，准备弹窗...");
+                            var prompt = new UpdatePromptWindow(updates, status.App, this);
+                            prompt.ShowDialog();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log?.Error("[自动更新] 检查或弹窗失败: " + ex.ToString());
+                    }
+                });
             }
-
-            // 6 小时节流，避免每次启动都打一次网络
-            var last = Settings.Str("last_update_check");
-            if (DateTime.TryParse(last, out var when) && DateTime.Now - when < TimeSpan.FromHours(6))
-                return;
-
-            var updates = Updates;
-            if (updates is null) return;
-
-            var status = await updates.CheckAsync(silent: true).ConfigureAwait(false);
-            if (status.Stage == UpdateStage.Available && status.App is not null)
+            catch (Exception ex)
             {
-                Tray?.Balloon("发现新版本 " + status.App.Version,
-                    "打开「设置 > 关于」查看更新内容", 5);
+                Log?.Error("[自动更新] 启动延迟检查调度失败: " + ex.ToString());
             }
-        }
-        catch (Exception ex)
-        {
-            Log?.Warn("启动检查更新异常：" + ex.Message);
-        }
+        });
     }
 
     void NotReady(string message)

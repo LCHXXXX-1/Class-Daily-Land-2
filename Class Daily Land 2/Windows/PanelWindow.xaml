@@ -1,4 +1,4 @@
-<Window x:Class="ClassDailyLand.App.Windows.PanelWindow"
+<Window x:Class="ClassDailyLand2.App.Windows.PanelWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Panel"
@@ -24,6 +24,8 @@
             <ScrollViewer x:Name="Scroll"
                           VerticalScrollBarVisibility="Disabled"
                           HorizontalScrollBarVisibility="Disabled"
+                          PanningMode="VerticalOnly"
+                          PanningDeceleration="0.001"
                           Padding="12,12,12,12">
                 <ItemsControl x:Name="Lines">
                     <ItemsControl.ItemsPanel>

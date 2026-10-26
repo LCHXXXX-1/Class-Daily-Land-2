@@ -1,9 +1,9 @@
-using ClassDailyLand.App.Integrations.Audio;
-using ClassDailyLand.App.Integrations.Disaster;
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core.Models;
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.App.Integrations.Audio;
+using ClassDailyLand2.App.Integrations.Disaster;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.Core.Models;
+using ClassDailyLand2.Plugin;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
@@ -11,7 +11,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.Windows;
+namespace ClassDailyLand2.App.Windows;
 
 public enum IslandState { Hidden, Mini, Compact, Countdown, Alert, Banner }
 

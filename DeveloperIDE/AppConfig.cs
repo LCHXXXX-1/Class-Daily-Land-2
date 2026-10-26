@@ -1,7 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using ClassDailyLand.Core;
+using ClassDailyLand2.Core;
 
 namespace DeveloperIDE;
 

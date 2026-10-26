@@ -1,9 +1,9 @@
-using ClassDailyLand.Core;
+using ClassDailyLand2.Core;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 
-namespace ClassDailyLand.App.Integrations.Audio;
+namespace ClassDailyLand2.App.Integrations.Audio;
 
 /// <summary>一次 SMTC 采样结果。<see cref="Revision"/> 变化表示封面文件换过了。</summary>
 public sealed record MediaInfo(string Title, string Artist, bool Playing, int Revision, string? ArtPath)

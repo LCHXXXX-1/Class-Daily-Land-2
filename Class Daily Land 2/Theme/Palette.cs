@@ -1,6 +1,6 @@
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Theme;
+namespace ClassDailyLand2.App.Theme;
 
 /// <summary>
 /// 主题色板（纯代码，无 XAML 资源字典）。所有 Brush 都 Freeze 缓存，切换主题时整体替换。

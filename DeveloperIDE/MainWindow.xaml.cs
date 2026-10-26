@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
@@ -39,7 +39,7 @@ public partial class MainWindow : Window
         var contract = PluginWorkshop.FindContract();
         Log("Class Daily Land 2 插件 IDE 就绪。");
         Log(contract is null
-            ? "警告：没找到 ClassDailyLand.Plugin.Abstractions.dll，编译会失败（先编译一次契约工程）。"
+            ? "警告：没找到 ClassDailyLand2.Plugin.Abstractions.dll，编译会失败（先编译一次契约工程）。"
             : "契约程序集：" + contract);
         RefreshStatus();
 

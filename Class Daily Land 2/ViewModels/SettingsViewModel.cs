@@ -1,10 +1,10 @@
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.Core.Managers;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.Core.Managers;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.ComponentModel;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.ViewModels;
+namespace ClassDailyLand2.App.ViewModels;
 
 /// <summary>
 /// 设置中心的视图模型：把 settings.json 的键暴露成强类型属性，页面只管绑定。
@@ -23,7 +23,7 @@ namespace ClassDailyLand.App.ViewModels;
 ///     island_show_wakeup_anim     → island_wake_animation
 ///     sub_island_collapsed        → sub_island_default_collapsed
 ///     check_update_on_start       → check_update_on_startup
-///     settings_mica / anim_fade_panel / anim_fade_text / block_update_on_source → 同名新增
+///     settings_mica / anim_fade_panel / anim_fade_text → 同名新增
 /// </summary>
 public sealed partial class SettingsViewModel : ObservableObject
 {
@@ -189,10 +189,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => Write("check_update_on_startup", value);
     }
 
-    public bool BlockUpdateOnSource
+    /// <summary>开机自启。真正的注册表写入在 AppController.OnSettingsChanged 里做（此处只管存设置）。</summary>
+    public bool StartWithWindows
     {
-        get => S.Bool("block_update_on_source");
-        set => Write("block_update_on_source", value);
+        get => S.Bool("start_with_windows");
+        set => Write("start_with_windows", value);
     }
 
     // ————————————————————— 外观 —————————————————————

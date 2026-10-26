@@ -1,6 +1,6 @@
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.Plugin;
 
-namespace ClassDailyLand.Core.Plugins;
+namespace ClassDailyLand2.Core.Plugins;
 
 /// <summary>下拉面板的一次求值结果。</summary>
 public sealed record PanelRender(PanelSpec Spec, IReadOnlyList<string> Lines);

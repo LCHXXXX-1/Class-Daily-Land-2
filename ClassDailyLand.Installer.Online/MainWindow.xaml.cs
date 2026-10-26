@@ -14,6 +14,8 @@ public partial class MainWindow : Window
 
     private CancellationTokenSource? _cts;
     private bool _busy;
+    private string _installTarget = "";
+    private string _appExe = "";
 
     public MainWindow()
     {
@@ -141,24 +143,11 @@ public partial class MainWindow : Window
             SetStatus("安装完成。", error: false);
             SetBusy(false, finished: true);
 
-            // ⑥ 启动
-            if (LaunchAfter.IsChecked == true)
-            {
-                if (!File.Exists(appExe))
-                {
-                    SetStatus("安装完成，但没找到 " + SetupEndpoints.AppExeName + "，请检查安装包内容。", true);
-                    return;
-                }
-
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = appExe,
-                    WorkingDirectory = target,
-                    UseShellExecute = true,
-                });
-
-                Close();
-            }
+            // ⑥ 不再直接启动：切到完成页，等待用户确认
+            _installTarget = target;
+            _appExe = appExe;
+            ShowFinishPanel();
+            return;
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
@@ -256,10 +245,39 @@ public partial class MainWindow : Window
         InstallButton.IsEnabled = !busy;
         BrowseButton.IsEnabled = !busy;
         InstallPath.IsEnabled = !busy;
-        LaunchAfter.IsEnabled = !busy;
 
         if (busy) CancelButton.Content = "取消";
         else CancelButton.Content = finished ? "关闭" : "取消";
+    }
+
+    private void ShowFinishPanel()
+    {
+        InstallPanel.Visibility = Visibility.Collapsed;
+        FinishPanel.Visibility = Visibility.Visible;
+        FinishPathText.Text = "已安装到：" + _installTarget;
+        RunAppCheckBox.IsChecked = true;
+        FinishButton.Focus();
+    }
+
+    private void Finish_Click(object sender, RoutedEventArgs e)
+    {
+        if (RunAppCheckBox.IsChecked == true && File.Exists(_appExe))
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = _appExe,
+                    WorkingDirectory = _installTarget,
+                    UseShellExecute = true,
+                });
+            }
+            catch
+            {
+            }
+        }
+
+        Application.Current.Shutdown();
     }
 
     private static void TryDelete(string path)

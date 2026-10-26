@@ -1,8 +1,8 @@
-using ClassDailyLand.Core.Models;
+using ClassDailyLand2.Core.Models;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace ClassDailyLand.App.Views.Dialogs;
+namespace ClassDailyLand2.App.Views.Dialogs;
 
 /// <summary>假期与调休（对位 web 版 openHolidays）。</summary>
 public sealed class HolidaysDialog : DialogPanel

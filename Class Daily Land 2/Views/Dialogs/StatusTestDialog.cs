@@ -1,10 +1,10 @@
-using ClassDailyLand.App.Controls;
-using ClassDailyLand.Core.Engine;
+using ClassDailyLand2.App.Controls;
+using ClassDailyLand2.Core.Engine;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Views.Dialogs;
+namespace ClassDailyLand2.App.Views.Dialogs;
 
 /// <summary>
 /// 状态测试（对位 web 版 openStatusTest）：试算完全在宿主侧算 ——

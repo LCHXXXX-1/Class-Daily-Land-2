@@ -1,9 +1,9 @@
-using ClassDailyLand.App.Theme;
+using ClassDailyLand2.App.Theme;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Windows;
+namespace ClassDailyLand2.App.Windows;
 
 /// <summary>
 /// 随机点名（对齐原版 randoms.py）：大号姓名 + 状态提示 + 「选名字文件 / 点名」两个按钮；

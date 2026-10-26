@@ -1,16 +1,16 @@
-using ClassDailyLand.App.Controls;
-using ClassDailyLand.App.Integrations.Audio;
-using ClassDailyLand.App.Integrations.Disaster;
-using ClassDailyLand.App.Plugins;
-using ClassDailyLand.App.Updates;
-using ClassDailyLand.App.ViewModels;
-using ClassDailyLand.App.Views.Dialogs;
+using ClassDailyLand2.App.Controls;
+using ClassDailyLand2.App.Integrations.Audio;
+using ClassDailyLand2.App.Integrations.Disaster;
+using ClassDailyLand2.App.Plugins;
+using ClassDailyLand2.App.Updates;
+using ClassDailyLand2.App.ViewModels;
+using ClassDailyLand2.App.Views.Dialogs;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.Views.Pages;
+namespace ClassDailyLand2.App.Views.Pages;
 
 // ============================================================================
 //  各页的代码后置：XAML 负责版式，这里只做「需要跑代码才能接上」的少量交互
@@ -53,7 +53,6 @@ public partial class SchedulePage : UserControl
     public SchedulePage()
     {
         InitializeComponent();
-        TimetableLink.Click += (_, _) => Show(vm => new TimetableDialog(vm));
         WeekendLink.Click += (_, _) => Show(vm => new WeekendDialog(vm));
         HolidaysLink.Click += (_, _) => Show(vm => new HolidaysDialog(vm));
         DutyLink.Click += (_, _) => Show(vm => new DutyDialog(vm));
@@ -487,7 +486,6 @@ public partial class AboutPage : UserControl
         _vm = vm;
         _hooked = true;
 
-        SourceNotice.Visibility = vm.BlockUpdateOnSource ? Visibility.Visible : Visibility.Collapsed;
         ChannelHint.Text = vm.UpdateChannel == "beta" ? "测试版可能不稳定" : "";
 
         vm.Ctx.Updates.StatusChanged += OnStatusChanged;

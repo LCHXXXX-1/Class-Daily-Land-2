@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace ClassDailyLand.Core.Models;
+namespace ClassDailyLand2.Core.Models;
 
 public enum ValueKind { Int, Bool, Str }
 
@@ -36,7 +36,7 @@ public sealed class AppSettings
         new("homework_scroll_step", ValueKind.Int, 24, 1, 400),      // 滚动步长(px)
         new("homework_scroll_pause_ms", ValueKind.Int, 2500, 0, 30000),      // 到底暂停
         new("check_update_on_startup", ValueKind.Bool, false),
-        new("block_update_on_source", ValueKind.Bool, true),          // 源码运行时保护更新
+        new("start_with_windows", ValueKind.Bool, false),             // 开机自启（HKCU Run 键）
 
         // —— 更新（关于页）——
         new("update_channel", ValueKind.Str, "stable"),               // stable / beta
@@ -109,7 +109,8 @@ public sealed class AppSettings
         {
             "show_main_window", "main_width_ratio", "main_opacity", "main_font_size",
             "homework_auto_scroll", "homework_scroll_interval_ms", "homework_scroll_step",
-            "homework_scroll_pause_ms", "check_update_on_startup", "block_update_on_source",
+            "homework_scroll_pause_ms", "check_update_on_startup",
+            "start_with_windows",
         },
         [PageAppearance] = new[]
         {

@@ -1,11 +1,11 @@
-using ClassDailyLand.Core;
+using ClassDailyLand2.Core;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using WinForms = System.Windows.Forms;
 
-namespace ClassDailyLand.App.Tray;
+namespace ClassDailyLand2.App.Tray;
 
 /// <summary>
 /// 托盘：左键开设置，右键弹出 WPF 原生菜单（Win11 样式）。
@@ -30,7 +30,7 @@ public sealed class TrayIcon : IDisposable
     public event Action? ExitRequested;
 
     /// <summary>插件注册的托盘菜单项（排在「设置」与「退出」之间）。每次弹菜单时现取。</summary>
-    public Func<IReadOnlyList<ClassDailyLand.Plugin.TrayActionSpec>>? PluginActions { get; set; }
+    public Func<IReadOnlyList<ClassDailyLand2.Plugin.TrayActionSpec>>? PluginActions { get; set; }
 
     public TrayIcon(Logger? log = null)
     {
@@ -38,7 +38,7 @@ public sealed class TrayIcon : IDisposable
         _notify = new WinForms.NotifyIcon
         {
             Icon = LoadIcon(),
-            Text = "班级日常 ClassDailyLand",
+            Text = "班级日常 ClassDailyLand2",
             Visible = true,
         };
 
@@ -145,7 +145,7 @@ public sealed class TrayIcon : IDisposable
         var pluginItems = new List<MenuItem>();
         try
         {
-            foreach (var spec in PluginActions?.Invoke() ?? Array.Empty<ClassDailyLand.Plugin.TrayActionSpec>())
+            foreach (var spec in PluginActions?.Invoke() ?? Array.Empty<ClassDailyLand2.Plugin.TrayActionSpec>())
             {
                 var mi = new MenuItem { Header = spec.Text };
                 var action = spec.Invoke;

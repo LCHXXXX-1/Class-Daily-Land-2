@@ -1,12 +1,12 @@
 using System.Reflection;
 using System.Windows;
-using ClassDailyLand.Core;
-using ClassDailyLand.Core.Plugins;
-using ClassDailyLand.Core.Storage;
-using ClassDailyLand.Plugin;
-using ClassDailyLand.UpdateContract;
+using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Plugins;
+using ClassDailyLand2.Core.Storage;
+using ClassDailyLand2.Plugin;
+using ClassDailyLand2.UpdateContract;
 
-namespace ClassDailyLand.App.Plugins;
+namespace ClassDailyLand2.App.Plugins;
 
 /// <summary>设置中心「插件」页要显示的一行。</summary>
 public sealed record PluginInfo(

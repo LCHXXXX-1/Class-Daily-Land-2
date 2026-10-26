@@ -1,6 +1,6 @@
 using System.Security.Cryptography;
 
-namespace ClassDailyLand.UpdateContract;
+namespace ClassDailyLand2.UpdateContract;
 
 /// <summary>
 /// SHA256 计算与比较。

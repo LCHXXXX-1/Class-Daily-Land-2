@@ -1,7 +1,7 @@
-<UserControl x:Class="ClassDailyLand.App.Views.Pages.HomeworkPage"
+<UserControl x:Class="ClassDailyLand2.App.Views.Pages.HomeworkPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+             xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls">
     <StackPanel>
         <TextBlock Style="{StaticResource PageTitle}" Text="作业" />
         <TextBlock Style="{StaticResource PageLead}" Text="布置与修改作业，改动即时生效" />

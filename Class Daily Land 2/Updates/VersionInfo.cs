@@ -1,4 +1,4 @@
-namespace ClassDailyLand.Core;
+namespace ClassDailyLand2.Core;
 
 /// <summary>
 /// 全局版本号与部署配置的唯一真源：发版只改这一处。
@@ -7,7 +7,7 @@ namespace ClassDailyLand.Core;
 /// </summary>
 public static class VersionInfo
 {
-    public const string Version = "1.0";
+    public const string Version = "1.1";
 
     /// <summary>主更新源（version.json）。</summary>
     public const string VersionUrl =

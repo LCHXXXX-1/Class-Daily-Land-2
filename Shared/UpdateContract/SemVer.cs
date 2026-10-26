@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace ClassDailyLand.UpdateContract;
+namespace ClassDailyLand2.UpdateContract;
 
 /// <summary>
 /// 语义化版本（semver 2.0）的解析与比较。

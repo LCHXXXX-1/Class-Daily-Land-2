@@ -3,7 +3,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Interop;
 
-namespace ClassDailyLand.App.Win32;
+namespace ClassDailyLand2.App.Win32;
 
 /// <summary>
 /// 全部 Win32 互操作集中在此：置顶、WS_EX_NOACTIVATE、前台窗口/全屏检测、Office 前台检测。

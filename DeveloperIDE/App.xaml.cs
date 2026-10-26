@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Windows;
+using System.Windows.Input;
 
 namespace DeveloperIDE;
 
@@ -27,6 +28,13 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 触屏：关掉"按住弹圆圈"的系统反馈（编辑器里长按多半是想选文字）
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent,
+            new RoutedEventHandler((sender, _) =>
+            {
+                if (sender is Window window) Stylus.SetIsPressAndHoldEnabled(window, false);
+            }));
 
         // 上次选过浅色就照着恢复（不写回配置，省一次落盘）
         if (string.Equals(IdeConfig.Load().Theme, "light", StringComparison.OrdinalIgnoreCase))

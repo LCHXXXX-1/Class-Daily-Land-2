@@ -1,10 +1,10 @@
-using ClassDailyLand.App.Theme;
+using ClassDailyLand2.App.Theme;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Windows;
+namespace ClassDailyLand2.App.Windows;
 
 /// <summary>
 /// 极简两字段数字输入弹窗（MVP 用；阶段 2 的编辑器会替换它）。

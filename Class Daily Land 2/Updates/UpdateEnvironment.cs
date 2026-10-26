@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Security.Principal;
-using ClassDailyLand.UpdateContract;
+using ClassDailyLand2.UpdateContract;
 
-namespace ClassDailyLand.App.Updates;
+namespace ClassDailyLand2.App.Updates;
 
 /// <summary>
 /// 更新相关的"环境判定"与"启动更新器"。与业务无关，纯粹是 Windows 上的杂事。
@@ -69,27 +69,6 @@ public static class UpdateEnvironment
     }
 
     /// <summary>
-    /// 是不是"从源码直接跑"（开发机）。
-    ///
-    /// 判定：程序目录里有 <c>*.csproj</c>，或者旁边有 <c>src\</c> / <c>Settings.qml</c> 这类开发痕迹。
-    /// 这种情况下自动更新会被 <c>block_update_on_source</c> 拦掉 —— 直接替换开发目录会把源码弄乱。
-    /// </summary>
-    public static bool IsSourceRun(string installDir)
-    {
-        try
-        {
-            if (Directory.EnumerateFiles(installDir, "*.csproj", SearchOption.TopDirectoryOnly).Any()) return true;
-            if (Directory.Exists(Path.Combine(installDir, "obj"))) return true;
-            if (Directory.Exists(Path.Combine(installDir, "src"))) return true;
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
     /// 更新器文件名。更新器是"框架依赖 + 单文件夹"，整个文件夹放在安装目录的 <c>Update\</c> 下
     /// （构建时由主工程 csproj 的 <c>CopyUpdater</c> 拷过去）。
     /// </summary>
@@ -105,7 +84,11 @@ public static class UpdateEnvironment
     public static string PrimaryUpdaterPath =>
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, NewUpdaterDir, UpdaterExeName);
 
-    /// <summary>1.1.0 及以前的旧布局：更新器在 <c>updater\</c> 子目录里、叫另一个名字。仅做兼容回退。</summary>
+    /// <summary>
+    /// 1.1.0 及以前的旧布局：更新器在 <c>updater\</c> 子目录里、叫另一个名字。仅做兼容回退。
+    /// ★ 这个文件名必须保持旧值（ClassDailyLand.Updater.exe）：它指的是**老安装里真实存在的文件**，
+    ///   跟着改名就等于关掉这条回退。
+    /// </summary>
     public const string LegacyUpdaterDir = "updater";
     public const string LegacyUpdaterExeName = "ClassDailyLand.Updater.exe";
 

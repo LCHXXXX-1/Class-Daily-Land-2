@@ -3,7 +3,7 @@
   "name": "示例插件",
   "version": "1.0.0",
   "description": "演示四个显示位：主岛徽标、副岛、下拉面板、班级日常区块。",
-  "author": "ClassDailyLand",
+  "author": "ClassDailyLand2",
   "entry": "HelloPlugin.dll",
   "type": "HelloPlugin.HelloPlugin",
   "apiVersion": 1

@@ -55,7 +55,7 @@ public sealed record BuildResult(bool Ok, byte[]? Assembly, string? EntryType, s
 /// </summary>
 public static class PluginWorkshop
 {
-    public const string ContractAssemblyName = "ClassDailyLand.Plugin.Abstractions";
+    public const string ContractAssemblyName = "ClassDailyLand2.Plugin.Abstractions";
     public const string PackageExtension = ".cblplugin";
 
     const int HostApiVersion = 1;
@@ -151,7 +151,7 @@ public static class PluginWorkshop
         var ver = string.IsNullOrWhiteSpace(version) ? "1.0.0" : version!;
 
         return $$"""
-        using ClassDailyLand.Plugin;
+        using ClassDailyLand2.Plugin;
 
         namespace {{ns}};
 
@@ -423,7 +423,7 @@ public static class PluginWorkshop
                 foreach (var tfm in new[] { "net10.0-windows10.0.19041.0", "net10.0-windows", "net10.0" })
                 {
                     yield return Path.Combine(dir.FullName,
-                        "ClassDailyLand.Plugin.Abstractions", "bin", config, tfm, file);
+                        "ClassDailyLand2.Plugin.Abstractions", "bin", config, tfm, file);
                 }
             }
             yield return Path.Combine(dir.FullName, file);
@@ -634,7 +634,7 @@ public static class PluginWorkshop
         // 而 IDE 每次部署插件都要问一次，异常会一直刷在调试输出里。
         try
         {
-            return ClassDailyLand.Shared.NativeProcess.AnyRunning(Path.GetFileName(mainExe));
+            return ClassDailyLand2.Shared.NativeProcess.AnyRunning(Path.GetFileName(mainExe));
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {

@@ -1,8 +1,8 @@
-using ClassDailyLand.App.Controls;
+using ClassDailyLand2.App.Controls;
 using System.Diagnostics;
 using System.Windows;
 
-namespace ClassDailyLand.App.Views;
+namespace ClassDailyLand2.App.Views;
 
 /// <summary>
 /// 二级浮层的统一入口：页面只负责「把哪个面板摆到遮罩上」。

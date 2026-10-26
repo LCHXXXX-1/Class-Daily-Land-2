@@ -143,14 +143,14 @@ public partial class App : Application
     // ─────────────────────────── 金蝉脱壳 ───────────────────────────
 
     /// <summary>
-    /// 把自己搬到 <c>%Temp%\ClassDailyLand.IDE.Update\</c> 再拉起副本，原进程立刻退出。
+    /// 把自己搬到 <c>%Temp%\ClassDailyLand2.IDE.Update\</c> 再拉起副本，原进程立刻退出。
     /// 单文件发布时只复制一个 exe；多文件 build 时同目录的 IDEUpdater.* 一起跟上。
     /// </summary>
     bool TryRestage(string url, string hash, string target)
     {
         try
         {
-            var dir = Path.Combine(Path.GetTempPath(), "ClassDailyLand.IDE.Update");
+            var dir = Path.Combine(Path.GetTempPath(), "ClassDailyLand2.IDE.Update");
             Directory.CreateDirectory(dir);
 
             var copied = 0;

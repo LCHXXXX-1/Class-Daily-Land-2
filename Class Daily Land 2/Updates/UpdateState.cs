@@ -1,6 +1,6 @@
-using ClassDailyLand.UpdateContract;
+using ClassDailyLand2.UpdateContract;
 
-namespace ClassDailyLand.App.Updates;
+namespace ClassDailyLand2.App.Updates;
 
 /// <summary>这次更新装的是什么。</summary>
 public enum UpdateKind

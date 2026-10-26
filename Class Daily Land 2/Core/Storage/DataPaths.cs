@@ -1,8 +1,8 @@
-namespace ClassDailyLand.Core.Storage;
+namespace ClassDailyLand2.Core.Storage;
 
 /// <summary>
 /// 数据根目录：优先程序目录下的 settings\（与规范一致）；
-/// 若不可写（例如装在 Program Files），回退 %LOCALAPPDATA%\ClassDailyLand\settings，
+/// 若不可写（例如装在 Program Files），回退 %LOCALAPPDATA%\ClassDailyLand2\settings，
 /// 并通过 <see cref="FallbackNotice"/> 告知 UI 显示提示。
 /// </summary>
 public sealed class DataPaths
@@ -44,7 +44,7 @@ public sealed class DataPaths
 
         var fallback = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ClassDailyLand", "settings");
+            "ClassDailyLand2", "settings");
         EnsureWritable(fallback, out _);
         var notice = $"程序目录不可写（{error}），数据已改存：{fallback}";
         return new DataPaths(fallback, plugins, true, notice);

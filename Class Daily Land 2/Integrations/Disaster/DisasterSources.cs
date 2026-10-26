@@ -5,7 +5,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
-namespace ClassDailyLand.App.Integrations.Disaster;
+namespace ClassDailyLand2.App.Integrations.Disaster;
 
 /// <summary>
 /// 灾害预警的数据源层（三个免 key 源）：

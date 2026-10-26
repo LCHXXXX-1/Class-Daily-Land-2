@@ -1,6 +1,6 @@
-using ClassDailyLand.Core.Models;
+using ClassDailyLand2.Core.Models;
 
-namespace ClassDailyLand.Core;
+namespace ClassDailyLand2.Core;
 
 /// <summary>首次运行时写入的默认数据（与原 PySide6 版的初始课表形态一致）。</summary>
 public static class Defaults

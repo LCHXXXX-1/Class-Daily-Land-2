@@ -1,6 +1,6 @@
-using ClassDailyLand.Core;
+using ClassDailyLand2.Core;
 
-namespace ClassDailyLand.App.Updates;
+namespace ClassDailyLand2.App.Updates;
 
 /// <summary>
 /// 当前程序版本的唯一读取入口。
@@ -13,6 +13,6 @@ public static class AppVersion
     public static string Current => VersionInfo.Version;
 
     /// <summary>语义化版本；<see cref="Current"/> 不合法时返回无效值。</summary>
-    public static ClassDailyLand.UpdateContract.SemVer Value =>
-        ClassDailyLand.UpdateContract.SemVer.TryParse(Current, out var v) ? v : default;
+    public static ClassDailyLand2.UpdateContract.SemVer Value =>
+        ClassDailyLand2.UpdateContract.SemVer.TryParse(Current, out var v) ? v : default;
 }

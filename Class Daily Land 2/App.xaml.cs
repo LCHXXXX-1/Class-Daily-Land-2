@@ -1,6 +1,7 @@
-﻿using System.Windows;
+using System.Windows;
+using System.Windows.Input;
 
-namespace ClassDailyLand.App;
+namespace ClassDailyLand2.App;
 
 /// <summary>
 /// 应用入口：单实例锁（Mutex）+ 第二实例唤醒 + 全局异常留痕。
@@ -8,8 +9,8 @@ namespace ClassDailyLand.App;
 /// </summary>
 public partial class App : Application
 {
-    const string MutexName = @"Local\ClassDailyLand.SingleInstance.v1";
-    const string WakeEventName = @"Local\ClassDailyLand.Wake.v1";
+    const string MutexName = @"Local\ClassDailyLand2.SingleInstance.v1";
+    const string WakeEventName = @"Local\ClassDailyLand2.Wake.v1";
 
     public AppController? Controller { get; private set; }
 
@@ -19,6 +20,14 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        // 触屏/触笔：关掉"按住不放弹圆圈"的系统反馈（各个 Window 在 Loaded 时统一设一遍）。
+        // 圈圈是系统在自己的浮层上画的，会盖在自绘的岛/主窗/下拉面板上，看着像卡住了。
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent,
+            new RoutedEventHandler((sender, _) =>
+            {
+                if (sender is Window window) Stylus.SetIsPressAndHoldEnabled(window, false);
+            }));
 
         // 启动早期（Logger 尚未就绪）的异常也要留痕，便于排查
         AppDomain.CurrentDomain.UnhandledException += (_, ex) => WriteCrashLog(ex.ExceptionObject);
@@ -91,7 +100,7 @@ public partial class App : Application
         try
         {
             var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "ClassDailyLand");
+                "ClassDailyLand2");
             Directory.CreateDirectory(dir);
             File.AppendAllText(Path.Combine(dir, "startup-crash.log"),
                 $"{DateTime.Now:yyyy-MM-dd HH:mm:ss} {ex}{Environment.NewLine}");

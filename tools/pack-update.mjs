@@ -13,7 +13,7 @@
 //     --merge
 //
 //   --updater 可省略：只有 1.1.0 及以前的旧布局才需要它（更新器在 <app>/updater）。
-//   现在更新器是仓库里的 ClassDailyLand.Updater 工程，产物是自带运行库的**单文件** Updater.exe，
+//   现在更新器是仓库里的 ClassDailyLand2.Updater 工程，产物是自带运行库的**单文件** Updater.exe，
 //   跟主程序一起落在 app 目录根上（主工程 csproj 的 CopyMyUpdater 负责拷过去），
 //   所以它本来就跟着 APP_DIR 进包，不需要单独的 --updater。
 //   --mandatory：标记为强制更新（version.json 里 is_mandatory=true），所有人都会收到。

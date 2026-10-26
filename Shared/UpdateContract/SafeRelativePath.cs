@@ -1,4 +1,4 @@
-namespace ClassDailyLand.UpdateContract;
+namespace ClassDailyLand2.UpdateContract;
 
 /// <summary>
 /// 把压缩包里的条目名归一化成"安全的相对路径"。

@@ -1,6 +1,6 @@
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Integrations.Disaster;
+namespace ClassDailyLand2.App.Integrations.Disaster;
 
 /// <summary>一条地震事件（已归一化，多个数据源共用同一形状）。</summary>
 public sealed record QuakeEvent(

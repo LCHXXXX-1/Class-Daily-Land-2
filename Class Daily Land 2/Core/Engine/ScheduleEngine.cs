@@ -1,6 +1,6 @@
-using ClassDailyLand.Core.Models;
+using ClassDailyLand2.Core.Models;
 
-namespace ClassDailyLand.Core.Engine;
+namespace ClassDailyLand2.Core.Engine;
 
 /// <summary>一节课在某天的展示条目（供主窗 / 下拉面板 / 导表使用）。</summary>
 public sealed record DayEntry(

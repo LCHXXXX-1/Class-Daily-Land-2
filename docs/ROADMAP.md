@@ -23,8 +23,8 @@
   Card（12px 圆角 + 顶部内高光 + 静置阴影）、SettingGroup、InfoBar、Badge
 - 外壳：48px 自绘标题栏（WindowChrome 交给系统拖动与缩放）+ 264px 侧栏（品牌 / 搜索过滤 / 药丸导航）
   + 内容区 max 980 + 页面淡入（350ms OutQuint + 上移 10px）
-- 8 个页面全部照 web 版字段与文案重做（新增 高级 与 插件 两页）；补 4 个设置键
-  `anim_fade_panel` / `anim_fade_text` / `settings_mica` / `block_update_on_source`
+- 8 个页面全部照 web 版字段与文案重做（新增 高级 与 插件 两页）；补 3 个设置键
+  `anim_fade_panel` / `anim_fade_text` / `settings_mica`
 - 6 个二级浮层改为**窗口内浮层**（不再各开一个窗）：课表管理 / 周末作息 / 假期与调休 /
   值日生名单 / 临时调课 / 状态测试；作业编辑器一份实现、两种用法（内嵌即时生效 / 独立带取消保存）
 - 键名沿用本项目既有 snake_case，差异集中在 `SettingsViewModel` 顶部注释那张映射表里
@@ -53,7 +53,7 @@
   贴屏幕右缘 + 顶部对齐、触摸/拖动滚动、手动滚动后自动滚动让位 4s
 
 ## 阶段 3 —— 插件系统（已完成 2026-10-24）
-- 契约工程 `ClassDailyLand.Plugin.Abstractions`（独立、无 WPF 依赖）：
+- 契约工程 `ClassDailyLand2.Plugin.Abstractions`（独立、无 WPF 依赖）：
   `IPlugin` / `IPluginHost`（**48 个成员**）/ 9 个显示位 Spec
 - 宿主：每插件一个**可卸载** `AssemblyLoadContext`（契约走默认上下文），
   `plugins\<id>\plugin.json` + 反射实例化；禁用/重载**不用重启应用**

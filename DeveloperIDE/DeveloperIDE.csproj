@@ -40,7 +40,7 @@
 
   <ItemGroup>
     <!-- 契约程序集：IDE 要靠它做语义分析（找 IPlugin 实现类），并保证引用解析一致 -->
-    <ProjectReference Include="..\ClassDailyLand.Plugin.Abstractions\ClassDailyLand.Plugin.Abstractions.csproj" />
+    <ProjectReference Include="..\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -77,12 +77,8 @@
   </ItemGroup>
 
   <!-- 先把更新器编出来（失败只警告，不拦 IDE 本体构建），再复制进输出的 Update\ -->
-  <Target Name="BuildUpdater" BeforeTargets="CopyUpdater"
-          Condition="'$(DesignTimeBuild)' != 'true' And '$(BuildingProject)' != 'false'">
-    <MSBuild Projects="$(MSBuildThisFileDirectory)update\ClassDailyLand.DeveloperIDE.Updater.csproj"
-             Targets="Build"
-             Properties="Configuration=$(Configuration)"
-             ContinueOnError="WarnAndContinue" />
+  <Target Name="BuildUpdater" BeforeTargets="CopyUpdater" Condition="'$(DesignTimeBuild)' != 'true' And '$(BuildingProject)' != 'false'">
+    <MSBuild Projects="$(MSBuildThisFileDirectory)update\ClassDailyLand2.DeveloperIDE.Updater.csproj" Targets="Build" Properties="Configuration=$(Configuration)" ContinueOnError="WarnAndContinue" />
   </Target>
 
   <!--

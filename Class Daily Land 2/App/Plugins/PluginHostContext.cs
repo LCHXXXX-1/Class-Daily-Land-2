@@ -1,11 +1,11 @@
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core.Storage;
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.Core.Storage;
+using ClassDailyLand2.Plugin;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text.Json;
 
-namespace ClassDailyLand.App.Plugins;
+namespace ClassDailyLand2.App.Plugins;
 
 /// <summary>
 /// 一个插件的宿主门面：把 <see cref="IPluginHost"/> 的 48 个成员接到真实的

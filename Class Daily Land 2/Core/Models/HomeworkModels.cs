@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
-namespace ClassDailyLand.Core.Models;
+namespace ClassDailyLand2.Core.Models;
 
 /// <summary>homework.json 的元素：{"subject","content","date"}。</summary>
 public sealed class HomeworkItem

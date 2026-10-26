@@ -1,6 +1,6 @@
 using System.IO.Compression;
 
-namespace ClassDailyLand.Core.Plugins;
+namespace ClassDailyLand2.Core.Plugins;
 
 /// <summary>安装 / 卸载结果。<see cref="Error"/> 非空时 <see cref="Ok"/> 必为 false。</summary>
 public sealed record InstallOutcome(bool Ok, string? PluginId, string? Error, string? InstalledPath = null)

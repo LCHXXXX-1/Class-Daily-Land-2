@@ -50,7 +50,7 @@
 
 1. **回调里不许做重活**。注册给宿主的 `Func<>` 每个都在 UI 线程每秒跑一次，
    里面**不能有 IO、网络、数据库、锁等待、大数组计算**。要拉数据自己起线程，回调只读缓存。
-2. **不要带自己的契约 DLL**。`ClassDailyLand.Plugin.Abstractions.dll` 只能由宿主提供，
+2. **不要带自己的契约 DLL**。`ClassDailyLand2.Plugin.Abstractions.dll` 只能由宿主提供，
    插件目录里放一份就再也加载不起来（详见 [1.3](#13-为什么必须-privatefalse)）。
 3. **时间只认 `host.Now`**。它已经叠加了用户设置的"时间偏移"；
    用 `DateTime.Now` 在用户调过时间之后就会和界面显示对不上。
@@ -65,7 +65,7 @@
 | --- | --- |
 | .NET SDK | 8.0 或更高（仓库用 10 编译） |
 | 目标框架 | `net10.0`（**不要** `-windows`，插件不该依赖 WPF） |
-| 引用的程序集 | **只有** `ClassDailyLand.Plugin.Abstractions.dll` |
+| 引用的程序集 | **只有** `ClassDailyLand2.Plugin.Abstractions.dll` |
 | 编辑器 | 任意；Visual Studio / Rider / VS Code + C# 扩展都行 |
 
 > 为什么不能依赖 WPF：插件跑在 UI 线程的回调里，如果它自己引用 WPF 并创建控件，
@@ -88,7 +88,7 @@
 
   <ItemGroup>
     <!-- ★ 关键：Private=false + ExcludeAssets=runtime -->
-    <ProjectReference Include="..\..\ClassDailyLand.Plugin.Abstractions\ClassDailyLand.Plugin.Abstractions.csproj">
+    <ProjectReference Include="..\..\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj">
       <Private>false</Private>
       <ExcludeAssets>runtime</ExcludeAssets>
     </ProjectReference>
@@ -108,8 +108,8 @@
 
 ```xml
 <ItemGroup>
-  <Reference Include="ClassDailyLand.Plugin.Abstractions">
-    <HintPath>..\lib\ClassDailyLand.Plugin.Abstractions.dll</HintPath>
+  <Reference Include="ClassDailyLand2.Plugin.Abstractions">
+    <HintPath>..\lib\ClassDailyLand2.Plugin.Abstractions.dll</HintPath>
     <Private>false</Private>
   </Reference>
 </ItemGroup>
@@ -119,7 +119,7 @@
 
 宿主用 `AssemblyLoadContext` 加载你的插件。加载器里有一条规则：
 
-> 任何名为 `ClassDailyLand.Plugin.Abstractions` 的程序集，**一律从默认上下文（宿主自己那份）解析**，
+> 任何名为 `ClassDailyLand2.Plugin.Abstractions` 的程序集，**一律从默认上下文（宿主自己那份）解析**，
 > 不从插件目录加载。
 
 这是故意的。如果插件目录里也有一份契约 DLL，就会出现**两个同名但不同实例的 `IPlugin` 类型**：
@@ -134,7 +134,7 @@
 - 宿主找不到"实现了 IPlugin 的类"，于是 `Initialize` **永远不会被调用**；
 - 设置页显示「加载失败：没有找到 IPlugin 实现」，但你代码明明写了。
 
-所以：**插件目录里不要出现 `ClassDailyLand.Plugin.Abstractions.dll`**。
+所以：**插件目录里不要出现 `ClassDailyLand2.Plugin.Abstractions.dll`**。
 上面模板里的 `Private=false` + `ExcludeAssets=runtime` 就是干这个的。
 
 ### 1.4 目录结构
@@ -187,7 +187,7 @@ dotnet new classlib -f net10.0
 ### 2.3 代码
 
 ```csharp
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.Plugin;
 
 namespace MyPlugin;
 
@@ -864,7 +864,7 @@ sealed class WeatherClient
 ### 8.4 主类（`Plugin.cs`）
 
 ```csharp
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.Plugin;
 
 namespace CountdownWeather;
 
@@ -1033,7 +1033,7 @@ zip -r ../../../hello-1.0.0.cblplugin . -x '*.pdb'
 
 | 别打包 | 原因 |
 | --- | --- |
-| `ClassDailyLand.Plugin.Abstractions.dll` | 会和宿主那份冲突，插件直接加载失败（见 [1.3](#13-为什么必须-privatefalse)） |
+| `ClassDailyLand2.Plugin.Abstractions.dll` | 会和宿主那份冲突，插件直接加载失败（见 [1.3](#13-为什么必须-privatefalse)） |
 | `*.pdb` | 体积大，除非你在排查崩溃 |
 | `data/` 目录 | 那是用户数据，覆盖安装会覆盖掉用户状态 |
 | 你自己的 `settings.json` / 缓存 | 同上 |
@@ -1056,7 +1056,7 @@ zip -r ../../../hello-1.0.0.cblplugin . -x '*.pdb'
 | --- | --- |
 | 设置 → 插件 → 运行日志 | 最近的插件日志（环形缓冲，最新的在下面） |
 | `settings\app.log` | 全量日志，插件行带 `[plugin:<id>]` 前缀 |
-| `%LOCALAPPDATA%\ClassDailyLand\startup-crash.log` | 启动崩溃兜底 |
+| `%LOCALAPPDATA%\ClassDailyLand2\startup-crash.log` | 启动崩溃兜底 |
 
 日志是排查的第一入口。加载失败的原因（清单校验、类型找不到、`apiVersion` 不匹配、
 `Initialize` 抛异常）都会写在这里，不要靠猜。
@@ -1278,7 +1278,7 @@ if (host.ApiVersion >= new Version(1, 1))
 | 「找不到类型 X」 | `type` 写错，或类不是 `public` | 写完整名（`命名空间.类名`），类加 `public` |
 | 「无法实例化」 | 没有 public 无参构造函数 | 加无参构造，或去掉带参构造 |
 | 「插件需要更新的宿主」 | `apiVersion` 大于宿主支持版本 | 降 `apiVersion` 或换新宿主 |
-| **`Initialize` 从没被调用，日志也没有** | 插件目录里放了 `ClassDailyLand.Plugin.Abstractions.dll` | 删掉它；csproj 加 `Private=false` + `ExcludeAssets=runtime` |
+| **`Initialize` 从没被调用，日志也没有** | 插件目录里放了 `ClassDailyLand2.Plugin.Abstractions.dll` | 删掉它；csproj 加 `Private=false` + `ExcludeAssets=runtime` |
 | 加载成功但显示位没内容 | 回调一直返回 null/空白 | 打日志确认回调被调用；检查数据来源 |
 | 显示位被别人盖掉 | 单值位竞争，别人 `Priority` 更高 | 提高自己的 `Priority`，或改注册到多值位 |
 | 改完 dll 没生效 | 还在跑旧 ALC | 点「重载」；报占用就先「禁用」再「启用」 |
@@ -1310,7 +1310,7 @@ if (host.ApiVersion >= new Version(1, 1))
 
 - [ ] `TargetFramework` 是 `net10.0`（不带 `-windows`）
 - [ ] 契约引用是 `Private=false` + `ExcludeAssets=runtime`
-- [ ] 输出目录里**没有** `ClassDailyLand.Plugin.Abstractions.dll`
+- [ ] 输出目录里**没有** `ClassDailyLand2.Plugin.Abstractions.dll`
 
 **代码**
 

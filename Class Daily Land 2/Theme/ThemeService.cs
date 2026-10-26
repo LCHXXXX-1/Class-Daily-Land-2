@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Theme;
+namespace ClassDailyLand2.App.Theme;
 
 /// <summary>
 /// 主题切换服务：换掉 App.Resources 里的 Tokens.Light/Dark 字典，

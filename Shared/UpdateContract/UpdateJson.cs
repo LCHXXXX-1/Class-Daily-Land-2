@@ -1,7 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace ClassDailyLand.UpdateContract;
+namespace ClassDailyLand2.UpdateContract;
 
 /// <summary>
 /// 主程序与更新器共用的 JSON 配置。

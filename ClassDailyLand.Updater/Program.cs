@@ -20,38 +20,55 @@ internal static class Program
     private static int Main(string[] args)
     {
         var log = new JobLog();
-        log.Write("===== 更新器启动 =====");
-        log.Write("参数：" + string.Join(' ', args));
+        App.Attach(log);
 
-        var cli = CommandLine.Parse(args);
-
-        // 一个参数都没有 = 用户直接双击了 Updater.exe。
-        // 以前这里直接 return BadJob（双击后"什么都没发生"），现在弹一张提示卡片说清楚它是更新组件。
-        if (!cli.HasJob && !cli.HasUrl)
+        try
         {
-            log.Write("没有启动参数：按「请勿直接运行」提示模式启动");
-            return RunWindow(null, null, directLaunch: true, log);
+            log.Write("===== 更新器启动 =====");
+            log.Write("参数：" + string.Join(' ', args));
+
+            var cli = CommandLine.Parse(args);
+
+            // 一个参数都没有 = 用户直接双击了 Updater.exe。
+            // 以前这里直接 return BadJob（双击后"什么都没发生"），现在弹一张提示卡片说清楚它是更新组件。
+            if (!cli.HasJob && !cli.HasUrl)
+            {
+                log.Write("没有启动参数：按「请勿直接运行」提示模式启动");
+                return RunWindow(null, null, directLaunch: true, log);
+            }
+
+            // 不再自我复制到 %Temp%：主程序在"检查更新"时已经把整个 Update\ 目录复制到
+            // %Temp%\CDL_UpdateTemp 并从那里启动，更新器就地运行即可（少一次复制 + 一次进程启动）。
+
+            var job = JobLoader.Load(cli, out var loadError);
+            if (job is not null)
+            {
+                log.Attach(job.Paths.Log);
+                log.Write($"任务 {job.JobId}：{job.App.CurrentVersion} → {job.App.TargetVersion}（{job.Channel}）");
+                log.Write($"程序目录：{job.App.InstallDir}");
+            }
+
+            return RunWindow(job, loadError, directLaunch: false, log);
         }
-
-        // 不再自我复制到 %Temp%：主程序在"检查更新"时已经把整个 Update\ 目录复制到
-        // %Temp%\CDL_UpdateTemp 并从那里启动，更新器就地运行即可（少一次复制 + 一次进程启动）。
-
-        var job = JobLoader.Load(cli, out var loadError);
-        if (job is not null)
+        catch (Exception ex)
         {
-            log.Attach(job.Paths.Log);
-            log.Write($"任务 {job.JobId}：{job.App.CurrentVersion} → {job.App.TargetVersion}（{job.Channel}）");
-            log.Write($"程序目录：{job.App.InstallDir}");
+            log.Write("更新器入口异常：" + ex);
+            App.Report(ex, "更新器启动失败");
+            return UpdateExitCode.ReplaceFailed;
         }
-
-        return RunWindow(job, loadError, directLaunch: false, log);
     }
 
     /// <summary>建 Application + 窗口并跑消息循环；返回更新器的退出码。</summary>
     private static int RunWindow(UpdateJob? job, string? loadError, bool directLaunch, JobLog log)
     {
-        // 没有 App.xaml：入口就在 Main，Application 手动创建（就不会和 SDK 生成的 Main 撞车）
-        var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
+        // 没有 App.xaml 内容：App 只负责挂全局异常；入口仍在 Main，避免和 SDK 生成的 Main 撞车。
+        var app = new App { ShutdownMode = ShutdownMode.OnMainWindowClose };
+        app.DispatcherUnhandledException += (_, e) =>
+        {
+            log.Write("UI 线程异常：" + e.Exception);
+            App.Report(e.Exception, "UI 线程异常");
+            e.Handled = true;
+        };
         UpdaterTheme.Apply(UpdaterTheme.IsSystemDark());
 
         try
@@ -64,6 +81,7 @@ internal static class Program
         {
             // 界面自己起不来（XAML 解析失败之类）时至少留下日志，别静默死掉
             log.Write("更新器界面启动失败：" + ex);
+            App.Report(ex, "更新器界面启动失败");
             return UpdateExitCode.ReplaceFailed;
         }
 
@@ -103,7 +121,11 @@ internal static class Program
     {
         Directory.CreateDirectory(job.Paths.WorkDir);
 
-        // ① 下载（此时主程序还在跑：我们不碰它的目录，它也不挡下载）
+        // ① 先把路径钉死：--target 必须是安装目录，绝不能是 %Temp% / 更新器工作目录。
+        if (!IsSafeInstallTarget(job.App.InstallDir, job.Paths.WorkDir, out var targetError))
+            return Fail(job, log, ui, UpdateExitCode.BadJob, targetError);
+
+        // ② 下载（此时主程序还在跑：我们不碰它的目录，它也不挡下载）
         var zipPath = Path.Combine(job.Paths.WorkDir, "payload.zip");
 
         // 下载期间主程序仍在运行（窗口先亮"正在连接服务器…"，见 MainWindow.Window_Loaded）
@@ -135,7 +157,7 @@ internal static class Program
             log.Write("任务没有提供 sha256，跳过校验");
         }
 
-        // ④ 关掉主程序：从这里开始独占程序目录里的文件（解压与替换是同一批文件）
+        // ③ 关掉主程序：从这里开始独占程序目录里的文件（解压与替换是同一批文件）
         ui.Status("下载完成，正在准备安装…");
         ui.SetProgress(90);
 
@@ -145,6 +167,10 @@ internal static class Program
             return Fail(job, log, ui, UpdateExitCode.AppStillRunning,
                 "没能关闭主程序（可能权限不足）。请手动退出 Class Daily Land 2 后点「重试」。");
         }
+
+        // Kill 返回只代表进程被请求结束，文件句柄未必已经释放完。这里再等一段，
+        // 然后才进入清理 / 解压，避免"进程还在退出"和"ZipFile.ExtractToDirectory"抢同一批文件。
+        await Task.Delay(1500, ct).ConfigureAwait(true);
 
         // ⑤ 先落一份「正在替换」：断电 / 被硬杀时，新程序启动能看出上次没做完
         WriteResult(job, ok: false, stage: "replacing", message: "正在替换文件…", backupDir: "");
@@ -176,9 +202,14 @@ internal static class Program
                 (done, total) => ui.SetProgress(94 + 5.0 * done / Math.Max(1, total)));
         }, ct).ConfigureAwait(true);
 
-        if (payload is null) return Fail(job, log, ui, UpdateExitCode.ExtractFailed, extractError ?? "解压失败");
+        if (payload is null)
+        {
+            await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
+            return Fail(job, log, ui, UpdateExitCode.ExtractFailed, extractError ?? "解压失败");
+        }
 
         log.Write($"解压完成：{payload.Count} 个文件 → {targetDir}");
+        await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
 
         WriteResult(job, ok: true, stage: "done", message: "更新完成", backupDir: "");
         AppendAppLog(job, $"[update] 已更新到 {job.App.TargetVersion}（{job.Channel}）");
@@ -238,9 +269,12 @@ internal static class Program
 
             if (payload is null)
             {
+                await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
                 log.Write("资源包解压失败，本次跳过资源更新：" + extractError);
                 return;
             }
+
+            await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
 
             ReplaceOutcome? outcome = null;
             await Task.Run(() => outcome = Replacer.Apply(job, staging, resources.InstallDir, payload!, log), ct)
@@ -364,7 +398,7 @@ internal static class Program
     /// 所以"关程序"要留到最后一刻，而不是一开头就等它退出。
     ///
     /// 按进程名遍历 <see cref="Process.GetProcessesByName(string)"/> 并逐个 <see cref="Process.Kill()"/>，
-    /// 杀完 <see cref="Thread.Sleep(int)"/> 1.5 秒等文件句柄释放，再进入解压 / 替换。
+    /// 每次 Kill 后 <see cref="Process.WaitForExit(int)"/>；返回后由调用方 <see cref="Task.Delay(int)"/> 等文件句柄释放。
     /// </summary>
     private static bool KillRunningApp(UpdateJob job, JobLog log)
     {
@@ -402,8 +436,9 @@ internal static class Program
                         if (proc.HasExited) continue;
 
                         proc.Kill();
+                        var exited = proc.WaitForExit(3000);
                         killed++;
-                        log.Write($"已强杀主程序进程：{name}（PID {proc.Id}）");
+                        log.Write($"已强杀主程序进程：{name}（PID {proc.Id}），WaitForExit(3000)={exited}");
                     }
                     catch (Exception ex)
                     {
@@ -414,9 +449,6 @@ internal static class Program
         }
 
         log.Write($"关闭主程序：共结束 {killed} 个进程");
-
-        // 强杀返回不代表文件句柄已经释放，固定等 1.5 秒再解压 / 覆盖
-        Thread.Sleep(1500);
 
         foreach (var name in uniqueNames)
         {
@@ -543,6 +575,69 @@ internal static class Program
         catch { /* 删不掉就让后面的覆盖写兜住 */ }
 
         Directory.CreateDirectory(path);
+    }
+
+    private static bool IsSafeInstallTarget(string? installDir, string? workDir, out string error)
+    {
+        error = "";
+
+        if (string.IsNullOrWhiteSpace(installDir))
+        {
+            error = "更新任务里的安装目录为空（--target）。";
+            return false;
+        }
+
+        string full;
+        try
+        {
+            full = Path.GetFullPath(installDir);
+        }
+        catch (Exception ex)
+        {
+            error = "安装目录不合法：" + ex.Message;
+            return false;
+        }
+
+        var temp = Path.GetTempPath();
+        var work = string.IsNullOrWhiteSpace(workDir) ? "" : Path.GetFullPath(workDir!);
+
+        if (full.StartsWith(temp, StringComparison.OrdinalIgnoreCase) ||
+            (work.Length > 0 && full.StartsWith(work, StringComparison.OrdinalIgnoreCase)))
+        {
+            error = "解压目标不能是 %Temp% / 更新器工作目录：" + full;
+            return false;
+        }
+
+        if (!Directory.Exists(full))
+        {
+            error = "安装目录不存在：" + full;
+            return false;
+        }
+
+        return true;
+    }
+
+    private static void TryDeleteDownloadedZip(string zipPath, JobLog log)
+    {
+        for (var attempt = 0; attempt < 5; attempt++)
+        {
+            try
+            {
+                if (!File.Exists(zipPath)) return;
+
+                File.SetAttributes(zipPath, FileAttributes.Normal);
+                File.Delete(zipPath);
+                log.Write("已删除下载的临时包：" + zipPath);
+                return;
+            }
+            catch (Exception ex)
+            {
+                log.Write($"删除临时包失败（第 {attempt + 1} 次）：{ex.Message}");
+                Thread.Sleep(500);
+            }
+        }
+
+        log.Write("临时包仍然被占用，交给退出清理流程处理：" + zipPath);
     }
 
     private static bool IsDiskFull(IOException ex)

@@ -1,4 +1,4 @@
-# ClassDailyLand（班级日常）
+# ClassDailyLand2（班级日常）
 
 C# / WPF / .NET 桌面版班级日常管理应用（原 PySide6 版重写）。
 
@@ -28,9 +28,9 @@ Class Daily Land 2/                     主工程（WinExe）
                                         内容区 padding 28 / 列宽 900；二级页整页推进 + 面包屑
                                         所有提示都在窗口内（不弹 MessageBox）
     Pages/*.xaml                        首页 / 通用 / 灵动岛 / 媒体 / 灾害预警 / 交互 /
-                                        个性化 / 课表与提醒 / 作业 / 插件 / 高级 / 关于
+                                        个性化 / 课表与提醒 / 课表编辑 / 作业 / 插件 / 高级 / 关于
     Pages/Pages.cs                      各页需要跑代码的少量交互（取 VM 的时机在 Loaded）
-    Dialogs/                            课表管理 / 周末作息 / 假期与调休 / 值日生 / 临时调课 /
+    Dialogs/                            周末作息 / 假期与调休 / 值日生 / 临时调课 /
                                         状态测试 / 作业编辑器，全部是窗口内浮层
     DialogLauncher.cs                   浮层统一入口 + 打开目录
   ViewModels/SettingsViewModel.cs       强类型绑定属性 + 滑块 200ms 防抖 + 外部改动按键回刷
@@ -72,11 +72,11 @@ Class Daily Land 2/                     主工程（WinExe）
   Resources/icon.ico                    应用图标
   settings/                             出厂默认配置（构建时复制到输出目录）
 
-ClassDailyLand.Plugin.Abstractions/     插件契约（IPlugin / IPluginHost 48 成员 / 各显示位 Spec，无 WPF）
+ClassDailyLand2.Plugin.Abstractions/     插件契约（IPlugin / IPluginHost 48 成员 / 各显示位 Spec，无 WPF）
 samples/HelloPlugin/                    可编译的示例插件（九个显示位用了一大半）
 docs/plugins.md                         插件开发指南（清单字段 / 显示位 / 48 个 API / 线程纪律 / 排错）
 docs/ROADMAP.md                         阶段划分与完成状态
-tests/ClassDailyLand.Core.Tests/        xUnit（课表引擎 / 原子写 / 设置模型 / 值日顺延 /
+tests/ClassDailyLand2.Core.Tests/        xUnit（课表引擎 / 原子写 / 设置模型 / 值日顺延 /
                                         插件清单·扫描·启停·安装安全·显示位竞争 /
                                         地震算法·城市检索·预警源解析 / 媒体暂停收起）
 ```
@@ -142,7 +142,7 @@ tests/ClassDailyLand.Core.Tests/        xUnit（课表引擎 / 原子写 / 设�
 
 | 能力 | 默认 | 说明 |
 | --- | --- | --- |
-| **手指上下滑动** | **始终开启** | WPF 的 `ScrollViewer` 默认 `PanningMode=None`，手指按住往下拖是**一点都不会动**的（只有滚轮/滚动条能滚）。设置页、侧栏、二级页、下拉面板、作业列表全部开了 `VerticalOnly` + 惯性衰减 0.0006，鼠标用户完全无感 |
+| **手指上下滑动** | **始终开启** | WPF 的 `ScrollViewer` 默认 `PanningMode=None`，手指按住往下拖是**一点都不会动**的（只有滚轮/滚动条能滚）。设置页、侧栏、二级页、下拉面板、作业列表、浮层内容与下拉框全部开了 `VerticalOnly` + 惯性衰减 0.001，鼠标用户完全无感 |
 | **点击目标放大** | 关（设置 → 交互 → 触屏优化） | 控件 32→44、小控件 28→38、设置行 62→82、导航项 40→54。切换即时生效（改窗口资源的 `DynamicResource`，不重建可视树） |
 
 > 滑动**不依赖**上面那个开关 —— 关掉触屏优化也照样能滑，开关只负责让手指更容易点中。
@@ -153,7 +153,7 @@ tests/ClassDailyLand.Core.Tests/        xUnit（课表引擎 / 原子写 / 设�
 
 ```bash
 dotnet build "Class Daily Land 2\Class Daily Land 2.csproj"
-dotnet test  tests/ClassDailyLand.Core.Tests/ClassDailyLand.Core.Tests.csproj
+dotnet test  tests/ClassDailyLand2.Core.Tests/ClassDailyLand2.Core.Tests.csproj
 dotnet run --project "Class Daily Land 2"
 ```
 
@@ -169,7 +169,7 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 > 要发给别人，用 `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true`。
 
 运行期数据写在 `settings\`（发布后是 exe 旁），
-`AppDomain.UnhandledException` 兜底日志在 `%LOCALAPPDATA%\ClassDailyLand\startup-crash.log`。
+`AppDomain.UnhandledException` 兜底日志在 `%LOCALAPPDATA%\ClassDailyLand2\startup-crash.log`。
 
 ## 验收清单
 
@@ -183,7 +183,7 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 | 深色主题即时生效 | `ThemeService` 换 Tokens.Light/Dark 字典（DynamicResource 整窗换色）+ 同步 `Palette` |
 | **圆角** | 只用 DWM 原生圆角（`DWMWA_WINDOW_CORNER_PREFERENCE=2`），没有任何手绘假圆角；Win10 保持原生直角 |
 | **云雾模糊** | Win11 云母（`DWMWA_SYSTEMBACKDROP_TYPE=2`）；Win10 1803+ 退到亚克力；更老/关掉则用不透明底色 |
-| **手指上下滑动** | 所有滚动区 `PanningMode=VerticalOnly`（无条件），惯性 0.0006 |
+| **手指上下滑动** | 所有滚动区 `PanningMode=VerticalOnly`（无条件），惯性 0.001 |
 | 改「提前提醒」生效 | settings.json 为准，同步进 schedule.json；文案 `下节 X · N分钟后` |
 | 重启后数据原样恢复 | 全部 JSON 原子写（tmp + File.Replace），坏文件自动隔离为 `.bad` |
 
@@ -191,9 +191,9 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 
 | 入口 | 界面 |
 | --- | --- |
-| 托盘 / 主窗右键 → 设置 / 主岛菜单 | `Views\SettingsWindow`：12 页，1232×762，288px 固定侧栏（不可折叠），页内搜索 |
-| 设置 → 课表与提醒 → 课表管理 | `TimetableDialog`：多课表 + 节次时间 + 课程格（只周一~周五）+ 导入导出 JSON |
-| 同上 → 周末作息 | `WeekendDialog`：上午分界点 + 下午节次 + 周末课程 |
+| 托盘 / 主窗右键 → 设置 / 主岛菜单 | `Views\SettingsWindow`：13 页，1232×762，288px 固定侧栏（不可折叠），页内搜索 |
+| 设置 → 课表编辑 | `Pages\TimetableEditorPage`：节次 + 开始/结束 + 周一~周日 的可编辑表格，加/删课节、导入导出 JSON、取消/保存（编辑的是副本，保存才落盘） |
+| 设置 → 课表与提醒 → 周末作息 | `WeekendDialog`：上午分界点 + 下午节次 + 周末课程 |
 | 同上 → 假期与调休 | `HolidaysDialog`：假期区间 + 调休补课日 |
 | 同上 → 值日生名单 | `DutyDialog`：名单增删改序 + 应到 / 实到 |
 | 同上 → 临时调课 | `TempAdjustDialog`：选日期 + 逐节覆盖（预填原课表） |

@@ -3,7 +3,7 @@
 	<PropertyGroup>
 		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
 		<OutputType>WinExe</OutputType>
-		<RootNamespace>ClassDailyLand</RootNamespace>
+		<RootNamespace>ClassDailyLand2</RootNamespace>
 		<AssemblyName>Class Daily Land 2</AssemblyName>
 		<Version>1.0</Version>
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
@@ -38,7 +38,7 @@
 	  所以也没有 IncludeNativeLibrariesForSelfExtract（那个只有单文件发布才用得上）。
 	  Debug 不受影响：照常 build / run，输出目录不多一层 win-x64。
 
-	  独立更新器（updater\ClassDailyLand.Updater.exe）是另一个进程、单独发布并自带运行库，
+	  独立更新器（updater\ClassDailyLand2.Updater.exe）是另一个进程、单独发布并自带运行库，
 	  与这里的主程序发布形态无关，不要跟着一起改。
 	-->
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -72,7 +72,7 @@
 		</None>
 
 		<!--
-		  独立更新器是仓库里的 ClassDailyLand.Updater 工程，框架依赖 + 单文件夹，
+		  独立更新器是仓库里的 ClassDailyLand2.Updater 工程，框架依赖 + 单文件夹，
 		  由下面的 CopyUpdater 目标整目录拷到输出目录的 Update\ 下。
 		  updater\ 子目录只剩 1.1.0 及以前的老二进制，StageUpdater 仍会回退去那里找。
 		-->
@@ -91,10 +91,10 @@
 	-->
 	<Target Name="CopyUpdater" AfterTargets="Build">
 		<PropertyGroup>
-			<_UpdaterOutDir>..\ClassDailyLand.Updater\bin\$(Configuration)\$(TargetFramework)\win-x64</_UpdaterOutDir>
+			<_UpdaterOutDir>..\ClassDailyLand2.Updater\bin\$(Configuration)\$(TargetFramework)\win-x64</_UpdaterOutDir>
 		</PropertyGroup>
 
-		<Error Condition="!Exists('$(_UpdaterOutDir)\Updater.exe')" Text="更新器没有编译出 Updater.exe：$(_UpdaterOutDir) 不存在或为空。请先构建 ClassDailyLand.Updater 工程。" />
+		<Error Condition="!Exists('$(_UpdaterOutDir)\Updater.exe')" Text="更新器没有编译出 Updater.exe：$(_UpdaterOutDir) 不存在或为空。请先构建 ClassDailyLand2.Updater 工程。" />
 
 		<!-- 上一版把单文件 Updater.exe 放在输出根目录：清掉，免得旧的坏更新器被优先找到 -->
 		<Delete Files="$(OutputPath)Updater.exe;$(OutputPath)Updater.dll;$(OutputPath)Updater.deps.json;$(OutputPath)Updater.runtimeconfig.json" />
@@ -122,7 +122,7 @@
 
 	<ItemGroup>
 	  <!-- 插件契约：插件作者只引用这一个程序集，宿主与插件共享同一份副本 -->
-	  <ProjectReference Include="..\ClassDailyLand.Plugin.Abstractions\ClassDailyLand.Plugin.Abstractions.csproj" />
+	  <ProjectReference Include="..\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -132,7 +132,7 @@
 		  这样 MSBuild 会按正常图先构建它（含 Restore），CopyUpdater 才有东西可搬。
 		  双方都是框架依赖，不会再触发"self-contained 工程不能引用"的 NETSDK1150。
 		-->
-		<ProjectReference Include="..\ClassDailyLand.Updater\ClassDailyLand.Updater.csproj" ReferenceOutputAssembly="false" Private="false" />
+		<ProjectReference Include="..\ClassDailyLand2.Updater\ClassDailyLand2.Updater.csproj" ReferenceOutputAssembly="false" Private="false" />
 	</ItemGroup>
 
 </Project>

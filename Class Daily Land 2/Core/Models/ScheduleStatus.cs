@@ -1,4 +1,4 @@
-namespace ClassDailyLand.Core.Models;
+namespace ClassDailyLand2.Core.Models;
 
 /// <summary>
 /// 课表状态计算结果。字段与 Python 版逐字一致（见需求文档第四节）。

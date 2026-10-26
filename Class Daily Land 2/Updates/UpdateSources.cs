@@ -1,10 +1,10 @@
-using ClassDailyLand.UpdateContract;
+using ClassDailyLand2.UpdateContract;
 using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 
-namespace ClassDailyLand.App.Updates;
+namespace ClassDailyLand2.App.Updates;
 
 /// <summary>
 /// 远端 <c>version.json</c> 的取数：双源（Gitee 主 / GitHub 备）+ 破缓存。
@@ -15,7 +15,7 @@ namespace ClassDailyLand.App.Updates;
 /// </summary>
 public static class UpdateSources
 {
-    const string UserAgent = "ClassDailyLand-Updater/1.0";
+    const string UserAgent = "ClassDailyLand2-Updater/1.0";
 
     /// <summary>单次请求的超时（秒）。不足 10 秒时，国内网络抖一下就会被误判成"更新源挂了"。</summary>
     const int TimeoutSeconds = 12;

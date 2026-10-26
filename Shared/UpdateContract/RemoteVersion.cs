@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ClassDailyLand.UpdateContract;
+namespace ClassDailyLand2.UpdateContract;
 
 /// <summary>
 /// 远端 <c>version.json</c> 的 DTO。

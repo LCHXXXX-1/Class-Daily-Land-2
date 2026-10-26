@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Runtime.Loader;
 
-namespace ClassDailyLand.App.Plugins;
+namespace ClassDailyLand2.App.Plugins;
 
 /// <summary>
 /// 每个插件一个（可卸载的）<see cref="AssemblyLoadContext"/>，好处有三：
@@ -11,14 +11,14 @@ namespace ClassDailyLand.App.Plugins;
 ///   <item>插件加载失败时上下文一起丢掉，不会污染后续加载。</item>
 /// </list>
 ///
-/// <para><b>关键一条</b>：契约程序集（<c>ClassDailyLand.Plugin.Abstractions</c>）必须返回
+/// <para><b>关键一条</b>：契约程序集（<c>ClassDailyLand2.Plugin.Abstractions</c>）必须返回
 /// <c>null</c> 交给默认上下文解析。否则插件会加载到自己的那份契约副本，类型与宿主的不一致，
 /// 表现为 <c>IPlugin</c> 永远 <c>IsAssignableFrom == false</c> —— 这是插件坑里最经典的第一个。</para>
 /// </summary>
 internal sealed class PluginLoadContext : AssemblyLoadContext
 {
     static readonly string ContractName =
-        typeof(ClassDailyLand.Plugin.IPlugin).Assembly.GetName().Name ?? "ClassDailyLand.Plugin.Abstractions";
+        typeof(ClassDailyLand2.Plugin.IPlugin).Assembly.GetName().Name ?? "ClassDailyLand2.Plugin.Abstractions";
 
     readonly string _directory;
 

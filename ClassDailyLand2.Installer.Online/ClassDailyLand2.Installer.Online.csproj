@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+	  在线安装器：自带运行库的**单文件** WPF 程序（用户双击一个 exe 就能装）。
+	  目标框架显式声明为 net10.0-windows10.0.19041.0。
+
+	  ★ 它自己必须 self-contained：安装器要负责「本机没有 .NET 10 桌面运行时」这种情况，
+	    如果它依赖运行库，那就成了"要先装运行库才能装运行库"。
+	-->
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<OutputType>WinExe</OutputType>
+		<UseWPF>true</UseWPF>
+		<RootNamespace>ClassDailyLand2.Installer.Online</RootNamespace>
+		<AssemblyName>ClassDailyLand2_Setup_Online</AssemblyName>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<LangVersion>latest</LangVersion>
+		<ApplicationIcon>..\Class Daily Land 2\Resources\icon.ico</ApplicationIcon>
+
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>true</SelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+
+		<!-- 极限压缩（WPF 不支持 Trimming，只能靠单文件压缩） -->
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+
+		<!-- 不生成调试符号与 XML 文档 -->
+		<DebugType>none</DebugType>
+		<GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+		<NoWarn>$(NoWarn);CA1416</NoWarn>
+	</PropertyGroup>
+
+	<!-- Release 发布：强制生成真正的单文件（含所有内容与原生库） -->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>true</SelfContained>
+		<PublishSingleFile>true</PublishSingleFile>
+		<IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+		<SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+		  ★ 和更新器同一个坑：开了 UseWPF 之后 SDK 的隐式 using 里**没有** System.IO 与
+		    System.Threading，于是 File / Path / Directory / FileStream / IOException /
+		    CancellationTokenSource 会集体报"找不到类型"。用 csproj 一处补齐，别在每个 .cs 顶部贴。
+		-->
+		<Using Include="System.IO" />
+		<Using Include="System.Threading" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+		  复用更新契约里的路径归一化（Zip Slip 防护）：安装器同样在"程序目录"上解压，
+		  手写一份只会有两份会走样的实现。
+		-->
+		<Compile Include="..\Shared\UpdateContract\SafeRelativePath.cs" Link="Shared\SafeRelativePath.cs" />
+
+		<!-- 下载完按 version.json 里的 sha256 校验：复用更新契约的流式实现，别手写一遍 -->
+		<Compile Include="..\Shared\UpdateContract\Hashing.cs" Link="Shared\Hashing.cs" />
+
+		<!-- 开机自启：与主程序共用同一份注册表逻辑（HKCU Run，键名 ClassDailyLand2） -->
+		<Compile Include="..\Class Daily Land 2\Core\Managers\StartupManager.cs" Link="Shared\StartupManager.cs" />
+
+		<!-- 版本号与主程序共用同一份硬编码常量 -->
+		<Compile Include="..\Class Daily Land 2\Updates\VersionInfo.cs" Link="VersionInfo.cs" />
+	</ItemGroup>
+
+</Project>

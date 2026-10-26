@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Media.Animation;
 
-namespace ClassDailyLand.App.Theme;
+namespace ClassDailyLand2.App.Theme;
 
 /// <summary>
 /// 动画统一入口：缓动曲线与时长**全部从 Themes/Tokens.Base.xaml 取**，

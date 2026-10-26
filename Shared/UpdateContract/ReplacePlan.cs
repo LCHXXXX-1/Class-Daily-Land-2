@@ -1,6 +1,6 @@
 using System.IO.Enumeration;
 
-namespace ClassDailyLand.UpdateContract;
+namespace ClassDailyLand2.UpdateContract;
 
 /// <summary>
 /// 保留白名单的判定规则（纯逻辑，可单测）。

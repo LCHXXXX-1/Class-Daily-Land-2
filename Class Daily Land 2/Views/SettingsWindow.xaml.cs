@@ -1,9 +1,9 @@
-using ClassDailyLand.App.Controls;
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.ViewModels;
-using ClassDailyLand.App.Views.Pages;
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core.Models;
+using ClassDailyLand2.App.Controls;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.ViewModels;
+using ClassDailyLand2.App.Views.Pages;
+using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.Core.Models;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -11,7 +11,7 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.Views;
+namespace ClassDailyLand2.App.Views;
 
 /// <summary>
 /// 设置中心（对齐 QML 版那套 Windows 11 设置）：
@@ -67,6 +67,7 @@ public partial class SettingsWindow : Window
             new("interaction", "交互", "\uE7C9", () => new InteractionPage()),
             new(AppSettings.PageAppearance, "个性化", "\uE790", () => new AppearancePage()),
             new(AppSettings.PageSchedule, "课表与提醒", "\uE787", () => new SchedulePage()),
+            new("timetable", "课表编辑", "\uE70F", () => new TimetableEditorPage()),
             new(AppSettings.PageHomework, "作业", "\uE8A5", () => new HomeworkPage()),
             new(AppSettings.PagePlugins, "插件", "\uE74C", () => new PluginsPage()),
             new("advanced", "高级", "\uE90F", () => new AdvancedPage()),

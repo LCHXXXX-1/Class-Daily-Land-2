@@ -1,17 +1,20 @@
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core.Managers;
-using ClassDailyLand.Core.Plugins;
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Plugins;
+using ClassDailyLand2.Plugin;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Shell;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.Windows;
+namespace ClassDailyLand2.App.Windows;
 
 /// <summary>
 /// 主窗口：无边框、贴屏幕右侧、顶部对齐。
@@ -40,6 +43,9 @@ public sealed class MainBoardWindow : Window
     double _fontSize = 16;
     double _widthRatio = 0.22;
     int _scrollStep = 24;
+
+    /// <summary>自动滚动方向：1 = 向下，-1 = 向上（到底/到顶就掉头，来回滚）。</summary>
+    int _scrollDirection = 1;
     int _scrollPauseMs = 2500;
     bool _autoScroll = true;
     bool _pausedByHover;
@@ -70,7 +76,6 @@ public sealed class MainBoardWindow : Window
     public event Action? NextDutyRequested;
     public event Action? AttendanceRequested;
     public event Action? EditHomeworkRequested;
-    public event Action? TimetableManagerRequested;
     public event Action? TempAdjustRequested;
     public event Action? HolidayRequested;
     public event Action? WeekendRequested;
@@ -85,7 +90,21 @@ public sealed class MainBoardWindow : Window
         // 主窗是贴边的桌面挂件，不该占任务栏；托盘图标才是它的入口。
         // （任务栏里应当只剩设置窗口一个条目。）
         ShowInTaskbar = false;
+        ShowActivated = false;
         Title = "班级日常";
+
+        // 关掉 WPF/DWM 的非客户区白边：无边框窗口在 Win10/Win11 上很容易被 DWM
+        // 画出一圈白色轮廓，这里强制不画玻璃帧、不画标题栏、不做圆角。
+        WindowChrome.SetWindowChrome(this, new WindowChrome
+        {
+            CaptionHeight = 0,
+            ResizeBorderThickness = new Thickness(0),
+            GlassFrameThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(0),
+            NonClientFrameEdges = NonClientFrameEdges.None,
+            UseAeroCaptionButtons = false,
+        });
+
         MinHeight = 100;
         FontFamily = new FontFamily("Microsoft YaHei UI, Segoe UI");
 
@@ -95,6 +114,8 @@ public sealed class MainBoardWindow : Window
         AllowsTransparency = false;
 
         _root.Padding = new Thickness(PadX, PadY, PadX, PadY);
+        _root.BorderThickness = new Thickness(0);
+        _root.BorderBrush = Brushes.Transparent;
         _root.SnapsToDevicePixels = true;
 
         _title.Text = "班级日常";
@@ -132,7 +153,12 @@ public sealed class MainBoardWindow : Window
 
         ApplyTheme();
         Palette.Changed += (_, _) => ApplyTheme();
-        SourceInitialized += (_, _) => Dispatcher.BeginInvoke(Reposition, DispatcherPriority.Loaded);
+        SourceInitialized += (_, _) =>
+        {
+            Interop.MakeToolWindowNoActivate(this, hideFromAltTab: false);
+            DisableDwmBorder();
+            Dispatcher.BeginInvoke(Reposition, DispatcherPriority.Loaded);
+        };
     }
 
     FrameworkElement Gap(double h) => new Border { Height = h };
@@ -204,31 +230,40 @@ public sealed class MainBoardWindow : Window
             var heading = new TextBlock
             {
                 Text = string.IsNullOrEmpty(g.Date) ? g.Subject : $"{g.Subject} ({g.Date})",
-                FontSize = fromFont,
+                FontSize = _fontSize,          // 新行一律按"当前"字号建，别沿用可能还在动画中的旧值
                 FontWeight = FontWeights.Bold,
                 Foreground = Palette.Text,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 2),
             };
             _homeworkPanel.Children.Add(heading);
-            AnimateFont(heading, _fontSize, fromFont);
+
+            // 只有在"字号真的变了"的时候才做动画；数据刷新时不该闪一下
+            if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(heading, _fontSize, fromFont);
 
             for (var i = 0; i < g.Contents.Count; i++)
             {
                 var row = new TextBlock
                 {
                     Text = $"  {i + 1}. {g.Contents[i]}",
-                    FontSize = fromFont,
+                    FontSize = _fontSize,
                     Foreground = Palette.Text,
                     TextWrapping = TextWrapping.Wrap,
-                    LineHeight = fromFont * 1.35,
+                    LineHeight = _fontSize * 1.35,
                 };
                 _homeworkPanel.Children.Add(row);
-                AnimateFont(row, _fontSize, fromFont);
+                if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(row, _fontSize, fromFont);
             }
         }
+
         _homeworkScroll.ScrollToVerticalOffset(0);
+        _scrollDirection = 1;
         _stack.UpdateLayout();
+
+        // ★ 作业增减后行数变了，窗口高度必须重算：
+        //   否则新加一堆作业窗口还是原来那么高（滚动条不出现），删完又留下一大片空白。
+        //   放到 Loaded 优先级，等布局跑完再量 DesiredSize。
+        Dispatcher.BeginInvoke(new Action(Reposition), DispatcherPriority.Loaded);
     }
 
     /// <summary>设置里改了「触屏优化」后重新落一次滑动能力（幂等，尺寸在设置窗那边处理）。</summary>
@@ -451,6 +486,45 @@ public sealed class MainBoardWindow : Window
             AnimateDouble(tb, TextBlock.LineHeightProperty, to * 1.35, from * 1.35);
     }
 
+    void DisableDwmBorder()
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            // 非客户区渲染关掉：没有这圈 DWM 自己画的边框 / 标题栏残影。
+            var disabled = 0;
+            DwmSetWindowAttribute(hwnd, DWMWA_NCRENDERING_POLICY, ref disabled, sizeof(int));
+
+            // Win11 的圆角 / 白色描边也关掉；老系统会直接返回失败，无副作用。
+            var donotround = 1;
+            DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref donotround, sizeof(int));
+
+            // 强制让非客户区样式立即重算。
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        }
+        catch
+        {
+            // 边框优化失败不能影响挂件显示。
+        }
+    }
+
+    const int DWMWA_NCRENDERING_POLICY = 2;
+    const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    const uint SWP_NOMOVE = 0x0002;
+    const uint SWP_NOSIZE = 0x0001;
+    const uint SWP_NOZORDER = 0x0004;
+    const uint SWP_NOACTIVATE = 0x0010;
+    const uint SWP_FRAMECHANGED = 0x0020;
+
+    [DllImport("dwmapi.dll")]
+    static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+
+    [DllImport("user32.dll")]
+    static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
     void ApplyTheme()
     {
         // 原版主窗：整块 window_bg 底板 + 纯文字，无卡片、无描边
@@ -479,7 +553,10 @@ public sealed class MainBoardWindow : Window
         var work = WindowUtil.WorkAreaDip();
         var width = Math.Max(190, Math.Round(work.Width * _widthRatio));
         Width = width;
-        _homeworkScroll.MaxHeight = Math.Max(80, work.Height * 0.5);
+
+        // 作业滚动区一直可以长到"工作区底部 - 顶部标题余量"：以前卡在 50% 屏高，
+        // 屏幕高时明明还有地方却提前出滚动条。
+        _homeworkScroll.MaxHeight = Math.Max(80, work.Height - 100);
 
         // 内容宽度 = 窗口宽 - 左右内边距（必须在此约束下测量，否则文本按自然宽度撑开）
         var contentWidth = Math.Max(60, width - PadX * 2);
@@ -489,7 +566,9 @@ public sealed class MainBoardWindow : Window
         var desired = _stack.DesiredSize.Height + PadY * 2;
         if (double.IsNaN(desired) || desired <= 0) desired = 220;
         BeginAnimation(HeightProperty, null);
-        Height = Math.Clamp(desired, 100, Math.Max(160, work.Height - 40));
+
+        // 上限放到工作区高度（任务栏上方）：内容真的比屏幕还高时才由滚动区接手。
+        Height = Math.Clamp(desired, 100, Math.Max(160, work.Height));
 
         Left = Math.Round(work.Right - width);
         Top = Math.Round(work.Top);
@@ -508,27 +587,55 @@ public sealed class MainBoardWindow : Window
         {
             _scrollTimer.Stop();
             _homeworkScroll.ScrollToVerticalOffset(0);
+            _scrollDirection = 1;
         }
     }
 
     void StepScroll()
     {
-        if (!_autoScroll || _pausedByHover || DateTime.Now < _pauseUntil) return;
+        if (!_autoScroll || _pausedByHover) return;
+
         var max = _homeworkScroll.ScrollableHeight;
         if (max <= 1)
         {
+            // 内容还没超过可视高度：不用滚，方向复位到向下
             _homeworkScroll.ScrollToVerticalOffset(0);
+            _scrollDirection = 1;
             return;
         }
-        var next = _homeworkScroll.VerticalOffset + _scrollStep;
-        if (next >= max)
+
+        var current = _homeworkScroll.VerticalOffset;
+
+        // 到底/到顶之后先停一会儿，再掉头（来回滚）
+        if (DateTime.Now < _pauseUntil) return;
+
+        if (_scrollDirection == 1)
         {
-            _homeworkScroll.ScrollToVerticalOffset(max);
-            _pauseUntil = DateTime.Now.AddMilliseconds(Math.Max(0, _scrollPauseMs));
+            var next = current + _scrollStep;
+            if (next >= max)
+            {
+                _homeworkScroll.ScrollToVerticalOffset(max);
+                _pauseUntil = DateTime.Now.AddMilliseconds(Math.Max(0, _scrollPauseMs));
+                _scrollDirection = -1;
+            }
+            else
+            {
+                _homeworkScroll.ScrollToVerticalOffset(next);
+            }
         }
         else
         {
-            _homeworkScroll.ScrollToVerticalOffset(next);
+            var next = current - _scrollStep;
+            if (next <= 0)
+            {
+                _homeworkScroll.ScrollToVerticalOffset(0);
+                _pauseUntil = DateTime.Now.AddMilliseconds(Math.Max(0, _scrollPauseMs));
+                _scrollDirection = 1;
+            }
+            else
+            {
+                _homeworkScroll.ScrollToVerticalOffset(next);
+            }
         }
     }
 
@@ -564,7 +671,6 @@ public sealed class MainBoardWindow : Window
         menu.Items.Add(new Separator());
         Item("编辑作业", () => EditHomeworkRequested?.Invoke());
         menu.Items.Add(new Separator());
-        Item("课表管理", () => TimetableManagerRequested?.Invoke());
         Item("临时调课", () => TempAdjustRequested?.Invoke());
         menu.Items.Add(new Separator());
         Item("假期与调休", () => HolidayRequested?.Invoke());

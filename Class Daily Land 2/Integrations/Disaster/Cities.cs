@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace ClassDailyLand.App.Integrations.Disaster;
+namespace ClassDailyLand2.App.Integrations.Disaster;
 
 /// <summary>
 /// 全国省 / 地级市 / 区县 的经纬度检索。

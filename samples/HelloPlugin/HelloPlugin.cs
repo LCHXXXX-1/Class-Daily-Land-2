@@ -1,4 +1,4 @@
-using ClassDailyLand.Plugin;
+using ClassDailyLand2.Plugin;
 
 namespace HelloPlugin;
 

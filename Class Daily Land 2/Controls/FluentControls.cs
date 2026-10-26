@@ -5,7 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Controls;
+namespace ClassDailyLand2.App.Controls;
 
 // ============================================================================
 //  设置中心用的 Fluent 风格控件（外观全部在 Themes/Controls.xaml 里定义模板）

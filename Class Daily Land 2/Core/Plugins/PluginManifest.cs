@@ -2,7 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
-namespace ClassDailyLand.Core.Plugins;
+namespace ClassDailyLand2.Core.Plugins;
 
 /// <summary>
 /// 插件清单（<c>plugins/&lt;目录&gt;/plugin.json</c>）。
@@ -30,7 +30,7 @@ public sealed partial class PluginManifest
     /// <summary>插件声明的契约版本，默认 1。</summary>
     public int ApiVersion { get; init; } = HostApiVersion;
 
-    /// <summary>插件编译时依赖的 SDK（ClassDailyLand.Plugin.Abstractions）版本；空表示不校验。</summary>
+    /// <summary>插件编译时依赖的 SDK（ClassDailyLand2.Plugin.Abstractions）版本；空表示不校验。</summary>
     public string? TargetSdkVersion { get; init; }
 
     /// <summary>插件要求的最低主程序版本；空表示不校验。</summary>

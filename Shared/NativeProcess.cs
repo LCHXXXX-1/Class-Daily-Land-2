@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace ClassDailyLand.Shared;
+namespace ClassDailyLand2.Shared;
 
 /// <summary>
 /// 纯 P/Invoke 的进程查询与结束 —— 这里**不用** <c>System.Diagnostics.Process</c>。

@@ -1,7 +1,7 @@
-using ClassDailyLand.Core.Models;
-using ClassDailyLand.Core.Storage;
+using ClassDailyLand2.Core.Models;
+using ClassDailyLand2.Core.Storage;
 
-namespace ClassDailyLand.Core.Managers;
+namespace ClassDailyLand2.Core.Managers;
 
 /// <summary>设置项变更事件参数：给出被改动的键，便于 UI 精确响应。</summary>
 public sealed class SettingsChangedEventArgs : EventArgs

@@ -1,7 +1,7 @@
-<Window x:Class="ClassDailyLand.App.Views.SettingsWindow"
+<Window x:Class="ClassDailyLand2.App.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:fl="clr-namespace:ClassDailyLand.App.Controls"
+        xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="设置"
         Width="1232" Height="762" MinWidth="1000" MinHeight="620"
@@ -154,7 +154,8 @@
                         </StackPanel>
 
                         <ScrollViewer x:Name="NavScroll" VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled">
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PanningMode="VerticalOnly" PanningDeceleration="0.001">
                             <StackPanel x:Name="NavItemsPanel" Margin="8,0" />
                         </ScrollViewer>
                     </DockPanel>
@@ -185,6 +186,7 @@
                     <ScrollViewer x:Name="ScrollPrev" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
+                                  PanningMode="VerticalOnly" PanningDeceleration="0.001"
                                   Padding="28,40,28,64">
                         <StackPanel x:Name="PrevInner" MaxWidth="900" />
                     </ScrollViewer>
@@ -192,6 +194,7 @@
                     <ScrollViewer x:Name="ScrollCur"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
+                                  PanningMode="VerticalOnly" PanningDeceleration="0.001"
                                   Padding="28,40,28,64">
                         <StackPanel MaxWidth="900">
                             <StackPanel x:Name="ToastSlot" />
@@ -207,6 +210,7 @@
                     <ScrollViewer x:Name="SubScroll" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
+                                  PanningMode="VerticalOnly" PanningDeceleration="0.001"
                                   Padding="28,32,28,64">
                         <StackPanel MaxWidth="900">
                             <Button x:Name="SubBackButton" Style="{StaticResource SubtleButton}"

@@ -6,7 +6,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading.Tasks;
-using ClassDailyLand.Core;
+using ClassDailyLand2.Core;
 
 namespace DeveloperIDE;
 

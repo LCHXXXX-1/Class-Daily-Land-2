@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace ClassDailyLand.App.Integrations.Disaster;
+namespace ClassDailyLand2.App.Integrations.Disaster;
 
 /// <summary>烈度等级色键与中文名（与 Python 版 <c>quake_calc</c> 一致）。</summary>
 public static class QuakeLevels

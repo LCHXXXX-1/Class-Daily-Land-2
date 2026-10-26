@@ -1,10 +1,10 @@
-using ClassDailyLand.App.Controls;
-using ClassDailyLand.App.ViewModels;
+using ClassDailyLand2.App.Controls;
+using ClassDailyLand2.App.ViewModels;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 
-namespace ClassDailyLand.App.Views.Dialogs;
+namespace ClassDailyLand2.App.Views.Dialogs;
 
 /// <summary>
 /// 二级浮层面板基类（对位 web 版 lib/editors.js 的 open()）：

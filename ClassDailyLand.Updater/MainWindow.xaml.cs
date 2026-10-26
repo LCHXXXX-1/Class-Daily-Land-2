@@ -41,20 +41,35 @@ public partial class MainWindow : Window, IUpdateUi
         _directLaunch = directLaunch;
         _log = log;
 
-        // 下载占整条进度的 0~90%，剩下的留给解压与替换
+        // 进度条不做逐字节跳变：用一个 16ms 的插值让它平滑追上目标值。
+        // 先建 Timer，再建下载进度回调：回调可能比构造函数更早被 Progress<T> 触发。
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, OnTick, Dispatcher);
+        _timer.Stop();
+
+        // 下载占整条进度的 0~90%，剩下的留给解压与替换。
+        // Progress<T> 的回调可能在后台线程触发，所有控件更新必须走 Dispatcher。
         Download = new System.Progress<DownloadProgressReport>(report =>
         {
             var percent = report.Total > 0
                 ? Math.Clamp(report.Received * 90.0 / report.Total, 0, 90)
                 : 0;
+            var detail = $"{Megabytes(report.Received)} / {Megabytes(report.Total)} MB";
 
-            SetProgress(percent);
-            Detail($"{Megabytes(report.Received)} / {Megabytes(report.Total)} MB");
+            try
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    _targetPercent = Math.Clamp(percent, 0, 100);
+                    _detail = detail;
+                    DetailText.Text = detail;
+                    if (!_timer.IsEnabled) _timer.Start();
+                });
+            }
+            catch (Exception ex)
+            {
+                _log.Write("下载进度更新失败：" + ex);
+            }
         });
-
-        // 进度条不做逐字节跳变：用一个 16ms 的插值让它平滑追上目标值
-        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, OnTick, Dispatcher);
-        _timer.Stop();
     }
 
     public IProgress<DownloadProgressReport> Download { get; }
@@ -77,10 +92,12 @@ public partial class MainWindow : Window, IUpdateUi
 
     public void Fail(string message) => OnUi(() =>
     {
+        Status(message);
+        StatusText.Foreground = (Brush)FindResource("Error");
+
         ErrorText.Text = message;
         ErrorText.Visibility = Visibility.Visible;
 
-        StatusText.Foreground = (Brush)FindResource("Error");
         RetryButton.Visibility = Visibility.Visible;
         FinishButton.Visibility = Visibility.Collapsed;
 
@@ -321,8 +338,16 @@ public partial class MainWindow : Window, IUpdateUi
     /// <summary>标记一下：所有界面更新都走这里，线程安全且不需要调用方关心在哪个线程。</summary>
     private void OnUi(Action action)
     {
-        if (Dispatcher.CheckAccess()) action();
-        else Dispatcher.InvokeAsync(action);
+        try
+        {
+            if (Dispatcher.CheckAccess()) action();
+            else Dispatcher.Invoke(action);
+        }
+        catch (Exception ex)
+        {
+            // UI 更新失败不能把更新器整个进程带崩；至少留下原因，主流程继续走失败/重试路径。
+            _log.Write("界面更新失败：" + ex);
+        }
     }
 
     private static string Megabytes(long bytes) => (bytes / 1048576.0).ToString("0.0");

@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 
-namespace ClassDailyLand.App.Views.Pages;
+namespace ClassDailyLand2.App.Views.Pages;
 
 public partial class HomePage : UserControl
 {

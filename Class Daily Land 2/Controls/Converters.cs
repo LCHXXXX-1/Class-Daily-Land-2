@@ -3,7 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 
-namespace ClassDailyLand.App.Controls;
+namespace ClassDailyLand2.App.Controls;
 
 /// <summary>
 /// XAML 侧用到的少量转换器。字符串/布尔 → 可见性这类都是「空值不占位」的需要，

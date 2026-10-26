@@ -1,9 +1,9 @@
-using ClassDailyLand.Core;
-using ClassDailyLand.Core.Managers;
-using ClassDailyLand.Core.Storage;
-using ClassDailyLand.UpdateContract;
+using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Storage;
+using ClassDailyLand2.UpdateContract;
 
-namespace ClassDailyLand.App.Updates;
+namespace ClassDailyLand2.App.Updates;
 
 /// <summary>
 /// 检查更新的编排：拉 version.json → 校验 → 比版本 → 产出 <see cref="UpdateOffer"/>；
@@ -408,10 +408,6 @@ public sealed class UpdateService
     {
         if (offer is null) return UpdateLaunchResult.Fail("没有要安装的更新");
 
-        // 源码运行保护：直接替换开发目录会把源码弄乱
-        if (UpdateEnvironment.IsSourceRun(UpdateEnvironment.InstallDir) && _settings.Bool("block_update_on_source"))
-            return UpdateLaunchResult.Fail("检测到从源码运行，已按设置跳过自动更新（在「关于」页可关掉保护）");
-
         if (!UpdateEnvironment.IsDirectoryWritable(UpdateEnvironment.InstallDir, out var writeError) &&
             !UpdateEnvironment.IsElevated)
         {
@@ -451,7 +447,7 @@ public sealed class UpdateService
         }
 
         var jobId = DateTime.Now.ToString("yyyyMMdd-HHmmss-") + Guid.NewGuid().ToString("N")[..6];
-        var workDir = Path.Combine(Path.GetTempPath(), "ClassDailyLand.Update", jobId);
+        var workDir = Path.Combine(Path.GetTempPath(), "ClassDailyLand2.Update", jobId);
         Directory.CreateDirectory(workDir);
 
         // 1) 更新器复制到 temp（避开"替换时锁住自己"）
@@ -517,7 +513,7 @@ public sealed class UpdateService
                     Size = res.Size,
                 },
                 InstallDir = Path.Combine(UpdateEnvironment.InstallDir, VersionInfo.AssetsDir),
-                NotifyEvent = "Local\\ClassDailyLand.Update.Resources.v1",
+                NotifyEvent = "Local\\ClassDailyLand2.Update.Resources.v1",
             };
         }
 
@@ -566,7 +562,7 @@ public static class LastUpdate
 {
     public static string DefaultPath =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "ClassDailyLand", "last-update.json");
+            "ClassDailyLand2", "last-update.json");
 
     public static LastUpdateResult? Read(string? path = null)
     {

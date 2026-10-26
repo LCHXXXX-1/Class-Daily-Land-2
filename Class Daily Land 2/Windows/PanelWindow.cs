@@ -1,11 +1,11 @@
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core.Engine;
-using ClassDailyLand.Core.Plugins;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.Core.Engine;
+using ClassDailyLand2.Core.Plugins;
 using System.Windows;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.Windows;
+namespace ClassDailyLand2.App.Windows;
 
 /// <summary>
 /// 单个下拉面板：从高度 0（+6px）展开到目标高度（OutCubic），收起反向。

@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
-namespace ClassDailyLand.Core.Storage;
+namespace ClassDailyLand2.Core.Storage;
 
 /// <summary>
 /// 原子 JSON 读写：写临时文件 → File.Replace（不存在则 File.Move overwrite）。

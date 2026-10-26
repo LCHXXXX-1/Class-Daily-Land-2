@@ -1,7 +1,7 @@
-<UserControl x:Class="ClassDailyLand.App.Views.Pages.AboutPage"
+<UserControl x:Class="ClassDailyLand2.App.Views.Pages.AboutPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+             xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls">
     <StackPanel>
         <TextBlock Style="{StaticResource PageTitle}" Text="关于" />
 
@@ -71,11 +71,6 @@
                     <TextBlock Grid.Row="4" Grid.Column="1" Text="原生 WPF XAML（设置中心）+ 自绘灵动岛"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
                 </Grid>
-
-                <fl:InfoBar x:Name="SourceNotice" Severity="Warning" Margin="0,16,0,0"
-                            Title="源码运行 · 自动更新已跳过"
-                            Message="检测到本地主入口源码，更新前会先提醒备份。"
-                            IsClosable="False" Visibility="Collapsed" />
 
                 <!-- 检查更新：状态条 + 通道选择 + 操作按钮 -->
                 <fl:InfoBar x:Name="UpdateBar" Margin="0,16,0,0" IsClosable="False"

@@ -1,6 +1,6 @@
-using ClassDailyLand.Core.Models;
+using ClassDailyLand2.Core.Models;
 
-namespace ClassDailyLand.Core.Engine;
+namespace ClassDailyLand2.Core.Engine;
 
 /// <summary>灵动岛 / 主窗文案（格式与 Python 版一致，见需求文档第三节）。</summary>
 public static class ScheduleText

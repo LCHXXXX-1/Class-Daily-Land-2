@@ -1,14 +1,14 @@
-using ClassDailyLand.App.ViewModels;
-using ClassDailyLand.Core.Managers;
-using ClassDailyLand.Core.Models;
-using ClassDailyLand.Core.Storage;
+using ClassDailyLand2.App.ViewModels;
+using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Models;
+using ClassDailyLand2.Core.Storage;
 using Microsoft.Win32;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 
-namespace ClassDailyLand.App.Views.Dialogs;
+namespace ClassDailyLand2.App.Views.Dialogs;
 
 /// <summary>
 /// 作业编辑器（对位 web 版 buildHomeworkEditor）：学科 / 日期 / 内容 三列 + 行内操作。
@@ -80,6 +80,7 @@ public sealed class HomeworkEditor : UserControl
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
         };
+        Theme.TouchMode.EnableTouchScroll(scroll);
         root.Children.Add(scroll);
 
         Content = root;
@@ -292,28 +293,6 @@ public sealed class HomeworkEditor : UserControl
     }
 }
 
-/// <summary>独立的「编辑作业」浮层：带取消 / 确认（对位 web 版 openHomeworkEditor）。</summary>
-public sealed class HomeworkDialog : DialogPanel
-{
-    public HomeworkDialog(SettingsViewModel vm) : base(vm, "编辑作业",
-        "改完点「保存」写回；取消则丢弃本次改动。", 760)
-    {
-        var backup = vm.Ctx.Homework.Items
-            .Select(i => new HomeworkItem { Subject = i.Subject, Date = i.Date, Content = i.Content })
-            .ToList();
+// 独立「编辑作业」已经从页内浮层（HomeworkDialog）改成独立窗口 Views\HomeworkEditorWindow，
+// 这里只保留内嵌进设置中心「作业」页的 HomeworkEditor（改动即时生效、没有确认按钮）。
 
-        var editor = new HomeworkEditor(vm, embedded: false);
-        Add(editor);
-
-        AddButton("取消", () =>
-        {
-            vm.Ctx.Homework.ReplaceAll(backup);
-            Close();
-        });
-        AddButton("保存", () =>
-        {
-            editor.Commit();
-            Close();
-        }, primary: true);
-    }
-}

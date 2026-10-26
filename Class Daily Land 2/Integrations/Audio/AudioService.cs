@@ -1,10 +1,10 @@
-using ClassDailyLand.Core;
-using ClassDailyLand.Core.Managers;
-using ClassDailyLand.Core.Storage;
+using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Storage;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace ClassDailyLand.App.Integrations.Audio;
+namespace ClassDailyLand2.App.Integrations.Audio;
 
 /// <summary>主岛右侧媒体片段要显示的内容。</summary>
 public sealed record MediaDisplay(

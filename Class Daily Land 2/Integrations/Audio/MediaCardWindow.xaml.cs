@@ -1,12 +1,12 @@
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.Win32;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.Win32;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.Integrations.Audio;
+namespace ClassDailyLand2.App.Integrations.Audio;
 
 /// <summary>
 /// 媒体展开卡：点岛上媒体片段后从岛下方浮出（封面 + 歌名/歌手 + 播放暂停）。

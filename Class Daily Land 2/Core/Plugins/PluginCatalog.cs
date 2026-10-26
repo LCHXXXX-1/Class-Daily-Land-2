@@ -1,4 +1,4 @@
-namespace ClassDailyLand.Core.Plugins;
+namespace ClassDailyLand2.Core.Plugins;
 
 /// <summary>
 /// 扫描到的一个插件目录。<see cref="Error"/> 非空表示这个目录有问题（缺清单 / 清单非法 /

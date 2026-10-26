@@ -1,8 +1,8 @@
-using ClassDailyLand.App.Controls;
-using ClassDailyLand.App.Updates;
+using ClassDailyLand2.App.Controls;
+using ClassDailyLand2.App.Updates;
 using System.Windows;
 
-namespace ClassDailyLand.App.Views.Dialogs;
+namespace ClassDailyLand2.App.Views.Dialogs;
 
 /// <summary>
 /// 更新相关的确认提示。全部画在设置窗口内部（用户明确要求过"提示不弹系统框"）。

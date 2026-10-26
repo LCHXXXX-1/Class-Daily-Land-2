@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Interop;
 
-namespace ClassDailyLand.App.Win32;
+namespace ClassDailyLand2.App.Win32;
 
 /// <summary>窗口工具：把工作区（去掉任务栏）换算成 WPF DIP，供贴边定位使用。</summary>
 internal static class WindowUtil

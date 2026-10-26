@@ -1,13 +1,13 @@
-using ClassDailyLand.App.Theme;
-using ClassDailyLand.App.Win32;
-using ClassDailyLand.Core.Models;
+using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.Core.Models;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 
-namespace ClassDailyLand.App.Windows;
+namespace ClassDailyLand2.App.Windows;
 
 /// <summary>副岛内容（阶段 3 由插件提供；MVP 允许为空）。</summary>
 public sealed record SubIslandContent(string Title, string Value, double Progress)

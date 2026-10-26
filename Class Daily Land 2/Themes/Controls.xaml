@@ -1,7 +1,7 @@
 <ResourceDictionary
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:fl="clr-namespace:ClassDailyLand.App.Controls">
+    xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls">
 
     <!-- ======================================================================
          Controls.xaml —— 基础控件（对位 ui/lib/controls.js + app.css 第 4~5 节）
@@ -695,7 +695,7 @@
                                     BorderThickness="1"
                                     Background="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}"
                                     Effect="{DynamicResource FlyoutShadowEffect}">
-                                <ScrollViewer>
+                                <ScrollViewer PanningMode="VerticalOnly" PanningDeceleration="0.001">
                                     <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained" />
                                 </ScrollViewer>
                             </Border>
@@ -807,7 +807,8 @@
                             BorderBrush="{TemplateBinding BorderBrush}"
                             BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{DynamicResource ControlCornerRadius}">
-                        <ScrollViewer Padding="{TemplateBinding Padding}" Focusable="False">
+                        <ScrollViewer Padding="{TemplateBinding Padding}" Focusable="False"
+                                      PanningMode="VerticalOnly" PanningDeceleration="0.001">
                             <ItemsPresenter />
                         </ScrollViewer>
                     </Border>

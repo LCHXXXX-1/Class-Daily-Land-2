@@ -1,7 +1,7 @@
-using ClassDailyLand.Core.Storage;
+using ClassDailyLand2.Core.Storage;
 using System.Text.Json;
 
-namespace ClassDailyLand.Core.Plugins;
+namespace ClassDailyLand2.Core.Plugins;
 
 /// <summary>
 /// 插件的启用/禁用状态（<c>settings/plugins.json</c>）。

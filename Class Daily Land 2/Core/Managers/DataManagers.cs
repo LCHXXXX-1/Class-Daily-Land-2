@@ -1,7 +1,7 @@
-using ClassDailyLand.Core.Models;
-using ClassDailyLand.Core.Storage;
+using ClassDailyLand2.Core.Models;
+using ClassDailyLand2.Core.Storage;
 
-namespace ClassDailyLand.Core.Managers;
+namespace ClassDailyLand2.Core.Managers;
 
 /// <summary>homework.json：[{"subject","content","date"}]</summary>
 public sealed class HomeworkManager

@@ -86,7 +86,7 @@ if (VERIFY) {
 
   check('1a. exe 换成新版', read('Class Daily Land 2.exe') === 'NEW-EXE-v1.1.0', '实际=' + read('Class Daily Land 2.exe'));
   check('2b. 主 dll 换成新版', read('Class Daily Land 2.dll') === 'NEW-DLL-v1.1.0', '实际=' + read('Class Daily Land 2.dll'));
-  check('2c. 抽象层 dll 换成新版', read('ClassDailyLand.Plugin.Abstractions.dll') === 'NEW-ABSTRACT', '实际=' + read('ClassDailyLand.Plugin.Abstractions.dll'));
+  check('2c. 抽象层 dll 换成新版', read('ClassDailyLand2.Plugin.Abstractions.dll') === 'NEW-ABSTRACT', '实际=' + read('ClassDailyLand2.Plugin.Abstractions.dll'));
   check('2d. 新文件已落地', read('new.dll') === 'BRAND-NEW', '实际=' + read('new.dll'));
 
   check('3a. settings/settings.json 没被动', read('settings/settings.json') === 'keep-me', '实际=' + read('settings/settings.json'));
@@ -146,7 +146,7 @@ function write(rel, content) {
 // 旧版本的程序文件
 write('Class Daily Land 2.exe', 'OLD-EXE-v1.0.0');
 write('Class Daily Land 2.dll', 'OLD-DLL-v1.0.0');
-write('ClassDailyLand.Plugin.Abstractions.dll', 'OLD-ABSTRACT');
+write('ClassDailyLand2.Plugin.Abstractions.dll', 'OLD-ABSTRACT');
 write('stale/old.dll', 'OLD-STALE-FILE');                 // 新版本没有了 → 应被删
 write('app.log', 'old log line');                          // 保留
 write('settings/settings.json', 'keep-me');                // ★ 用户数据，绝不能动
@@ -169,7 +169,7 @@ function stageFile(rel, content) {
 // 新版本：主程序换新 + 多一个新文件 + 不带 settings/plugins
 stageFile('Class Daily Land 2.exe', 'NEW-EXE-v1.1.0');
 stageFile('Class Daily Land 2.dll', 'NEW-DLL-v1.1.0');
-stageFile('ClassDailyLand.Plugin.Abstractions.dll', 'NEW-ABSTRACT');
+stageFile('ClassDailyLand2.Plugin.Abstractions.dll', 'NEW-ABSTRACT');
 stageFile('new.dll', 'BRAND-NEW');
 stageFile('install.info.json', JSON.stringify({ name: 'Class Daily Land 2', version: '1.1.0', channel: 'stable' }));
 
@@ -232,5 +232,5 @@ console.log('任务文件：' + jobPath);
 console.log('');
 console.log('下一步：');
 console.log(`  node tools/serve.mjs --dir ${fakeDir} --port ${PORT}`);
-console.log('  dotnet run --project ../ClassDailyLand.Updater-src -- --job ' + jobPath);
+console.log('  dotnet run --project ../ClassDailyLand2.Updater-src -- --job ' + jobPath);
 console.log('  node tools/make-fake-update.mjs --verify --out ' + OUT);

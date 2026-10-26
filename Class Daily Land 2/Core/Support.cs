@@ -1,7 +1,7 @@
-using ClassDailyLand.Core.Storage;
+using ClassDailyLand2.Core.Storage;
 using System.Text;
 
-namespace ClassDailyLand.Core;
+namespace ClassDailyLand2.Core;
 
 /// <summary>极简本地日志（app.log，追加写）。业务数据仍走 AtomicJson。</summary>
 public sealed class Logger

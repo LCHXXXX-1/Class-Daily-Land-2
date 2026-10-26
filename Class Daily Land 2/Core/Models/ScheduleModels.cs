@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.Json.Serialization;
 
-namespace ClassDailyLand.Core.Models;
+namespace ClassDailyLand2.Core.Models;
 
 /// <summary>一节课的时间段（早读/第1节…）。start/end 为 "HH:mm"。</summary>
 public sealed class Period

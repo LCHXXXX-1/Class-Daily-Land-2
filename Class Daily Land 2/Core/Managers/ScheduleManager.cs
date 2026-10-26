@@ -1,9 +1,9 @@
-using ClassDailyLand.Core.Engine;
-using ClassDailyLand.Core.Models;
-using ClassDailyLand.Core.Storage;
+using ClassDailyLand2.Core.Engine;
+using ClassDailyLand2.Core.Models;
+using ClassDailyLand2.Core.Storage;
 using System.Text.Json;
 
-namespace ClassDailyLand.Core.Managers;
+namespace ClassDailyLand2.Core.Managers;
 
 /// <summary>
 /// schedule.json 的读写 + 课表结构操作。引擎实例随文件更新重建，保证 UI 拿到的永远是最新状态。

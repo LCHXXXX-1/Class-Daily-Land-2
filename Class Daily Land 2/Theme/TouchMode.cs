@@ -1,7 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 
-namespace ClassDailyLand.App.Theme;
+namespace ClassDailyLand2.App.Theme;
 
 /// <summary>
 /// 触屏支持。分两件互不相干的事：
@@ -43,8 +43,8 @@ public static class TouchMode
     {
         if (viewer is null) return;
         viewer.PanningMode = PanningMode.VerticalOnly;
-        // 惯性衰减 0.0006（默认 0.001 在长列表上"甩一下只滑一屏"，手感偏肉）
-        viewer.PanningDeceleration = 0.0006;
+        // 惯性衰减统一 0.001（与 XAML 里 <ScrollViewer PanningDeceleration="0.001"> 保持一致）
+        viewer.PanningDeceleration = 0.001;
         // 不设 IsManipulationEnabled：ScrollViewer 的 PanningMode 内部已经接管了
         // manipulation，子元素再自己开会把单击吞掉（按钮点不动）。
     }

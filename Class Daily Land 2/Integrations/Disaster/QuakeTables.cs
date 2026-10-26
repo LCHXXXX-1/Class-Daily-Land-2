@@ -1,4 +1,4 @@
-namespace ClassDailyLand.App.Integrations.Disaster;
+namespace ClassDailyLand2.App.Integrations.Disaster;
 
 /// <summary>
 /// 横波到达时间查表（由 Python 版 <c>quake_calc.py</c> 自动生成，请勿手改）。

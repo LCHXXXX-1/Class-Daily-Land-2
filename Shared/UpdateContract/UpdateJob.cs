@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ClassDailyLand.UpdateContract;
+namespace ClassDailyLand2.UpdateContract;
 
 /// <summary>
 /// 主程序写给更新器的本地任务文件（<c>job.json</c>），schema 版本 1。
@@ -91,13 +91,13 @@ public sealed class UpdateJob
         var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 
         if (string.IsNullOrWhiteSpace(Paths.WorkDir))
-            Paths.WorkDir = Path.Combine(temp, "ClassDailyLand.Update", JobId);
+            Paths.WorkDir = Path.Combine(temp, "ClassDailyLand2.Update", JobId);
         if (string.IsNullOrWhiteSpace(Paths.BackupRoot))
-            Paths.BackupRoot = Path.Combine(localAppData, "ClassDailyLand", "UpdateBackup");
+            Paths.BackupRoot = Path.Combine(localAppData, "ClassDailyLand2", "UpdateBackup");
         if (string.IsNullOrWhiteSpace(Paths.Log))
-            Paths.Log = Path.Combine(localAppData, "ClassDailyLand", "logs", $"updater-{JobId}.log");
+            Paths.Log = Path.Combine(localAppData, "ClassDailyLand2", "logs", $"updater-{JobId}.log");
         if (string.IsNullOrWhiteSpace(Paths.Result))
-            Paths.Result = Path.Combine(localAppData, "ClassDailyLand", "last-update.json");
+            Paths.Result = Path.Combine(localAppData, "ClassDailyLand2", "last-update.json");
 
         App.InstallDir = App.InstallDir?.Trim() ?? "";
     }

@@ -1,9 +1,9 @@
-using ClassDailyLand.Core;
-using ClassDailyLand.Core.Managers;
+using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Managers;
 using System.Windows.Media;
 using System.Windows.Threading;
 
-namespace ClassDailyLand.App.Integrations.Disaster;
+namespace ClassDailyLand2.App.Integrations.Disaster;
 
 /// <summary>
 /// 灾害预警集成：地震预警（ICL 主源 + Wolfx 备源）与气象灾害（中央气象台）。
