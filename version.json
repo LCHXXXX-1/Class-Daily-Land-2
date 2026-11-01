@@ -1,13 +1,13 @@
 {
   "stable": {
-    "version": "1.3.1",
+    "version": "1.3.2",
     "release_date": "2026-11-01",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.3.1.zip",
-    "sha256": "64d3cafa4158f7581aeaed498ceecdaf90ed3bb58f02716dbe385fa71a4648be",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.3.2.zip",
+    "sha256": "6a63ef6387854f89e2cab30ef74b176451beb33b54316c735818d5f8571e03c3",
     "changelog": [
-      "设置中心：有内容的地方也能看到云母（内容层降到 25%、卡片 45%，不再把云母盖死）",
-      "修复：蓝色强调按钮（检查更新 / 立即同步 / 保存）鼠标悬停时变隐形",
-      "只影响设置中心与强调按钮，其它界面无变化"
+      "修复：地震预警倒计时只显示 5 秒就收起 —— 现在横波未到时红条一直走到抵达",
+      "到达后再留 5 秒「横波已到达」提示才交还课程；红级仍留到点胶囊确认",
+      "顺带修掉「首次看到时间」只增不减的小泄漏，长时间运行不再累积"
     ],
     "is_mandatory": true
   }
