@@ -7,6 +7,6 @@
     "changelog": [
       "新增作业历史记录"
     ],
-    "is_mandatory": false
+    "is_mandatory": true
   }
 }
