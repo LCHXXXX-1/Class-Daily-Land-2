@@ -1,12 +1,16 @@
 {
   "stable": {
-    "version": "1.2.0",
-    "release_date": "2026-10-26",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.2.zip",
-    "sha256": "9742EF5D012D763421767EE66E7AD9E7E4773C8740A593E606EF37A859CDF7D5",
+    "version": "1.3.0",
+    "release_date": "2026-11-01",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.3.zip",
+    "sha256": "e7dfdbd3f63377cd3b817f5dee36e5fb16ec8dc313ef2e4185f43269f3e82129",
     "changelog": [
-      "新增作业历史记录"
+      "新增插件市场：一键安装/更新，sha256+包内清单校验，断网显示缓存，可「立即同步」",
+      "插件可声明自己的设置页（契约 v2，48→50 成员），已安装列表出现「设置」按钮",
+      "示例插件「高考倒计时」1.1.1：届别可选（2029 届等），可显示在主岛",
+      "修复：覆盖安装的 .bak 备份目录被当成插件列出",
+      "修复：卸载/升级时文件被占用导致删不掉（立即回收 + 重试 + 改名待清理）"
     ],
-    "is_mandatory": true
+    "is_mandatory": false
   }
 }
