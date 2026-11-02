@@ -1,6 +1,0 @@
-dotnet 退出码 1
-  Determining projects to restore...
-  Restored D:\a\Class-Daily-Land-2\Class-Daily-Land-2\upstream\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj (in 2.55 sec).
-  Restored D:\a\_temp\mb\gaokao-countdown-1.1.2-src\extract\GaokaoCountdown\GaokaoCountdown.csproj (in 2.56 sec).
-  ClassDailyLand2.Plugin.Abstractions -> D:\a\_temp\mb\gaokao-countdown-1.1.2-src\out\ClassDailyLand2.Plugin.Abstractions.dll
-D:\a\_temp\mb\gaokao-countdown-1.1.2-src\extract\GaokaoCountdown\GaokaoCountdown.cs(168,26): error CS0246: The type or namespace name 'SettingOption' could not be found (are you missing a using directive or an assembly reference?) [D:\a\_temp\mb\gaokao-countdown-1.1.2-src\extract\GaokaoCountdown\GaokaoCountdown.csproj]
