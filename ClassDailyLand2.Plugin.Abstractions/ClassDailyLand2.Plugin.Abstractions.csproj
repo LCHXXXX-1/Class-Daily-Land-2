@@ -13,7 +13,7 @@
     <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>ClassDailyLand2.Plugin</RootNamespace>
     <AssemblyName>ClassDailyLand2.Plugin.Abstractions</AssemblyName>
-    <Version>1.1.0</Version>
+    <Version>1.2.0</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

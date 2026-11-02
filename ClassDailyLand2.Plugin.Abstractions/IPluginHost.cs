@@ -1,7 +1,7 @@
 namespace ClassDailyLand2.Plugin;
 
 /// <summary>
-/// 宿主交给插件的一切能力。共 48 个成员，分七组：
+/// 宿主交给插件的一切能力。共 50 个成员，分八组：
 /// <list type="number">
 ///   <item>元信息与日志（8）</item>
 ///   <item>显示位注册（11）</item>
@@ -9,6 +9,7 @@ namespace ClassDailyLand2.Plugin;
 ///   <item>插件私有存储（5）</item>
 ///   <item>宿主动作（7）</item>
 ///   <item>事件（3）</item>
+///   <item>插件设置页（2）</item>
 ///   <item>时间（见 <see cref="Now"/>）</item>
 /// </list>
 ///
@@ -185,4 +186,26 @@ public interface IPluginHost
 
     /// <summary>用户点了灵动岛（UI 线程）。</summary>
     event EventHandler? IslandClicked;
+
+    // ═══════════════ 七、插件自己的设置页 ═══════════════
+
+    /// <summary>
+    /// 声明本插件的设置页。声明之后，「设置 → 插件 → 已安装」里这个插件才会出现「设置」按钮，
+    /// 点开按 <see cref="SettingsPageSpec.Fields"/> 逐项渲染成宿主的原生控件。
+    ///
+    /// <para>值的落点就是本插件的私有 state（<c>plugins/&lt;id&gt;/data/state.json</c>）：
+    /// 界面读到的是 <see cref="ReadState"/>，保存时宿主调 <see cref="WriteState"/> 并
+    /// <see cref="FlushState"/>，然后触发 <see cref="SettingChanged"/>。</para>
+    ///
+    /// <para>重复调用以最后一次为准（重载后重新声明即可）；不调用就表示"这个插件没有可配的东西"，
+    /// 已安装列表不会出现设置按钮 —— 不要为了凑一个空页面去声明。</para>
+    /// </summary>
+    /// <returns>注册 id（可用于 <see cref="Unregister"/>）。</returns>
+    string RegisterSettings(SettingsPageSpec spec);
+
+    /// <summary>
+    /// 宿主界面改动了本插件的某个设置项（UI 线程）。参数带键与新值，
+    /// 插件应在这里刷新自己缓存的字符串/数字，而不是等下一次 Tick 才发现值变了。
+    /// </summary>
+    event EventHandler<PluginSettingChangedEventArgs>? SettingChanged;
 }

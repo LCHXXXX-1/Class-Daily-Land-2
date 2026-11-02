@@ -96,6 +96,64 @@ public sealed record BoardActionSpec(string Text, Action Invoke, int Order = 50)
 /// <summary>托盘右键菜单项（排在「设置」之后、「退出」之前）。</summary>
 public sealed record TrayActionSpec(string Text, Action Invoke, int Order = 50);
 
+// ————————————————————— 插件自己的设置页 —————————————————————
+
+/// <summary>设置项类型。宿主按它决定渲染成什么控件。</summary>
+public enum SettingFieldKind
+{
+    /// <summary>单行文本（<c>TextBox</c>）。</summary>
+    Text = 0,
+    /// <summary>数字（带 ▲▼ 的 <c>NumberBox</c>），配合 <see cref="SettingField.Min"/> / <see cref="SettingField.Max"/>。</summary>
+    Number = 1,
+    /// <summary>开关（<c>FluentToggle</c>），值存 <c>"true"</c> / <c>"false"</c>。</summary>
+    Toggle = 2,
+    /// <summary>单选下拉（<c>ComboBox</c>），选项见 <see cref="SettingField.Options"/>。</summary>
+    Choice = 3,
+}
+
+/// <summary>下拉选项：<see cref="Value"/> 是落盘值，<see cref="Label"/> 是显示文案。</summary>
+public sealed record SettingOption(string Value, string Label);
+
+/// <summary>
+/// 一个设置项。<see cref="Key"/> 同时是 <c>ReadState</c> / <c>WriteState</c> 的键 ——
+/// 宿主写完会触发 <see cref="IPluginHost.SettingChanged"/>，插件据此刷新自己的缓存。
+/// </summary>
+/// <param name="Key">落盘键名（插件私有 state.json）。建议用 snake_case。</param>
+/// <param name="Label">左侧标题。</param>
+/// <param name="Kind">控件类型。</param>
+/// <param name="Hint">标题下面那行灰色说明，可为 null。</param>
+/// <param name="DefaultValue">没写过值时界面显示的默认值；不写则文本空、数字 0、开关关、下拉选第一项。</param>
+/// <param name="Options">仅 <see cref="SettingFieldKind.Choice"/> 用。</param>
+/// <param name="Min">仅 Number 用，最小值（0 与 Max 都为 0 时表示不限）。</param>
+/// <param name="Max">仅 Number 用，最大值。</param>
+/// <param name="Unit">仅 Number 用，单位后缀（如 " 天"）。</param>
+public sealed record SettingField(
+    string Key,
+    string Label,
+    SettingFieldKind Kind,
+    string? Hint = null,
+    string? DefaultValue = null,
+    IReadOnlyList<SettingOption>? Options = null,
+    double Min = 0,
+    double Max = 0,
+    string Unit = "");
+
+/// <summary>
+/// 插件的设置页。插件在 <c>Initialize</c> 里通过
+/// <see cref="IPluginHost.RegisterSettings"/> 声明，宿主会在「设置 → 插件」的
+/// 已安装列表里给这个插件亮出「设置」按钮，点开按 <see cref="Fields"/> 逐项渲染。
+///
+/// <para>声明式而不是"插件自己画界面"：插件跑在独立 ALC 里、不许碰 WPF 视觉树，
+/// 宿主保证深色/浅色主题、触屏放大、键盘操作全都一致。</para>
+/// </summary>
+/// <param name="Title">设置页标题（通常是插件名）。</param>
+/// <param name="Fields">设置项，按顺序渲染。</param>
+/// <param name="Summary">已安装列表里那行小字（如「2029 届 · 还有 218 天」）；返回 null 表示不显示。</param>
+public sealed record SettingsPageSpec(
+    string Title,
+    IReadOnlyList<SettingField> Fields,
+    Func<string?>? Summary = null);
+
 // ————————————————————— 只读数据快照 —————————————————————
 
 /// <summary>一节课（<see cref="Start"/>/<see cref="End"/> 为已叠加时间偏移的 HH:mm）。</summary>
@@ -135,4 +193,20 @@ public sealed class HostSettingsEventArgs : EventArgs
 {
     public HostSettingsEventArgs(IReadOnlyList<string> keys) => Keys = keys;
     public IReadOnlyList<string> Keys { get; }
+}
+
+/// <summary>插件自己的设置项被改动（宿主界面写的，不是插件自己写的）。</summary>
+public sealed class PluginSettingChangedEventArgs : EventArgs
+{
+    public PluginSettingChangedEventArgs(string key, string? value)
+    {
+        Key = key;
+        Value = value;
+    }
+
+    /// <summary>被改动的键（<see cref="SettingField.Key"/>）。</summary>
+    public string Key { get; }
+
+    /// <summary>新值；null 表示这一项被清空。</summary>
+    public string? Value { get; }
 }
