@@ -5,7 +5,7 @@
 //  插件市场的三种文件，各管一件事：
 //    entries/<id>.json                     作者提交的「输入」，一插件一文件（PR 友好）
 //    index.json                            工具生成的「输出」，一文件装全部插件（客户端只请求它）
-//    packages/<id>/<id>-<ver>.cblplugin    整包（含入口 dll）
+//    已完成插件/<id>/<id>-<ver>.cblplugin  整包（含入口 dll）
 //
 //  用法：
 //    node tools/market.mjs pack  <插件输出目录> [-o 包路径]
@@ -29,6 +29,7 @@ import crypto from 'node:crypto';
 import { writeZip, listZip, readZipEntry } from './zip.mjs';
 
 // 契约程序集由宿主提供，任何情况下都不随包分发
+const PKG_DIR = '已完成插件';
 const CONTRACT_DLL = 'classdailyland2.plugin.abstractions.dll';
 const EXCLUDE_DIRS = new Set(['data', 'obj', 'bin', '.git', '.vs', 'node_modules']);
 const EXCLUDE_EXT = new Set(['.pdb', '.cs', '.csproj', '.sln', '.slnx', '.user', '.log']);
@@ -85,7 +86,7 @@ const writeJson = (file, value) => {
 
 function marketRoot(flags) {
   const root = path.resolve(flags.root ?? 'market');
-  for (const dir of ['entries', 'packages']) fs.mkdirSync(path.join(root, dir), { recursive: true });
+  for (const dir of ['entries', PKG_DIR]) fs.mkdirSync(path.join(root, dir), { recursive: true });
   return root;
 }
 
@@ -211,7 +212,7 @@ function add(packagePath, flags) {
   const previous = fs.existsSync(entryPath) ? readJson(entryPath) : null;
 
   const fileName = `${id}-${version}.cblplugin`;
-  const targetDir = path.join(root, 'packages', id);
+  const targetDir = path.join(root, PKG_DIR, id);
   fs.mkdirSync(targetDir, { recursive: true });
   const targetPackage = path.join(targetDir, fileName);
   if (path.resolve(targetPackage) !== path.resolve(packagePath)) fs.copyFileSync(packagePath, targetPackage);
@@ -290,9 +291,9 @@ function collectIndex(root, { write }) {
     if (!CATEGORIES.includes(entry.category)) problems.push(`${where}：category「${entry.category}」不在枚举里`);
     if (!TRUST.includes(entry.trust)) problems.push(`${where}：trust「${entry.trust}」不在枚举里`);
 
-    const packagePath = path.join(root, 'packages', entry.id, entry.package ?? '');
+    const packagePath = path.join(root, PKG_DIR, entry.id, entry.package ?? '');
     if (!entry.package || !fs.existsSync(packagePath)) {
-      problems.push(`${where}：找不到安装包 packages/${entry.id}/${entry.package}`);
+      problems.push(`${where}：找不到安装包 ${PKG_DIR}/${entry.id}/${entry.package}`);
       continue;
     }
 
@@ -330,7 +331,7 @@ function collectIndex(root, { write }) {
       ...(entry.tags?.length ? { tags: entry.tags } : {}),
       trust: entry.trust,
       ...(hasIcon ? { icon: iconName } : {}),
-      path: `packages/${entry.id}/${entry.package}`,
+      path: `${PKG_DIR}/${entry.id}/${entry.package}`,
       sha256: digest,
       size,
       ...(entry.homepage ? { homepage: entry.homepage } : {}),
@@ -389,7 +390,7 @@ switch (command) {
     const manifest = readJson(path.join(sourceDir, 'plugin.json'));
     const outFile =
       flags.o ??
-      path.join(marketRoot(flags), 'packages', manifest.id, `${manifest.id}-${manifest.version}.cblplugin`);
+      path.join(marketRoot(flags), PKG_DIR, manifest.id, `${manifest.id}-${manifest.version}.cblplugin`);
     pack(path.resolve(sourceDir), path.resolve(outFile));
     break;
   }

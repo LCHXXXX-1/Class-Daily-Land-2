@@ -39,7 +39,9 @@ const opt = (name, dflt) => {
 const has = (name) => argv.includes(name);
 
 const ROOT = path.resolve(opt('--root', '.'));
-const INBOX = path.resolve(opt('--inbox', path.join(ROOT, 'inbox')));
+const PKG_DIR = '已完成插件';   // 编译产物落地目录（客户端 index 里的 path 前缀）
+const INBOX_DIR = '上传的zip';  // 收件箱：往里丢 zip 就触发
+const INBOX = path.resolve(opt('--inbox', path.join(ROOT, INBOX_DIR)));
 const UPSTREAM = path.resolve(opt('--upstream', path.join(ROOT, 'upstream')));
 const WORK = path.resolve(opt('--work', path.join(os.tmpdir(), 'market-build')));
 const RESULT = path.resolve(opt('--result', path.join(WORK, 'result.json')));
@@ -358,9 +360,9 @@ function checkVersion(manifest, pkgPath) {
     throw new UserError(`版本倒退：已发布 ${entry.version}，本次 ${manifest.version}。客户端本来就拦降级，发了等于白推`);
 
   if (cmp === 0) {
-    const existing = path.join(ROOT, 'packages', manifest.id, entry.package || '');
+    const existing = path.join(ROOT, PKG_DIR, manifest.id, entry.package || '');
     if (!fs.existsSync(existing))
-      throw new UserError(`entries 里记着 ${entry.version}，但包不在 packages/${manifest.id}/ 下 —— 分支状态不一致，请先修好`);
+      throw new UserError(`entries 里记着 ${entry.version}，但包不在 ${PKG_DIR}/${manifest.id}/ 下 —— 分支状态不一致，请先修好`);
 
     const same = sha256(existing) === sha256(pkgPath);
     if (same) return { skipped: true, version: manifest.version };
@@ -389,7 +391,7 @@ function publishOne(zipFile, workDir) {
       throw new UserError('zip 里的 .cblplugin 缺 plugin.json 或缺 id/version');
 
     const meta = {};
-    const targetDir = path.join(ROOT, 'packages', manifest.id);
+    const targetDir = path.join(ROOT, PKG_DIR, manifest.id);
     const target = path.join(targetDir, `${manifest.id}-${manifest.version}.cblplugin`);
     fs.mkdirSync(targetDir, { recursive: true });
     fs.copyFileSync(shape.file, target);
@@ -421,7 +423,7 @@ function publishOne(zipFile, workDir) {
   const meta = readMeta(sourceDir);
 
   // 目标路径先建好（pack 会写进去；体积闸门在 finish 里按实际大小判断）
-  const targetDir = path.join(ROOT, 'packages', manifest.id);
+  const targetDir = path.join(ROOT, PKG_DIR, manifest.id);
   const target = path.join(targetDir, `${manifest.id}-${manifest.version}.cblplugin`);
   fs.mkdirSync(targetDir, { recursive: true });
 
@@ -530,7 +532,7 @@ function finish(manifest, meta, pkgPath, ctx) {
 
 /** 保留最近 N 个版本（索引只列最新，旧包对用户没意义，但会永久占 git 历史）。 */
 function pruneOldVersions(id, currentVersion) {
-  const dir = path.join(ROOT, 'packages', id);
+  const dir = path.join(ROOT, PKG_DIR, id);
   if (!fs.existsSync(dir)) return;
 
   const files = fs.readdirSync(dir).filter((f) => f.toLowerCase().endsWith('.cblplugin'));
@@ -548,7 +550,7 @@ function pruneOldVersions(id, currentVersion) {
 // ————————————————————— 索引 —————————————————————
 
 function totalPackagesSize() {
-  const dir = path.join(ROOT, 'packages');
+  const dir = path.join(ROOT, PKG_DIR);
   if (!fs.existsSync(dir)) return 0;
   return walk(dir, () => true).reduce((s, f) => s + fs.statSync(f).size, 0);
 }
@@ -556,9 +558,9 @@ function totalPackagesSize() {
 function rebuildIndex() {
   const total = totalPackagesSize();
   if (total > LIMITS.totalHard)
-    throw new UserError(`packages/ 总量 ${mb(total)} 超过 ${mb(LIMITS.totalHard)} 硬上限，拒绝发布`);
+    throw new UserError(`${PKG_DIR}/ 总量 ${mb(total)} 超过 ${mb(LIMITS.totalHard)} 硬上限，拒绝发布`);
   if (total > LIMITS.totalWarn)
-    log(`⚠ packages/ 总量 ${mb(total)}，已超过 ${mb(LIMITS.totalWarn)} 建议值`);
+    log(`⚠ ${PKG_DIR}/ 总量 ${mb(total)}，已超过 ${mb(LIMITS.totalWarn)} 建议值`);
 
   // 只兜底 index.json 这一个文件：build 失败时可能留下半成品。
   // ★ 绝不在这里做 `git clean` —— entries/packages 在分支上本来就可能是"本次新增"的

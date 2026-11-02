@@ -9,7 +9,7 @@ plugins/
   index.json                         ★ 工具生成，禁止手改
   schema/index.schema.json           index.json 的格式定义
   entries/<id>.json                  一个插件一条，上架时只改这里
-  packages/<id>/<id>-<ver>.cblplugin 安装包（整包，含入口 dll）
+  已完成插件/<id>/<id>-<ver>.cblplugin 安装包（整包，含入口 dll）
   icons/<id>.png                     可选，列表图标（缺省用名称首字色块）
 ```
 
@@ -25,7 +25,7 @@ dotnet build samples/GaokaoCountdown/GaokaoCountdown.csproj -c Release
 node tools/market.mjs pack "samples/GaokaoCountdown/bin/Release/net10.0-windows10.0.19041.0"
 
 # 3) 写入 entries（sha256 与体积由工具算，别手写）
-node tools/market.mjs add "market/packages/<id>/<id>-<ver>.cblplugin" \
+node tools/market.mjs add "已完成插件/<id>/<id>-<ver>.cblplugin" \
   --id <id> --name "显示名" --summary "一句话（≤60 字）" \
   --category reminder --trust official --tags "标签1,标签2" \
   --repo "https://github.com/LCHXXXX-1/Class-Daily-Land-2/tree/master/samples/<工程>" \
@@ -61,7 +61,7 @@ git push github plugins        # GitHub（备用源，必须同步）
 | 事项 | 规则 |
 | --- | --- |
 | 版本 | 严格 semver，**只升不降**。要回退就发更高的补丁号，降级会被客户端拦 |
-| 一个 id 一条 | 索引只列最新版本，历史包可以留在 `packages/` 但不进 `index.json` |
+| 一个 id 一条 | 索引只列最新版本，历史包可以留在 `已完成插件/` 但不进 `index.json` |
 | 下架 | 在 entry 里加 `"revoked": true` 并重新 `build`；**不要直接删条目**（已装用户需要看到原因） |
 | 单包体积 | 建议 ≤ 5 MB。超了改走 Releases，并把 entry 的 `package` 换成绝对 URL |
 | 改名 | 不要复用别人的 id；改 id 等于换插件，老用户的启用状态与数据不会跟过去 |

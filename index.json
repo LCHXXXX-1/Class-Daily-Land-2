@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-11-02T17:47:00+00:00",
+  "generated_at": "2026-11-03T01:53:45+08:00",
   "count": 1,
   "plugins": [
     {
@@ -20,7 +20,7 @@
         "灵动岛面板"
       ],
       "trust": "official",
-      "path": "packages/lch.gaokao-countdown/lch.gaokao-countdown-1.1.1.cblplugin",
+      "path": "已完成插件/lch.gaokao-countdown/lch.gaokao-countdown-1.1.1.cblplugin",
       "sha256": "B4B7DC940746737C2DB4E411F60B5383D5CB6EFFCEBCB8855498ABBA85125880",
       "size": 5601,
       "repo": "https://gitee.com/lchxxxx/class-daily-land-2/tree/plugins/sources/lch.gaokao-countdown",
