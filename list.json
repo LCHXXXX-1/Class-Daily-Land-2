@@ -1,0 +1,16 @@
+{
+  "generated_at": "2026-11-02T08:57:48Z",
+  "plugins": [
+    {
+      "package_name": "LCHXXXX.a",
+      "plugin_name": "a",
+      "version": "1.0.0",
+      "sha256": "96bec871ac3a4b4c76d2a46d3114847838da5beae407170f97aff228c328342f",
+      "size": 1667,
+      "download": {
+        "github": "",
+        "gitee": ""
+      }
+    }
+  ]
+}
