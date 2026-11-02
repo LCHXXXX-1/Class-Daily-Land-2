@@ -1,6 +1,35 @@
 {
   "schema": 1,
-  "generated_at": "2026-11-03T02:18:52+08:00",
-  "count": 0,
-  "plugins": []
+  "generated_at": "2026-11-02T18:23:53+00:00",
+  "count": 1,
+  "plugins": [
+    {
+      "id": "lch.gaokao-countdown",
+      "name": "高考倒计时",
+      "summary": "在灵动岛下拉面板显示距离高考还有多少天。届别（哪一年高考）在「设置 → 插件 → 已安装 → 设置」里选，可选在主岛也显",
+      "author": "LCH",
+      "version": "1.1.2",
+      "api_version": 2,
+      "min_app_version": "1.2",
+      "target_sdk_version": "1.2.0",
+      "category": "reminder",
+      "tags": [
+        "高考",
+        "倒计时",
+        "届别",
+        "灵动岛面板"
+      ],
+      "trust": "official",
+      "path": "已完成插件/lch.gaokao-countdown/lch.gaokao-countdown-1.1.2.cblplugin",
+      "sha256": "2D0878FDF555F886D1E7ED31755E0381FEB2B033DA3DD9EC2B6EBA910134BFF1",
+      "size": 6028,
+      "repo": "https://gitee.com/lchxxxx/class-daily-land-2/tree/plugins/sources/lch.gaokao-countdown",
+      "license": "MIT",
+      "published_at": "2026-11-02",
+      "changelog": [
+        "通过收件箱（inbox）重新发布，验证 GitHub Actions 自动编译打包链路",
+        "功能与设置项与 1.1.1 完全一致，无行为变化"
+      ]
+    }
+  ]
 }

@@ -1,5 +1,11 @@
 {
   "version": 1,
   "note": "已处理文件指纹，删掉某条即可强制重发",
-  "items": {}
+  "items": {
+    "5A369FD239586E86F960B074EF7DC941E081EABBD1FFDAA0EBE72434A89CADF8": {
+      "id": "lch.gaokao-countdown",
+      "version": "1.1.2",
+      "at": "2026-11-02T18:23:53.466Z"
+    }
+  }
 }
