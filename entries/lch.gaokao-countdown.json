@@ -1,0 +1,25 @@
+{
+  "id": "lch.gaokao-countdown",
+  "name": "高考倒计时",
+  "summary": "在灵动岛下拉面板显示距离高考还有多少天，届别可自选",
+  "description": "点主岛展开下拉面板即可看到：届别、剩余天数、约合小时/周/月、今天日期与周几、目标日期。届别（哪一年高考，如 2029 届）在「设置 → 插件 → 已安装 → 设置」里选；也可以打开「也在主岛显示」，让灵动岛文案位多一句「高考 N 天」。",
+  "author": "LCH",
+  "version": "1.1.1",
+  "api_version": 2,
+  "target_sdk_version": "1.2.0",
+  "category": "reminder",
+  "tags": [
+    "高考",
+    "倒计时",
+    "届别",
+    "灵动岛面板"
+  ],
+  "trust": "official",
+  "license": "MIT",
+  "repo": "https://gitee.com/lchxxxx/class-daily-land-2/tree/plugins/sources/lch.gaokao-countdown",
+  "package": "lch.gaokao-countdown-1.1.1.cblplugin",
+  "published_at": "2026-11-01",
+  "changelog": [
+    "修正：远期倒计时改为显示「约 N 个月」，不再显示无意义的小时数"
+  ]
+}

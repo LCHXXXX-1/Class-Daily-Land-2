@@ -1,0 +1,13 @@
+# 忽略 CI 的临时检出与工作目录
+#
+# upstream/ 是 workflow 里第二次 checkout（master 的契约工程与工具链）落下的位置。
+# actions/checkout 的 path 只能相对 workspace，所以它必然出现在工作树里 ——
+# 忘了忽略就会把整个 master 提交进 plugins 分支（本方案最容易翻车的一处）。
+/upstream/
+/work/
+/.work/
+
+# 编辑器/系统垃圾
+.DS_Store
+Thumbs.db
+*.tmp
