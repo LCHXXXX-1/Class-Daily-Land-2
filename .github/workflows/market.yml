@@ -1,0 +1,200 @@
+name: market-publish
+
+# 往 inbox/ 丢一个 zip 就自动：编译（若是源码）→ 打包 → 算哈希 → 重建 index.json → 双推。
+# 手工需要重算索引/下架时，用 Actions 页面的 Run workflow（rebuild）。
+
+on:
+  push:
+    branches: [plugins]
+    paths:
+      - 'inbox/*.zip'
+  workflow_dispatch:
+    inputs:
+      rebuild:
+        description: '只重建 index.json（不消费 inbox）'
+        type: boolean
+        default: false
+      dry_run:
+        description: '只打包校验，不提交也不推送'
+        type: boolean
+        default: false
+
+# 只申请仓库内容写权限，其余一律不要（最小权限）
+permissions:
+  contents: write
+
+jobs:
+  market:
+    # 防自触发的第 2、3 道（第 1 道是：GITHUB_TOKEN 推送本身不会触发 workflow）
+    if: >-
+      github.actor != 'github-actions[bot]' &&
+      !contains(github.event.head_commit.message || '', '[skip ci]')
+    runs-on: windows-latest
+    timeout-minutes: 20
+    concurrency:
+      group: market-publish
+      cancel-in-progress: false      # 排队而不取消：zip 留在 inbox，不会丢
+
+    steps:
+      - name: 1. 取 plugins 分支（工作树 = 市场根）
+        uses: actions/checkout@v4
+        with:
+          # ★ 显式指定 ref：这份 workflow 同时在 master（默认分支 —— GitHub 的 Actions 列表
+          #   和「Run workflow」按钮只认默认分支上的 workflow）和 plugins（响应 inbox 的 push）
+          #   各放一份，两处都必须 checkout 市场根，而不是当前触发的 ref。
+          ref: plugins
+          fetch-depth: 1
+          persist-credentials: true
+
+      # 契约工程与工具链都只在 master；sparse 只取需要的两个目录，
+      # 落点 upstream/ 已写进 .gitignore，推送前还有一道暂存审计兜底。
+      - name: 2. 稀疏取 master 的契约工程与工具链
+        uses: actions/checkout@v4
+        with:
+          ref: master
+          path: upstream
+          sparse-checkout: |
+            ClassDailyLand2.Plugin.Abstractions
+            tools
+            docs
+          sparse-checkout-cone-mode: true
+
+      - name: 3. 空箱早退（误触发时 10 秒结束）
+        id: gate
+        shell: bash
+        run: |
+          count=$(find inbox -maxdepth 1 -name '*.zip' 2>/dev/null | wc -l | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "收件箱里有 $count 个 zip；rebuild=${{ inputs.rebuild }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$count" = "0" ] && [ "${{ inputs.rebuild }}" != "true" ]; then
+            echo "没有要处理的内容，跳过" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+      - name: 4. .NET 10
+        if: steps.gate.outputs.count != '0'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: 5. NuGet 缓存（Windows SDK ref pack 是主要耗时点）
+        if: steps.gate.outputs.count != '0'
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('upstream/ClassDailyLand2.Plugin.Abstractions/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: 6. 处理收件箱
+        if: steps.gate.outputs.count != '0' || inputs.rebuild == true
+        shell: bash
+        env:
+          # 只在"编译目录"之外给这两个值；令牌不进这一步（见第 8 步）
+          OFFICIAL_ACTORS: ${{ vars.OFFICIAL_ACTORS }}
+          GITHUB_ACTOR_NAME: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          args=(
+            --inbox inbox --root . --upstream upstream
+            --work "$RUNNER_TEMP/mb" --result "$RUNNER_TEMP/mb/result.json"
+            --actor "$GITHUB_ACTOR_NAME" --official-actors "${OFFICIAL_ACTORS:-}"
+          )
+          if [ "${{ inputs.rebuild }}" = "true" ]; then args+=(--rebuild); fi
+          if [ "${{ inputs.dry_run }}" = "true" ]; then args+=(--dry-run); fi
+          node tools/ci/publish.mjs "${args[@]}"
+
+      - name: 7. 写步骤摘要
+        if: always()
+        shell: bash
+        run: |
+          f="$RUNNER_TEMP/mb/result.json"
+          [ -f "$f" ] || exit 0
+          node -e '
+            const fs = require("fs");
+            const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const out = fs.appendFileSync.bind(fs);
+            const p = process.env.GITHUB_STEP_SUMMARY;
+            out(p, "\n## 市场发布结果\n\n");
+            out(p, `| 结果 | 插件 | 版本 | 说明 |\n| --- | --- | --- | --- |\n`);
+            for (const x of r.published) out(p, `| 发布 | ${x.id} | ${x.version} | ${String(x.sha256).slice(0,12)}… |\n`);
+            for (const x of r.skipped)  out(p, `| 跳过 | ${x.id} | ${x.version || "—"} | ${x.reason || "已存在且内容一致"} |\n`);
+            for (const x of r.failed)   out(p, `| **失败** | ${x.zip} | — | ${String(x.error).split("\n")[0].replace(/\|/g,"/")} |\n`);
+          ' "$f"
+
+      - name: 8. 提交并双推（先 GitHub，后 Gitee）
+        if: ${{ inputs.dry_run != true && (steps.gate.outputs.count != '0' || inputs.rebuild == true) }}
+        shell: bash
+        env:
+          # 令牌只出现在这一步，编译步骤拿不到
+          GITEE_USERNAME: ${{ secrets.GITEE_USERNAME }}
+          GITEE_TOKEN: ${{ secrets.GITEE_TOKEN }}
+        run: |
+          set -euo pipefail
+          git config user.name  "market-bot"
+          git config user.email "market-bot@users.noreply.github.com"
+
+          git add -A .
+
+          # 审计：临时检出绝不能进提交（upstream/ 是工作树里的第二份 checkout）
+          if git diff --cached --name-only | grep -qE '^(upstream|work)/'; then
+            echo "::error::临时目录被暂存了（upstream/ 或 work/），拒绝推送"
+            exit 1
+          fi
+          if git diff --cached --name-only | grep -qE '^\.github/'; then
+            echo "::warning::本次提交包含 .github/ 变更，请确认是人工修改而非投稿包带入"
+          fi
+
+          if git diff --cached --quiet; then
+            echo "没有变更，跳过推送" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          git commit -F "$RUNNER_TEMP/mb/commit-msg.txt"
+
+          # ① GitHub（备源）：让 Actions 的运行地先变成最新
+          git push origin HEAD:plugins
+
+          # ② Gitee（主源）：偶发 502，重试三次
+          url="https://${GITEE_USERNAME}:${GITEE_TOKEN}@gitee.com/lchxxxx/class-daily-land-2.git"
+          for i in 1 2 3; do
+            if git push "$url" HEAD:plugins; then ok=1; break; fi
+            echo "Gitee 推送第 $i 次失败，5 秒后重试"; sleep 5
+          done
+          [ "${ok:-}" = "1" ] || { echo "::error::Gitee 推送三次均失败（GitHub 已推送，主源稍后需补）"; exit 1; }
+
+          # 双向核对：两边都指向同一个 commit 才算完成
+          local_sha=$(git rev-parse HEAD)
+          gh_sha=$(git ls-remote origin refs/heads/plugins | cut -f1)
+          ge_sha=$(git ls-remote --heads "$url" refs/heads/plugins | cut -f1)
+          {
+            echo ""
+            echo "| 远端 | 指针 | 期望 |"
+            echo "| --- | --- | --- |"
+            echo "| GitHub | ${gh_sha:0:7} | ${local_sha:0:7} |"
+            echo "| Gitee | ${ge_sha:0:7} | ${local_sha:0:7} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          [ "$gh_sha" = "$local_sha" ] || echo "::warning::GitHub 尚未指向新提交"
+          [ "$ge_sha" = "$local_sha" ] || echo "::warning::Gitee 尚未指向新提交（镜像/网络延迟）"
+
+      - name: 9. 上传日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: market-logs
+          path: ${{ runner.temp }}/mb/**
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: 10. 有失败则置红（推送已完成）
+        if: always()
+        shell: bash
+        run: |
+          f="$RUNNER_TEMP/mb/result.json"
+          [ -f "$f" ] || exit 0
+          node -e '
+            const r = require(process.argv[1]);
+            if (r.failed && r.failed.length) {
+              console.log("::error::" + r.failed.length + " 个包处理失败，证据在 failed/ 目录，详见任务摘要");
+              process.exit(1);
+            }
+          ' "$f"
