@@ -1,6 +1,0 @@
-dotnet 退出码 1
-  Determining projects to restore...
-  All projects are up-to-date for restore.
-D:\a\_temp\mb\gaokao-countdown-1.1.2-src\ClassDailyLand2.Plugin.Abstractions\IPlugin.cs(14,18): error CS0101: The namespace 'ClassDailyLand2.Plugin' already contains a definition for 'IPlugin' [D:\a\_temp\mb\gaokao-countdown-1.1.2-src\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj]
-D:\a\_temp\mb\gaokao-countdown-1.1.2-src\ClassDailyLand2.Plugin.Abstractions\IPluginHost.cs(22,18): error CS0101: The namespace 'ClassDailyLand2.Plugin' already contains a definition for 'IPluginHost' [D:\a\_temp\mb\gaokao-countdown-1.1.2-src\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj]
-D:\a\_temp\mb\gaokao-countdown-1.1.2-src\ClassDailyLand2.Plugin.Abstractions\Specs.cs(22,21): error CS0101: The namespace 'ClassDailyLand2.Plugin' already contains a definition for 'HostStatus' [D:\a\_temp\mb\gaokao-countdown-1.1.2-src\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj]

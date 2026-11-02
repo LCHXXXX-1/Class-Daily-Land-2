@@ -233,6 +233,30 @@ function classify(dir) {
  *   等价于 resolve(projectDir, '..', '..')。写成 dirname(dirname(csproj)) 会少跳一级，
  *   结果是 dotnet 报 MSB9008「引用的项目 … 不存在」。
  */
+/**
+ * 契约工程的相对路径（`..\..\ClassDailyLand2.Plugin.Abstractions\`）只在仓库布局里成立。
+ * CI 里插件是解压到临时目录的，套了几层目录不可控 —— 与其猜，不如把 csproj 里的
+ * ProjectReference 直接改指上游的绝对路径。改的是 workDir 里的一次性副本，
+ * `sources/` 快照仍然是作者原样提交的内容。
+ */
+function pointContractAtUpstream(projectFile) {
+  const upstream = path.join(UPSTREAM, 'ClassDailyLand2.Plugin.Abstractions', 'ClassDailyLand2.Plugin.Abstractions.csproj');
+  if (!fs.existsSync(upstream))
+    throw new UserError(`找不到契约工程：${upstream}（workflow 里的 sparse checkout 没跑？）`);
+
+  const text = fs.readFileSync(projectFile, 'utf8');
+  const re = /(<ProjectReference\s+Include=")([^"]*ClassDailyLand2\.Plugin\.Abstractions\.csproj)(")/i;
+  if (!re.test(text)) {
+    log('   ⚠ csproj 里没有对契约工程的 ProjectReference，保持原样');
+    return false;
+  }
+
+  const abs = upstream.replace(/\\/g, '/');
+  fs.writeFileSync(projectFile, text.replace(re, (_m, a, _old, c) => a + abs + c), 'utf8');
+  log(`   契约引用已改指上游：${abs}`);
+  return true;
+}
+
 function ensureAbstractions(projectFile) {
   const projectDir = path.dirname(projectFile);
   const anchor = path.resolve(projectDir, '..', '..');
@@ -278,15 +302,18 @@ function buildProject(projectFile, outDir, workDir) {
   try {
     build();
   } catch (e) {
-    // 兜底：错误里若点名缺失的 Abstractions.csproj，按它要的绝对路径再放一次
+    // 兜底：错误里若点名缺失的 Abstractions.csproj，按它要的绝对路径再放一次。
+    // ★ 目标目录必须不存在才放：往已存在的工程目录里再复制一份同名子目录，
+    //   项目的默认递归 glob 会把两份 .cs 都编进去 → CS0101 重复定义，
+    //   把真正的错误盖掉（CI 上真实发生过）。
     const text = `${e.stdout || ''}\n${e.stderr || ''}`;
-    const missing = text.match(/([A-Za-z]:\\[^\r\n]*?ClassDailyLand2\.Plugin\.Abstractions\.csproj)/);
+    const missing = text.match(/([A-Za-z]:[\\/][^\r\n]*?ClassDailyLand2\.Plugin\.Abstractions\.csproj)/);
     if (!missing) throw e;
-    const wanted = path.dirname(missing[1]);
+    const wantedDir = path.dirname(missing[1]);
     const source = path.join(UPSTREAM, 'ClassDailyLand2.Plugin.Abstractions');
-    if (!fs.existsSync(source) || !fs.existsSync(wanted)) throw e;
-    log(`   契约工程路径不符，按报错要求补放到 ${wanted}`);
-    fs.cpSync(source, path.join(wanted, 'ClassDailyLand2.Plugin.Abstractions'), { recursive: true });
+    if (!fs.existsSync(source) || fs.existsSync(wantedDir)) throw e;
+    log(`   契约工程路径不符，按报错要求放到 ${wantedDir}`);
+    fs.cpSync(source, wantedDir, { recursive: true });
     build();
   }
 }
@@ -404,7 +431,8 @@ function publishOne(zipFile, workDir) {
   let builtFromSource = false;
 
   if (shape.kind === 'source') {
-    ensureAbstractions(shape.project);
+    // 首选：把引用改成绝对路径（与目录层级无关）；改不动才退回"物理放置"的老办法
+    if (!pointContractAtUpstream(shape.project)) ensureAbstractions(shape.project);
     outDir = path.join(workDir, 'out');
     log('   dotnet build …');
     buildProject(shape.project, outDir, workDir);
