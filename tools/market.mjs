@@ -271,7 +271,9 @@ function collectIndex(root, { write }) {
     ? fs.readdirSync(entriesDir).filter((f) => f.endsWith('.json')).sort()
     : [];
 
-  if (!files.length) fail('entries/ 里一个插件都没有，先把包装进来（market.mjs add）');
+  // 空市场是合法状态（新分支、或清空后重新投稿）：写出一份 count=0 的索引，
+  // 客户端会显示"市场里还没有插件"，比让整个流程红掉要有用得多。
+  if (!files.length) console.log('⚠ entries/ 为空，将生成空索引');
 
   const problems = [];
   const plugins = [];
