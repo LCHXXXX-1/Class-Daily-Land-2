@@ -39,6 +39,10 @@ jobs:
       - name: 1. 取 plugins 分支（工作树 = 市场根）
         uses: actions/checkout@v4
         with:
+          # ★ 显式指定 ref：这份 workflow 同时在 master（默认分支 —— GitHub 的 Actions 列表
+          #   和「Run workflow」按钮只认默认分支上的 workflow）和 plugins（响应 inbox 的 push）
+          #   各放一份，两处都必须 checkout 市场根，而不是当前触发的 ref。
+          ref: plugins
           fetch-depth: 1
           persist-credentials: true
 
