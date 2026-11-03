@@ -1,12 +1,12 @@
 {
   "stable": {
-    "version": "1.7.1",
+    "version": "1.7.2",
     "release_date": "2026-11-03",
-    "download_url": "https://github.com/LCHXXXX-1/Class-Daily-Land-2/releases/download/Version/Class-Daily-Land-2-1.7.1.zip",
-    "sha256": "877f109bf2a9ddf110df2c00785c0de7d4dd82cefc3c32dddb1b7e93894598ff",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.2.zip",
+    "sha256": "5ecb2b49174a224f02f0c6dcff84e0065b8ec84dae6643673cf4b1901dccd878",
     "changelog": [
-      "修复：更新器关闭主程序失败——更新器是主程序的子进程时禁止整树强杀，现退化为只结束主程序本身（灵动岛/托盘随进程退出）",
-      "改进：此修复从本版起才真正到达用户手中（1.3.7 的包误带了未含此修复的更新器）"
+      "界面重做：更新窗口全新设计——大号进度数字、渐变进度条、阶段胶囊、图标化标题栏与错误提示胶囊",
+      "深浅色跟随系统，圆角与阴影更细腻"
     ],
     "is_mandatory": true
   },
