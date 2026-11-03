@@ -93,6 +93,13 @@ public sealed class MainBoardWindow : Window
         ShowActivated = false;
         Title = "班级日常";
 
+        // ★ 触屏：把"按住"交给系统去变成右键。
+        //   WPF 默认会自己接管笔/触的"按住"（弹出自己的手势提示），那会把系统的
+        //   「长按 = 右键」顶掉，用户长按半天什么也没发生。
+        //   关掉它之后，系统/驱动把长按转成右键 → 我们的 OnMouseRightButtonUp 正常弹菜单。
+        Stylus.SetIsPressAndHoldEnabled(this, false);
+        Stylus.SetIsTapFeedbackEnabled(this, false);
+
         // 关掉 WPF/DWM 的非客户区白边：无边框窗口在 Win10/Win11 上很容易被 DWM
         // 画出一圈白色轮廓，这里强制不画玻璃帧、不画标题栏、不做圆角。
         WindowChrome.SetWindowChrome(this, new WindowChrome
@@ -710,39 +717,6 @@ public sealed class MainBoardWindow : Window
         return menu;
     }
 
-    // ————————————————————— 长按唤出菜单（触屏） —————————————————————
-
-    /// <summary>按住多久算长按（毫秒）。</summary>
-    const int LongPressMs = 600;
-
-    /// <summary>长按期间允许的手指抖动（像素）；超过就当拖拽，取消长按。</summary>
-    const double LongPressMoveTolerance = 12;
-
-    DispatcherTimer? _longPressTimer;
-    Point _pressStart;
-    bool _pressActive;
-    bool _longPressFired;
-
-    private void EnsureLongPressTimer()
-    {
-        if (_longPressTimer is not null) return;
-        _longPressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(LongPressMs) };
-        _longPressTimer.Tick += OnLongPressTick;
-    }
-
-    private void OnLongPressTick(object? sender, EventArgs e)
-    {
-        _longPressTimer?.Stop();
-        if (!_pressActive) return;
-
-        _longPressFired = true;
-
-        // ★ 绝不能 Mouse.Capture(this)：鼠标一旦被本窗口抓住，整个应用的点击都会被吞掉
-        //   （灵动岛、主窗口、按钮全都点不动，踩过）。抬起事件本来就会先经 Preview 到达窗口，
-        //   不需要抓鼠标就能拦下来。
-        BuildContextMenu().IsOpen = true;
-    }
-
     // ————————————————————— 交互：F1 退出 / 触摸拖动滚动 —————————————————————
     Point? _dragStart;
     double _dragOffset;
@@ -762,66 +736,11 @@ public sealed class MainBoardWindow : Window
         base.OnPreviewMouseLeftButtonDown(e);
         _dragStart = e.GetPosition(this);
         _dragOffset = _homeworkScroll.VerticalOffset;
-
-        // 长按（触屏等价于右键）→ 弹出菜单。
-        // 但按在按钮/输入框这类可交互控件上时不启动长按计时器：正常点击优先，别被菜单劫持。
-        if (IsOnInteractiveElement(e.OriginalSource as DependencyObject))
-        {
-            _pressActive = false;
-            _longPressFired = false;
-            _longPressTimer?.Stop();
-            return;
-        }
-
-        EnsureLongPressTimer();
-        _pressStart = _dragStart.Value;
-        _pressActive = true;
-        _longPressFired = false;
-        _longPressTimer?.Stop();
-        _longPressTimer?.Start();
-    }
-
-    /// <summary>按下的位置是否落在可交互控件上（按钮、输入框、列表项……）。</summary>
-    private static bool IsOnInteractiveElement(DependencyObject? source)
-    {
-        var current = source;
-        while (current is not null)
-        {
-            if (current is ButtonBase or TextBoxBase or ComboBox or ListBoxItem or MenuItem or ToggleButton)
-                return true;
-
-            DependencyObject? parent = null;
-            if (current is Visual or System.Windows.Media.Media3D.Visual3D)
-            {
-                try { parent = VisualTreeHelper.GetParent(current); }
-                catch { parent = null; }
-            }
-            else if (current is FrameworkContentElement)
-            {
-                parent = LogicalTreeHelper.GetParent(current);
-            }
-
-            current = parent;
-        }
-        return false;
     }
 
     protected override void OnPreviewMouseMove(MouseEventArgs e)
     {
         base.OnPreviewMouseMove(e);
-
-        // 长按期间挪动超过阈值 = 用户在拖拽滚动，取消长按
-        if (_pressActive && !_longPressFired)
-        {
-            var point = e.GetPosition(this);
-            if (Math.Abs(point.X - _pressStart.X) > LongPressMoveTolerance ||
-                Math.Abs(point.Y - _pressStart.Y) > LongPressMoveTolerance)
-            {
-                _pressActive = false;
-                _longPressTimer?.Stop();
-            }
-        }
-
         if (_dragStart is null) return;
         var dy = e.GetPosition(this).Y - _dragStart.Value.Y;
         if (Math.Abs(dy) < 3) return;
@@ -833,19 +752,6 @@ public sealed class MainBoardWindow : Window
     {
         base.OnPreviewMouseLeftButtonUp(e);
         _dragStart = null;
-
-        _longPressTimer?.Stop();
-
-        if (_longPressFired)
-        {
-            // 长按已经弹过菜单：吞掉这次抬起，别让它变成点击
-            _longPressFired = false;
-            _pressActive = false;
-            e.Handled = true;
-            return;
-        }
-
-        _pressActive = false;
     }
 
     /// <summary>手动滚动后让自动滚动让位 4 秒（原版 MANUAL_SCROLL_HOLD_MS）。</summary>
