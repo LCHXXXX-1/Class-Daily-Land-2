@@ -1,14 +1,14 @@
 {
   "stable": {
-    "version": "1.7.2",
-    "release_date": "2026-11-03",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.2.zip",
-    "sha256": "5ecb2b49174a224f02f0c6dcff84e0065b8ec84dae6643673cf4b1901dccd878",
+    "version": "1.7.3",
+    "release_date": "2026-11-04",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.3.zip",
+    "sha256": "dbd7d3f0e5472d996f97ba6ea7233fd32653ec9b4377162d5beca80d326526e9",
     "changelog": [
-      "界面重做：更新窗口全新设计——大号进度数字、渐变进度条、阶段胶囊、图标化标题栏与错误提示胶囊",
-      "深浅色跟随系统，圆角与阴影更细腻"
+      "新增：「班级日常」主窗口支持长按（按住 0.6 秒）唤出与右键相同的菜单，触屏也能用",
+      "改进：长按期间移动手指即取消（不误触滚动），松手不会变成点击"
     ],
-    "is_mandatory": true
+    "is_mandatory": false
   },
   "developer_tool": {
     "version": "1.0.1",
