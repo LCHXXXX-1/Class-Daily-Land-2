@@ -1,14 +1,14 @@
 {
   "stable": {
-    "version": "1.7.6",
+    "version": "1.7.7",
     "release_date": "2026-11-04",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.6.zip",
-    "sha256": "ed2bd28c73545c167c350245183962a526e32965390ef6ef1f786e8062be7252",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.7.zip",
+    "sha256": "74da290fead47b9916ad34cf567c1b13c68a1c67b3d08511552fd14f208e2217",
     "changelog": [
-      "修复：触屏长按「班级日常」窗口不出菜单——Win32 程序的触屏长按不会自动变右键，现改为直接监听触屏事件（按住 0.55 秒弹菜单）",
-      "改进：长按后不会误触单击，长按期间移动手指视作滚动"
+      "修复：触屏长按后松手菜单就消失——改为手指离开的瞬间才弹出菜单，并按落点定位",
+      "改进：长按期间移动手指仍然视作滚动，不会误弹菜单"
     ],
-    "is_mandatory": true
+    "is_mandatory": false
   },
   "developer_tool": {
     "version": "1.0.1",
