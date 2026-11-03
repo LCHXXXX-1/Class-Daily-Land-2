@@ -30,6 +30,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
     private readonly CommandLine _cli;
     private readonly Dictionary<UpdateStage, TextBlock> _stageMarks = new();
     private readonly Dictionary<UpdateStage, TextBlock> _stageDots = new();
+    private readonly Dictionary<UpdateStage, Border> _stageChips = new();
 
     private UpdateJob? _job;
     private string? _loadError;
@@ -76,6 +77,20 @@ public partial class UpdaterWindow : Window, IUpdaterUi
         Set("_Success", Theme.Success);
         Set("_ButtonFace", Theme.ButtonFace);
         Set("_ButtonHover", Theme.ButtonHover);
+        Set("_CardBg", Theme.CardBg);
+        Set("_ChipBg", Theme.ChipBg);
+        Set("_ChipBorder", Theme.ChipBorder);
+        Set("_ErrorSoft", Theme.ErrorSoft);
+
+        var gradient = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(1, 1),
+        };
+        gradient.GradientStops.Add(new GradientStop(Theme.Accent, 0));
+        gradient.GradientStops.Add(new GradientStop(Theme.AccentLight, 1));
+        gradient.Freeze();
+        Resources["_AccentGradient"] = gradient;
     }
 
     /// <summary>圆角与阴影交给 DWM（自绘透明窗口会丢系统圆角，踩过）。</summary>
@@ -152,7 +167,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
             if (result is null)
             {
                 StatusText.Text = "已恢复到更新前的状态。";
-                ErrorText.Visibility = Visibility.Collapsed;
+                ErrorPill.Visibility = Visibility.Collapsed;
                 SetButtons(cancel: false, retry: false, rollback: false, launch: true, done: true);
                 _exitCode = UpdateExitCode.Success;
             }
@@ -160,7 +175,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
             {
                 StatusText.Text = "回滚完成，但有个别文件没有恢复成功：";
                 ErrorText.Text = result;
-                ErrorText.Visibility = Visibility.Visible;
+                ErrorPill.Visibility = Visibility.Visible;
                 SetButtons(cancel: false, retry: false, rollback: false, launch: true, done: true);
                 _exitCode = UpdateExitCode.ReplaceFailed;
             }
@@ -201,7 +216,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
         _engine = new UpdaterEngine(_job, App.Log, this);
 
         ResetStageMarks();
-        ErrorText.Visibility = Visibility.Collapsed;
+        ErrorPill.Visibility = Visibility.Collapsed;
         SetButtons(cancel: true, retry: false, rollback: false, launch: false, done: false);
 
         _exitCode = await _engine.RunAsync(_cts.Token).ConfigureAwait(true);
@@ -231,7 +246,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
     {
         StatusText.Text = message;
         StatusText.SetResourceReference(TextBlock.ForegroundProperty, "_TextSecondary");
-        ErrorText.Visibility = Visibility.Collapsed;
+        ErrorPill.Visibility = Visibility.Collapsed;
 
         MarkStage(stage);
 
@@ -280,7 +295,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
         StatusText.Text = "更新失败：";
         StatusText.SetResourceReference(TextBlock.ForegroundProperty, "_Error");
         ErrorText.Text = message;
-        ErrorText.Visibility = Visibility.Visible;
+        ErrorPill.Visibility = Visibility.Visible;
 
         SetButtons(cancel: false, retry: true, rollback: _lastBackupDir is not null,
             launch: false, done: true);
@@ -307,8 +322,9 @@ public partial class UpdaterWindow : Window, IUpdaterUi
             var dot = new TextBlock
             {
                 Text = "●",
-                FontSize = 9,
+                FontSize = 8,
                 VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
                 Foreground = Theme.Brush(Theme.TextSecondary),
             };
 
@@ -320,25 +336,25 @@ public partial class UpdaterWindow : Window, IUpdaterUi
                 Foreground = Theme.Brush(Theme.TextSecondary),
             };
 
-            var item = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 6, 0) };
-            item.Children.Add(dot);
-            item.Children.Add(text);
+            var inner = new StackPanel { Orientation = Orientation.Horizontal };
+            inner.Children.Add(dot);
+            inner.Children.Add(text);
 
-            if (i < StageOrder.Length - 1)
+            var chip = new Border
             {
-                item.Children.Add(new TextBlock
-                {
-                    Text = "—",
-                    FontSize = 11,
-                    Margin = new Thickness(6, 0, 6, 0),
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = Theme.Brush(Theme.Track),
-                });
-            }
+                CornerRadius = new CornerRadius(11),
+                Padding = new Thickness(11, 5, 11, 5),
+                Margin = new Thickness(0, 0, 8, 0),
+                Background = Theme.Brush(Theme.ChipBg),
+                BorderBrush = Theme.Brush(Theme.ChipBorder),
+                BorderThickness = new Thickness(1),
+                Child = inner,
+            };
 
             _stageMarks[stage] = text;
             _stageDots[stage] = dot;
-            StageStrip.Children.Add(item);
+            _stageChips[stage] = chip;
+            StageStrip.Children.Add(chip);
         }
 
         ResetStageMarks();
@@ -353,6 +369,8 @@ public partial class UpdaterWindow : Window, IUpdaterUi
             if (!_stageMarks.TryGetValue(StageOrder[i].Stage, out var text)) continue;
             var dot = _stageDots.TryGetValue(StageOrder[i].Stage, out var d) ? d : null;
 
+            _stageChips.TryGetValue(StageOrder[i].Stage, out var chip);
+
             if (i < index)
             {
                 text.Foreground = Theme.Brush(Theme.TextSecondary);
@@ -361,11 +379,21 @@ public partial class UpdaterWindow : Window, IUpdaterUi
                     dot.Foreground = Theme.Brush(Theme.Success);
                     dot.Text = "✓";
                 }
+                if (chip is not null)
+                {
+                    chip.Background = Theme.Brush(Theme.ChipBg);
+                    chip.BorderBrush = Theme.Brush(Theme.ChipBorder);
+                }
             }
             else if (i == index)
             {
                 text.Foreground = Theme.Brush(Theme.Accent);
                 if (dot is not null) dot.Foreground = Theme.Brush(Theme.Accent);
+                if (chip is not null)
+                {
+                    chip.Background = Theme.Brush(Theme.AccentSoft);
+                    chip.BorderBrush = Theme.Brush(Theme.Accent);
+                }
             }
             else
             {
@@ -374,6 +402,11 @@ public partial class UpdaterWindow : Window, IUpdaterUi
                 {
                     dot.Foreground = Theme.Brush(Theme.TextSecondary);
                     dot.Text = "●";
+                }
+                if (chip is not null)
+                {
+                    chip.Background = Theme.Brush(Theme.ChipBg);
+                    chip.BorderBrush = Theme.Brush(Theme.ChipBorder);
                 }
             }
         }
@@ -388,6 +421,11 @@ public partial class UpdaterWindow : Window, IUpdaterUi
             {
                 dot.Foreground = Theme.Brush(Theme.Success);
                 dot.Text = "✓";
+            }
+            if (_stageChips.TryGetValue(stage, out var chip))
+            {
+                chip.Background = Theme.Brush(Theme.ChipBg);
+                chip.BorderBrush = Theme.Brush(Theme.Success);
             }
         }
     }
@@ -464,7 +502,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
         {
             StatusText.Text = "回滚完成，但有个别文件没有恢复成功：";
             ErrorText.Text = result;
-            ErrorText.Visibility = Visibility.Visible;
+            ErrorPill.Visibility = Visibility.Visible;
             _exitCode = UpdateExitCode.ReplaceFailed;
             App.ExitCode = UpdateExitCode.ReplaceFailed;
         }
@@ -551,7 +589,7 @@ public partial class UpdaterWindow : Window, IUpdaterUi
         StatusText.Text = "无法执行更新：";
         StatusText.SetResourceReference(TextBlock.ForegroundProperty, "_Error");
         ErrorText.Text = message;
-        ErrorText.Visibility = Visibility.Visible;
+        ErrorPill.Visibility = Visibility.Visible;
         PercentText.Text = "";
 
         SetButtons(cancel: false, retry: false, rollback: false, launch: false, done: true);

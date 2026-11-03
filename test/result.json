@@ -1,0 +1,11 @@
+{
+  "job_id": "ui-smoke",
+  "from": "1.7.1",
+  "to": "1.7.1",
+  "ok": false,
+  "stage": "replacing",
+  "message": "正在替换文件…",
+  "finished_at": "2026-11-04 00:49:26",
+  "backup_dir": "C:\\Users\\35350\\OneDrive\\Desktop\\更新器\\test\\backup\\ui-smoke",
+  "consumed": false
+}

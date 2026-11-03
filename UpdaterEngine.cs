@@ -145,11 +145,13 @@ public sealed class UpdaterEngine
 
         // ── StopApp（只有替换需要独占程序目录，关程序留到最后一刻）──
         Stage(UpdateStage.StopApp, "正在关闭主程序…", 0.45);
-        var appClosed = await Task.Run(() => KillRunningApp(), ct).ConfigureAwait(true);
+        var appClosed = await KillRunningApp().ConfigureAwait(true);
         if (!appClosed)
         {
-            return await FailAsync(UpdateExitCode.AppStillRunning,
-                "没能关闭主程序（可能权限不足）。请手动退出 Class Daily Land 2 后重试。").ConfigureAwait(true);
+            var stillRunning = StuckProcessHint.Length > 0
+                ? "没能自动关闭主程序。" + StuckProcessHint
+                : "没能关闭主程序（可能权限不足）。请手动退出 Class Daily Land 2 后重试。";
+            return await FailAsync(UpdateExitCode.AppStillRunning, stillRunning).ConfigureAwait(true);
         }
         await Task.Delay(1200, ct).ConfigureAwait(true);   // 等句柄释放
 
@@ -530,8 +532,20 @@ public sealed class UpdaterEngine
 
     // ————————————————————— 主程序进程 —————————————————————
 
-    /// <summary>下载校验期间主程序活着；只有替换需要独占文件，按 PID + 名字逐个结束。</summary>
-    private bool KillRunningApp()
+    /// <summary>
+    /// 下载校验期间主程序活着；只有替换需要独占文件。
+    ///
+    /// 关闭策略分四步：
+    ///   1. 礼貌请求退出（CloseMainWindow）——让主程序走正常关闭：清运行标记、关灵动岛与托盘、
+    ///      停媒体桥（SMTC 的 powershell 子进程靠 -ParentPid 自杀）；
+    ///   2. 还活着就强杀（Kill 整棵进程树）；
+    ///   3. 多轮复查：5 轮，每轮结束等 2 秒再查；
+    ///   4. 仍然有活口就失败，并精确列出卡住的 PID 与原因。
+    ///
+    /// ★ Process 对象的 Dispose 是不可逆的：读 ProcessName / Id 之前绝不能 Dispose
+    ///   （先把要报的信息读成字符串，对象统一在最后清理——Dispose 后再读就 ODE，踩过）。
+    /// </summary>
+    private async Task<bool> KillRunningApp()
     {
         var names = new List<string>();
 
@@ -541,82 +555,142 @@ public sealed class UpdaterEngine
         names.Add("Class Daily Land 2");
 
         var uniqueNames = names.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var killed = 0;
+        var denied = false;
+        var allHandles = new List<System.Diagnostics.Process>();
 
-        // 先按 PID 精确结束（主程序写 job 时留了 pid）
+        // 活着的进程 → (pid, name) 字符串对。名称立即读死，避免后面用已 Dispose 的对象。
+        List<(int Pid, string Name)> CollectAlive()
+        {
+            var alive = new List<(int Pid, string Name)>();
+            foreach (var name in uniqueNames)
+            {
+                try
+                {
+                    foreach (var proc in System.Diagnostics.Process.GetProcessesByName(name))
+                    {
+                        if (proc.Id == Environment.ProcessId) { proc.Dispose(); continue; }
+                        try
+                        {
+                            if (proc.HasExited) continue;
+                            allHandles.Add(proc);
+                            alive.Add((proc.Id, SafeName(proc)));
+                        }
+                        catch { /* 进程刚退出：当作已关闭 */ }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.Write($"按名字枚举主程序 {name} 失败：{ex.Message}");
+                }
+            }
+            return alive;
+        }
+
+        static string SafeName(System.Diagnostics.Process proc)
+        {
+            try { return proc.ProcessName; } catch { return "未知进程"; }
+        }
+
+        // ① 先按任务里的 PID 精确礼貌关闭
         if (_job.App.Pid > 0)
         {
             try
             {
-                var proc = Process.GetProcessById(_job.App.Pid);
+                var proc = System.Diagnostics.Process.GetProcessById(_job.App.Pid);
                 if (!proc.HasExited)
                 {
-                    proc.Kill(entireProcessTree: true);
-                    proc.WaitForExit(3000);
-                    killed++;
-                    _log.Write($"已结束主程序进程（PID {proc.Id}，按任务里的 pid）");
+                    proc.CloseMainWindow();
+                    _log.Write($"已请求主程序正常退出（PID {proc.Id}）");
                 }
             }
-            catch (Exception ex)
-            {
-                _log.Write($"按 PID 结束主程序失败（继续按名字找）：{ex.Message}");
-            }
+            catch { /* 进程已经没了 */ }
         }
 
-        foreach (var name in uniqueNames)
+        // ② 按名字礼貌关闭一轮，给它最多 5 秒走正常关闭流程
+        var aliveNow = CollectAlive();
+        if (aliveNow.Count > 0)
         {
-            try
-            {
-                foreach (var proc in Process.GetProcessesByName(name))
-                {
-                    using (proc)
-                    {
-                        if (proc.Id == Environment.ProcessId) continue;   // 别杀自己
-                        if (proc.HasExited) continue;
+            _log.Write($"发现主程序进程 {aliveNow.Count} 个：" +
+                       string.Join(", ", aliveNow.Select(p => $"PID {p.Pid}")));
+            foreach (var proc in allHandles) { try { proc.CloseMainWindow(); } catch { } }
+            for (var i = 0; i < 10 && CollectAlive().Count > 0; i++)
+                await Task.Delay(500).ConfigureAwait(false);
+        }
 
-                        try
-                        {
-                            proc.Kill(entireProcessTree: true);
-                            proc.WaitForExit(3000);
-                            killed++;
-                            _log.Write($"已结束主程序进程：{name}（PID {proc.Id}）");
-                        }
-                        catch (Exception ex)
-                        {
-                            _log.Write($"结束主程序 {name}（PID {proc.Id}）失败：{ex.Message}");
-                        }
+        // ③ 强杀 + 多轮复查（最多 5 轮，每轮之间等 2 秒让句柄释放）
+        for (var round = 1; round <= 5; round++)
+        {
+            aliveNow = CollectAlive();
+            if (aliveNow.Count == 0) break;
+
+            _log.Write($"第 {round} 轮强制结束 {aliveNow.Count} 个进程");
+            foreach (var proc in allHandles)
+            {
+                try
+                {
+                    if (proc.HasExited) continue;
+                    proc.Kill(entireProcessTree: true);
+                    if (!proc.WaitForExit(5000))
+                        _log.Write($"进程 {proc.Id} 在 5 秒内没有退出，下一轮继续");
+                }
+                catch (InvalidOperationException ioEx) when (ioEx.Message.Contains("calling process"))
+                {
+                    // ★ 更新器是主程序拉起的子进程：目标进程树里包含更新器自己，
+                    //   .NET 禁止整树杀。退化为只结束该进程本身 ——
+                    //   媒体桥（SMTC）等子进程带 -ParentPid，父进程死后自会退出。
+                    try
+                    {
+                        proc.Kill();
+                        _log.Write($"已结束进程 {proc.Id}（仅本进程：进程树包含更新器自身，不能整树杀）");
+                    }
+                    catch (Exception ex2)
+                    {
+                        _log.Write($"结束进程 {proc.Id} 失败：{ex2.Message}");
                     }
                 }
+                catch (Exception ex)
+                {
+                    var msg = ex.Message;
+                    if (ex is System.ComponentModel.Win32Exception w && w.NativeErrorCode == 5)
+                    {
+                        denied = true;
+                        msg = "拒绝访问（目标进程可能以管理员身份运行）";
+                    }
+                    _log.Write($"结束进程失败：{msg}");
+                }
             }
-            catch (Exception ex)
-            {
-                _log.Write($"按名字查找主程序 {name} 失败：{ex.Message}");
-            }
+            await Task.Delay(2000).ConfigureAwait(false);
         }
 
-        _log.Write($"关闭主程序：共结束 {killed} 个进程");
+        // ④ 终判：先读成字符串，再清理句柄
+        var finalAlive = CollectAlive();
+        var stuck = string.Join(", ", finalAlive.Select(p => $"PID {p.Pid}"));
+        var stuckNames = string.Join(", ", finalAlive.Select(p => p.Name).Distinct());
 
-        foreach (var name in uniqueNames)
+        foreach (var proc in allHandles)
         {
-            try
-            {
-                var remaining = Process.GetProcessesByName(name);
-                var alive = remaining.Where(p => p.Id != Environment.ProcessId).ToArray();
-                if (alive.Length == 0) continue;
+            try { proc.Dispose(); } catch { }
+        }
+        allHandles.Clear();
 
-                foreach (var proc in alive) proc.Dispose();
-                _log.Write($"仍有主程序进程在运行：{name}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                _log.Write($"复查主程序 {name} 失败（按已关闭处理）：{ex.Message}");
-            }
+        if (finalAlive.Count > 0)
+        {
+            _log.Write($"仍有主程序进程未退出：{stuck}；denied={denied}");
+            StuckProcessHint = denied
+                ? $"主程序可能以**管理员身份**运行，而更新器没有提权，无法自动关闭。" +
+                  $"请先手动退出主程序（含灵动岛与托盘图标）后重试，或以管理员身份重新运行更新器。卡住的进程：{stuckNames}（{stuck}）"
+                : $"以下进程未退出：{stuckNames}（{stuck}）。请手动退出主程序（含灵动岛与托盘图标）后重试。";
+            return false;
         }
 
+        _log.Write("主程序已全部退出");
         return true;
     }
 
+    /// <summary>关闭失败时的补充提示（权限不足 / 卡住的 PID 清单），拼进用户可见的错误里。</summary>
+    public string StuckProcessHint { get; private set; } = "";
+
+    /// <summary>更新完成后启动主程序（只由 InstallDir + ExeName 拼，绝不能用更新器自己的目录）。</summary>
     /// <summary>更新完成后启动主程序（只由 InstallDir + ExeName 拼，绝不能用更新器自己的目录）。</summary>
     public bool LaunchApp(out string error)
     {

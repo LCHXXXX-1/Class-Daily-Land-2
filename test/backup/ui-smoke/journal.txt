@@ -1,0 +1,21 @@
+﻿target	C:\Users\35350\OneDrive\Desktop\更新器\test\live-install
+from	1.7.1
+to	1.7.1
+created_at	2026-11-04 00:49:26
+overwritten	Class Daily Land 2.deps.json
+overwritten	Class Daily Land 2.dll
+overwritten	Class Daily Land 2.exe
+overwritten	Class Daily Land 2.runtimeconfig.json
+overwritten	ClassDailyLand2.Plugin.Abstractions.dll
+overwritten	ClassDailyLand2.Plugin.Abstractions.xml
+overwritten	CommunityToolkit.Mvvm.dll
+overwritten	icon.ico
+overwritten	install.info.json
+overwritten	Microsoft.Windows.SDK.NET.dll
+overwritten	Update/Microsoft.Windows.SDK.NET.dll
+overwritten	Update/Updater.deps.json
+overwritten	Update/Updater.dll
+overwritten	Update/Updater.exe
+overwritten	Update/Updater.runtimeconfig.json
+overwritten	Update/WinRT.Runtime.dll
+overwritten	WinRT.Runtime.dll
