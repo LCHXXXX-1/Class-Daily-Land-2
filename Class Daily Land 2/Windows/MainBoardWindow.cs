@@ -654,6 +654,13 @@ public sealed class MainBoardWindow : Window
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseRightButtonUp(e);
+        BuildContextMenu().IsOpen = true;
+        e.Handled = true;
+    }
+
+    /// <summary>右键与长按共用的菜单（触屏没有右键键，长按是等价手势）。</summary>
+    private ContextMenu BuildContextMenu()
+    {
         var menu = new ContextMenu { PlacementTarget = this, Placement = PlacementMode.MousePoint };
 
         void Item(string text, Action action)
@@ -700,8 +707,40 @@ public sealed class MainBoardWindow : Window
         menu.Items.Add(new Separator());
         Item("退出", () => ExitRequested?.Invoke());
 
-        menu.IsOpen = true;
-        e.Handled = true;
+        return menu;
+    }
+
+    // ————————————————————— 长按唤出菜单（触屏） —————————————————————
+
+    /// <summary>按住多久算长按（毫秒）。</summary>
+    const int LongPressMs = 600;
+
+    /// <summary>长按期间允许的手指抖动（像素）；超过就当拖拽，取消长按。</summary>
+    const double LongPressMoveTolerance = 12;
+
+    DispatcherTimer? _longPressTimer;
+    Point _pressStart;
+    bool _pressActive;
+    bool _longPressFired;
+
+    private void EnsureLongPressTimer()
+    {
+        if (_longPressTimer is not null) return;
+        _longPressTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(LongPressMs) };
+        _longPressTimer.Tick += OnLongPressTick;
+    }
+
+    private void OnLongPressTick(object? sender, EventArgs e)
+    {
+        _longPressTimer?.Stop();
+        if (!_pressActive) return;
+
+        _longPressFired = true;
+
+        // 抓住鼠标，保证随后的抬起事件也走这里（要吞掉，否则会被当成点击）
+        try { Mouse.Capture(this); } catch { /* 抓不到就算了 */ }
+
+        BuildContextMenu().IsOpen = true;
     }
 
     // ————————————————————— 交互：F1 退出 / 触摸拖动滚动 —————————————————————
@@ -723,11 +762,32 @@ public sealed class MainBoardWindow : Window
         base.OnPreviewMouseLeftButtonDown(e);
         _dragStart = e.GetPosition(this);
         _dragOffset = _homeworkScroll.VerticalOffset;
+
+        // 长按（触屏等价于右键）→ 弹出菜单
+        EnsureLongPressTimer();
+        _pressStart = _dragStart.Value;
+        _pressActive = true;
+        _longPressFired = false;
+        _longPressTimer?.Stop();
+        _longPressTimer?.Start();
     }
 
     protected override void OnPreviewMouseMove(MouseEventArgs e)
     {
         base.OnPreviewMouseMove(e);
+
+        // 长按期间挪动超过阈值 = 用户在拖拽滚动，取消长按
+        if (_pressActive && !_longPressFired)
+        {
+            var point = e.GetPosition(this);
+            if (Math.Abs(point.X - _pressStart.X) > LongPressMoveTolerance ||
+                Math.Abs(point.Y - _pressStart.Y) > LongPressMoveTolerance)
+            {
+                _pressActive = false;
+                _longPressTimer?.Stop();
+            }
+        }
+
         if (_dragStart is null) return;
         var dy = e.GetPosition(this).Y - _dragStart.Value.Y;
         if (Math.Abs(dy) < 3) return;
@@ -739,6 +799,20 @@ public sealed class MainBoardWindow : Window
     {
         base.OnPreviewMouseLeftButtonUp(e);
         _dragStart = null;
+
+        _longPressTimer?.Stop();
+
+        if (_longPressFired)
+        {
+            // 长按已经弹过菜单：吞掉这次抬起，别让它变成点击
+            _longPressFired = false;
+            _pressActive = false;
+            try { Mouse.Capture(null); } catch { }
+            e.Handled = true;
+            return;
+        }
+
+        _pressActive = false;
     }
 
     /// <summary>手动滚动后让自动滚动让位 4 秒（原版 MANUAL_SCROLL_HOLD_MS）。</summary>
