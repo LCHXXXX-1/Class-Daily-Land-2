@@ -1,4 +1,5 @@
 using ClassDailyLand2.UpdateContract;
+using ClassDailyLand2.Core;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -66,6 +67,9 @@ public static class UpdateSources
             using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
             deadline.CancelAfter(Timeout);
 
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            Logger.Current?.Step("更新", $"检查源 {name}：{url}");
+
             try
             {
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
@@ -77,15 +81,18 @@ public static class UpdateSources
                     .ConfigureAwait(false);
                 if (!response.IsSuccessStatusCode)
                 {
+                    Logger.Current?.Http("GET", url, (int)response.StatusCode, watch.ElapsedMilliseconds, null, "更新源返回错误");
                     errors.Add($"{name}：HTTP {(int)response.StatusCode}");
                     continue;
                 }
 
                 var bytes = await response.Content.ReadAsByteArrayAsync(deadline.Token).ConfigureAwait(false);
+                Logger.Current?.Http("GET", url, (int)response.StatusCode, watch.ElapsedMilliseconds, bytes.LongLength, "更新源");
                 var text = DecodeBody(bytes);
 
                 if (string.IsNullOrWhiteSpace(text))
                 {
+                    Logger.Current?.Warn($"[更新] {name} 返回空响应（{bytes.LongLength} 字节）");
                     errors.Add($"{name}：空响应");
                     continue;
                 }
@@ -97,6 +104,8 @@ public static class UpdateSources
                 }
                 catch (JsonException ex)
                 {
+                    var head = text.Length > 200 ? text[..200] : text;
+                    Logger.Current?.Warn($"[更新] {name} 内容不是合法 JSON：{ex.Message}；响应前 200 字符：{head}");
                     errors.Add($"{name}：内容不是合法 JSON（{ex.Message}）");
                     continue;
                 }

@@ -136,10 +136,18 @@ public sealed class TrayIcon : IDisposable
         miUpdate.Click += (_, _) => CheckUpdateRequested?.Invoke();
 
         var miSettings = new MenuItem { Header = "设置…" };
-        miSettings.Click += (_, _) => SettingsRequested?.Invoke();
+        miSettings.Click += (_, _) =>
+        {
+            Logger.Current?.Action("托盘", "菜单：设置");
+            SettingsRequested?.Invoke();
+        };
 
         var miExit = new MenuItem { Header = "退出" };
-        miExit.Click += (_, _) => ExitRequested?.Invoke();
+        miExit.Click += (_, _) =>
+        {
+            Logger.Current?.Action("托盘", "菜单：退出");
+            ExitRequested?.Invoke();
+        };
 
         // 插件菜单项：拿不到（或没插件）就什么都不加，菜单保持原样
         var pluginItems = new List<MenuItem>();

@@ -127,6 +127,12 @@ public sealed class Logger
         DataRoot = paths.Root;
     }
 
+    /// <summary>真实版本号（VersionInfo.Version）；未设置时退回程序集版本。</summary>
+    public string? VersionOverride { get; set; }
+
+    /// <summary>日志里显示用的版本号。</summary>
+    public string DisplayVersion => string.IsNullOrWhiteSpace(VersionOverride) ? AppVersion : VersionOverride!;
+
     /// <summary>数据根目录（运行标记、设置都在这里）。报信进程清运行标记时要用。</summary>
     public string DataRoot { get; }
 
@@ -150,7 +156,7 @@ public sealed class Logger
             var sb = new StringBuilder();
             sb.AppendLine($"Class Daily Land 2 · {kind}");
             sb.AppendLine($"时间：{DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-            sb.AppendLine($"版本：{AppVersion}");
+            sb.AppendLine($"版本：{DisplayVersion}");
             if (!string.IsNullOrWhiteSpace(note)) sb.AppendLine($"说明：{note}");
             sb.AppendLine($"以下为最近 {lines.Count} 条日志");
             sb.AppendLine(new string('-', 64));
@@ -187,6 +193,94 @@ public sealed class Logger
     public void Info(string message) => Write("INFO", message);
     public void Warn(string message) => Write("WARN", message);
     public void Error(string message) => Write("ERROR", message);
+
+    // ————————————————————— 结构化埋点（排障时按前缀搜） —————————————————————
+
+    /// <summary>分区横幅：把一次会话切成"启动 / 更新 / 退出"等大段，方便肉眼定位。</summary>
+    public void Section(string title) => Write("INFO", $"---------- {title} ----------");
+
+    /// <summary>流程步骤（启动流程、更新流程等），可带耗时。</summary>
+    public void Step(string area, string step, long elapsedMs = -1) =>
+        Write("INFO", elapsedMs >= 0 ? $"[{area}] {step}（{elapsedMs}ms）" : $"[{area}] {step}");
+
+    /// <summary>状态流转：谁变成谁（窗口显隐、更新阶段、插件状态）。</summary>
+    public void Flow(string area, string description) => Write("INFO", $"[{area}] {description}");
+
+    /// <summary>用户动作：点了哪个菜单项、切了哪个开关（做"用户到底做了啥"的现场还原）。</summary>
+    public void Action(string area, string description) => Write("INFO", $"[{area}] 用户操作：{description}");
+
+    /// <summary>HTTP 请求与响应：方法、地址、状态码、耗时、字节数。</summary>
+    public void Http(string method, string url, int? status, long elapsedMs, long? bytes = null, string? note = null)
+    {
+        var level = status is >= 400 ? "WARN" : "INFO";
+        var size = bytes is > 0 ? $", {bytes}B" : "";
+        var state = status is null ? "无响应" : status.ToString();
+        var extra = string.IsNullOrWhiteSpace(note) ? "" : $" · {note}";
+        Write(level, $"[HTTP] {method} {url} → {state}（{elapsedMs}ms{size}）{extra}");
+    }
+
+    /// <summary>文件操作：动作、路径、成败、附注。</summary>
+    public void FileOp(string action, string path, bool ok, string? note = null)
+    {
+        var extra = string.IsNullOrWhiteSpace(note) ? "" : $" · {note}";
+        Write(ok ? "TRACE" : "WARN", $"[文件] {action} {(ok ? "成功" : "失败")}：{path}{extra}");
+    }
+
+    /// <summary>耗时采样（渲染、计算、IO），TRACE 级，别在热循环里调。</summary>
+    public void Perf(string name, long elapsedMs) => Write("TRACE", $"[耗时] {name}：{elapsedMs}ms");
+
+    /// <summary>带错误码的异常记录：一条日志里同时有码、原因和堆栈。</summary>
+    public void Error(string code, string message, Exception? exception = null)
+    {
+        var detail = exception is null ? "" : $"{Environment.NewLine}{exception}";
+        Write("ERROR", $"[{code}] {message}{detail}");
+    }
+
+    /// <summary>内存与线程快照（启动/退出/疑似泄漏时看）。</summary>
+    public void Memory(string tag)
+    {
+        try
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+            Write("INFO", $"[内存] {tag}：工作集 {proc.WorkingSet64 / 1048576.0:0.0} MB，" +
+                           $"私有 {proc.PrivateMemorySize64 / 1048576.0:0.0} MB，" +
+                           $"GC 堆 {GC.GetTotalMemory(false) / 1048576.0:0.0} MB，" +
+                           $"线程 {proc.Threads.Count}，句柄 {proc.HandleCount}");
+        }
+        catch (Exception ex)
+        {
+            Write("WARN", "[内存] 采样失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>环境横幅：一条日志把"什么机器、什么版本、什么权限"钉死。</summary>
+    public void EnvironmentBanner()
+    {
+        try
+        {
+            var proc = System.Diagnostics.Process.GetCurrentProcess();
+            var elevated = false;
+            try
+            {
+                using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
+                var principal = new System.Security.Principal.WindowsPrincipal(identity);
+                elevated = principal.IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+            }
+            catch { /* 查不到就当非提权 */ }
+
+            Write("INFO", $"[环境] 版本 {DisplayVersion} · 进程 {proc.Id} · 线程 {proc.Threads.Count}");
+            Write("INFO", $"[环境] 系统 {Environment.OSVersion} · {(Environment.Is64BitProcess ? "x64" : "x86")} · " +
+                           $".NET {Environment.Version} · 处理器 {Environment.ProcessorCount} 核");
+            Write("INFO", $"[环境] 用户 {Environment.UserName} · 提权 {elevated} · 中文界面 {System.Globalization.CultureInfo.CurrentUICulture.Name}");
+            Write("INFO", $"[环境] 程序目录 {AppContext.BaseDirectory}");
+            Write("INFO", $"[环境] 数据目录 {DataRoot}（存在 {Directory.Exists(DataRoot)}）");
+            Write("INFO", $"[环境] 工作集 {proc.WorkingSet64 / 1048576.0:0.0} MB · 启动于 {proc.StartTime:yyyy-MM-dd HH:mm:ss}");
+        }
+        catch (Exception ex)
+        {
+            Write("WARN", "[环境] 横幅采集失败：" + ex.Message);
+        }
+    }
 
     void Write(string level, string message)
     {

@@ -1,5 +1,6 @@
 using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Win32;
+using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Managers;
 using ClassDailyLand2.Core.Plugins;
 using ClassDailyLand2.Plugin;
@@ -781,7 +782,11 @@ public sealed class MainBoardWindow : Window
         void Item(string text, Action action)
         {
             var mi = new MenuItem { Header = text };
-            mi.Click += (_, _) => action();
+            mi.Click += (_, _) =>
+            {
+                Logger.Current?.Action("班级日常", "菜单：" + text);
+                action();
+            };
             menu.Items.Add(mi);
         }
 

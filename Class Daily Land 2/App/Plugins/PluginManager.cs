@@ -114,6 +114,14 @@ public sealed class PluginManager
 
     public void LoadAll()
     {
+        Logger.Current?.Step("插件", "开始加载插件");
+        var loadWatch = System.Diagnostics.Stopwatch.StartNew();
+        LoadAllCore();
+        Logger.Current?.Step("插件", "插件加载流程结束", loadWatch.ElapsedMilliseconds);
+    }
+
+    void LoadAllCore()
+    {
         Append("host", $"开始扫描插件目录：{PluginsRoot}");
 
         // 先清一遍上次的残留（覆盖安装的 <id>.bak-* / 卸载失败的 _trash-*）：

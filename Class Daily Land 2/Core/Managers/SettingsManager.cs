@@ -71,7 +71,35 @@ public sealed class SettingsManager
         }
     }
 
-    void SaveCore() => AtomicJson.Write(_paths.Settings, Current.ToDictionary());
+    Dictionary<string, object?>? _lastSavedSnapshot;
+
+    /// <summary>保存并把"改了哪些键、旧值→新值"写进日志（排障时最想知道的一类信息）。</summary>
+    void SaveCore()
+    {
+        var next = Current.ToDictionary();
+
+        if (_lastSavedSnapshot is not null)
+        {
+            var changed = 0;
+            foreach (var (key, value) in next)
+            {
+                var before = _lastSavedSnapshot.TryGetValue(key, out var old) ? old : null;
+                if (Equals(before, value)) continue;
+
+                changed++;
+                // 跳过过长的值（比如整段 JSON），只留摘要
+                var beforeText = before?.ToString() ?? "(未设置)";
+                var afterText = value?.ToString() ?? "(null)";
+                if (beforeText.Length > 120) beforeText = beforeText[..120] + "…";
+                if (afterText.Length > 120) afterText = afterText[..120] + "…";
+                Logger.Current?.Flow("设置", $"{key}：{beforeText} → {afterText}");
+            }
+            if (changed == 0) Logger.Current?.Trace("[设置] 本次保存没有值变化");
+        }
+
+        AtomicJson.Write(_paths.Settings, next);
+        _lastSavedSnapshot = next;
+    }
 
     public void Save()
     {

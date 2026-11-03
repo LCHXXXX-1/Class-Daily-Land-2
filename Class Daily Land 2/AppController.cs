@@ -97,25 +97,36 @@ public sealed class AppController
 
     // ————————————————————— 启动 —————————————————————
 
+    DateTime _startedAt;
+
     public void Startup()
     {
         Paths = DataPaths.Create();
         Log = new Logger(Paths);
         Logger.Current = Log;   // Core 层（AtomicJson / ScheduleEngine / Managers）经它写详细日志
-        Log.Info("===== ClassDailyLand2 启动 =====");
+        Log.VersionOverride = VersionInfo.Version;
+        _startedAt = DateTime.Now;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        Log.Section("ClassDailyLand2 启动");
+        Log.EnvironmentBanner();
         Log.Trace($"[启动] 数据目录：{Paths.Root}（回退：{Paths.UsedFallback}）");
         if (Paths.UsedFallback) Log.Warn(Paths.FallbackNotice ?? "");
 
         Settings = new SettingsManager(Paths);
         Settings.Load();
+        Log.Step("启动", $"设置加载完成（被修正 {Settings.RepairedKeys.Count} 项）", sw.ElapsedMilliseconds);
 
         // 内存日志上限（500~3000）跟着设置走，用户在日志页改完立刻生效
         Log.Capacity = Settings.Int("log_max_lines");
+        Log.Step("启动", $"日志上限 {Log.Capacity} 行");
 
         // 异常退出检测：正常关闭会删掉运行标记；标记还在 = 上一次没走正常流程就结束了
         CheckAbnormalExit();
+        sw.Restart();
         Schedule = new ScheduleManager(Paths);
         Schedule.Load();
+        Log.Step("启动", "课表加载完成", sw.ElapsedMilliseconds);
         Homework = new HomeworkManager(Paths);
         // 每次作业落盘（Changed 在 Save 里触发）都写一份当日快照；保留天数从 settings.json 读。
         // 订阅放在 Load 之前：首次运行 homework.json 由 Load 里的 Save 生成时也能留下快照。
@@ -125,7 +136,9 @@ public sealed class AppController
             HomeworkHistory.SaveSnapshot(Homework.Items);
             if (HomeworkHistory.LastError is { } error) Log?.Warn(error);
         };
+        sw.Restart();
         Homework.Load();
+        Log.Step("启动", $"作业加载完成（{Homework.Items.Count} 项）", sw.ElapsedMilliseconds);
         HomeworkHistory.CleanOldSnapshots(Settings.Int("homework_history_days"));
         if (HomeworkHistory.LastError is { } historyError) Log.Warn(historyError);
         Duty = new StudentOnDuty(Paths);
@@ -1146,6 +1159,15 @@ public sealed class AppController
 
     public void Shutdown()
     {
+        Log?.Section("ClassDailyLand2 退出");
+        if (_startedAt != default)
+        {
+            var uptime = DateTime.Now - _startedAt;
+            Log?.Step("退出", $"本次运行时长 {uptime.Hours} 小时 {uptime.Minutes} 分 {uptime.Seconds} 秒");
+        }
+        Log?.Memory("退出前");
+        Log?.Step("退出", "开始收尾：停止定时器 / 关闭插件 / 释放托盘");
+
         _tick.Stop();
         try { Plugins?.ShutdownAll(); }
         catch { /* 退出路径不抛 */ }
@@ -1156,5 +1178,8 @@ public sealed class AppController
 
         // 正常关闭：删掉运行标记，下次启动就不会报"上次异常退出"
         ClearRunningMarker();
+
+        Log?.Step("退出", "收尾完成");
+        Log?.Section("进程退出");
     }
 }
