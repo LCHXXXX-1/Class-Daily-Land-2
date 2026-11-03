@@ -4,62 +4,67 @@
 
     <UserControl.Resources>
 
-        <Style x:Key="HomeCard" TargetType="Border">
-            <Setter Property="CornerRadius" Value="4" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-            <Setter Property="Margin" Value="0,0,0,8" />
-        </Style>
-
-        <Style x:Key="HomeRow" TargetType="Button">
-            <Setter Property="Height" Value="62" />
+        <!--
+          首页导航卡（Win11「设置」主页）：8 圆角卡片、单色图标 + 标题/说明 + chevron。
+          Tag 传 Segoe Fluent Icons 字符，CommandParameter 传页 id（OnCardClick 读）。
+        -->
+        <Style x:Key="HomeNavCard" TargetType="Button">
+            <Setter Property="MinHeight" Value="72" />
+            <Setter Property="Margin" Value="0,0,0,10" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FluentFocusVisual}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Grid>
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="3"
-                                    Padding="18,0">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="20" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Grid.Column="0"
-                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="16"
+                        <Border x:Name="Bd" CornerRadius="{DynamicResource CardCornerRadius}"
+                                BorderThickness="1"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Padding="18,14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" MinWidth="0" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0" Width="34" Height="34"
+                                        CornerRadius="{DynamicResource TileCornerRadius}"
+                                        VerticalAlignment="Center"
+                                        Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                                    <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                               FontSize="17"
                                                Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
-                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="1" Margin="14,0,0,0"
-                                               Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
-                                               FontSize="{DynamicResource FontSizeBody}"
                                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                                               VerticalAlignment="Center" />
-                                    <TextBlock Grid.Column="2"
-                                               FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                                               FontSize="12" Text="&#xE76C;"
-                                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                               VerticalAlignment="Center" />
-                                </Grid>
-                            </Border>
-                            <Border x:Name="FocusRing" CornerRadius="3" BorderThickness="2"
-                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}"
-                                    Visibility="Collapsed" />
-                        </Grid>
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+
+                                <StackPanel Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
+                                               FontSize="{DynamicResource FontSizeBody}"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                    <TextBlock Margin="0,2,0,0"
+                                               Text="{Binding ToolTip, RelativeSource={RelativeSource TemplatedParent}}"
+                                               FontSize="{DynamicResource FontSizeCaption}"
+                                               TextWrapping="Wrap"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </StackPanel>
+
+                                <TextBlock Grid.Column="2" Margin="10,0,2,0"
+                                           FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                           FontSize="12" Text="&#xE76C;"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                           VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" />
+                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.85" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -70,46 +75,63 @@
     </UserControl.Resources>
 
     <StackPanel>
-        <TextBlock Text="首页" FontSize="28" FontWeight="SemiBold"
+        <TextBlock Style="{StaticResource PageTitle}" Text="首页" />
+
+        <!-- 品牌卡：应用名 + 版本 + 一句话简介 -->
+        <Border CornerRadius="{DynamicResource CardCornerRadius}" BorderThickness="1"
+                Margin="0,18,0,26" Padding="20,18"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+            <StackPanel Orientation="Horizontal">
+                <Border Width="48" Height="48" CornerRadius="12"
+                        Background="{DynamicResource AccentFillColorDefaultBrush}">
+                    <TextBlock Text="C" FontSize="22" FontWeight="SemiBold"
+                               FontFamily="{DynamicResource FontFamilyDisplay}"
+                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Margin="16,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Class Daily Land 2"
+                               FontSize="{DynamicResource FontSizeSubtitle}"
+                               FontFamily="{DynamicResource FontFamilyDisplay}"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Version, StringFormat=版本 {0}}"
+                               FontSize="{DynamicResource FontSizeCaption}" Margin="0,3,0,0"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <TextBlock Text="选择一个类别开始" Margin="2,0,0,12"
+                   FontSize="{DynamicResource FontSizeBody}" FontWeight="SemiBold"
                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
-        <TextBlock Text="Class Daily Land 2" FontSize="28" FontWeight="SemiBold"
-                   Margin="0,48,0,0"
-                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+        <!-- 分类卡片：两列网格（奇数项落最后一行左列） -->
+        <UniformGrid Columns="2">
+            <UniformGrid.Resources>
+                <Style TargetType="Button" BasedOn="{StaticResource HomeNavCard}">
+                    <Setter Property="Margin" Value="0,0,10,10" />
+                </Style>
+            </UniformGrid.Resources>
 
-        <TextBlock Text="管理班级日常、课表、作业与桌面灵动岛。选择一个设置类别开始。"
-                   FontSize="{DynamicResource FontSizeBody}"
-                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                   TextWrapping="Wrap" Margin="0,12,0,0" />
-
-        <TextBlock Text="设置" FontSize="{DynamicResource FontSizeBody}"
-                   FontWeight="SemiBold"
-                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
-                   Margin="0,26,0,10" />
-
-        <Border Style="{StaticResource HomeCard}">
-            <Button Style="{StaticResource HomeRow}" Content="通用" Tag="&#xE713;"
+            <Button Content="通用" Tag="&#xE713;" ToolTip="主窗口、作业滚动与启动行为"
                     CommandParameter="general" Click="OnCardClick" />
-        </Border>
-        <Border Style="{StaticResource HomeCard}">
-            <Button Style="{StaticResource HomeRow}" Content="灵动岛" Tag="&#xE7F4;"
+            <Button Content="灵动岛" Tag="&#xE7F4;" ToolTip="屏幕顶部的提醒条与副岛"
                     CommandParameter="island" Click="OnCardClick" />
-        </Border>
-        <Border Style="{StaticResource HomeCard}">
-            <Button Style="{StaticResource HomeRow}" Content="个性化" Tag="&#xE790;"
+            <Button Content="媒体" Tag="&#xE8D6;" ToolTip="把正在播放的音乐显示到灵动岛上"
+                    CommandParameter="media" Click="OnCardClick" />
+            <Button Content="灾害预警" Tag="&#xE730;" ToolTip="地震倒计时与气象灾害提醒"
+                    CommandParameter="disaster" Click="OnCardClick" />
+            <Button Content="交互" Tag="&#xE7C9;" ToolTip="动画、渐显与触屏优化"
+                    CommandParameter="interaction" Click="OnCardClick" />
+            <Button Content="个性化" Tag="&#xE790;" ToolTip="颜色主题与窗口材质"
                     CommandParameter="appearance" Click="OnCardClick" />
-        </Border>
-        <Border Style="{StaticResource HomeCard}">
-            <Button Style="{StaticResource HomeRow}" Content="课表与提醒" Tag="&#xE787;"
+            <Button Content="课表与提醒" Tag="&#xE787;" ToolTip="上课提醒、课表与值日生"
                     CommandParameter="schedule" Click="OnCardClick" />
-        </Border>
-        <Border Style="{StaticResource HomeCard}">
-            <Button Style="{StaticResource HomeRow}" Content="作业" Tag="&#xE8A5;"
+            <Button Content="作业" Tag="&#xE8A5;" ToolTip="布置与修改作业，改动即时生效"
                     CommandParameter="homework" Click="OnCardClick" />
-        </Border>
-        <Border Style="{StaticResource HomeCard}">
-            <Button Style="{StaticResource HomeRow}" Content="插件" Tag="&#xE74C;"
+            <Button Content="插件" Tag="&#xE74C;" ToolTip="管理已安装的插件"
                     CommandParameter="plugins" Click="OnCardClick" />
-        </Border>
+        </UniformGrid>
     </StackPanel>
 </UserControl>

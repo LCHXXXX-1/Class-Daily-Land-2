@@ -8,7 +8,7 @@ using System.Text.Json;
 namespace ClassDailyLand2.App.Plugins;
 
 /// <summary>
-/// 一个插件的宿主门面：把 <see cref="IPluginHost"/> 的 48 个成员接到真实的
+/// 一个插件的宿主门面：把 <see cref="IPluginHost"/> 的 50 个成员接到真实的
 /// 应用装配器（<see cref="AppController"/>）与注册表上。
 ///
 /// 每个已加载插件一份，<c>PluginId</c> / 数据目录都跟着各自的清单走 ——
@@ -346,6 +346,35 @@ internal sealed class PluginHostContext : IPluginHost
     internal void RaiseTick(HostTickEventArgs e) => Tick?.Invoke(this, e);
     internal void RaiseSettingsChanged(HostSettingsEventArgs e) => SettingsChanged?.Invoke(this, e);
     internal void RaiseIslandClicked() => IslandClicked?.Invoke(this, EventArgs.Empty);
+
+    // ═══════════════ 七、插件自己的设置页 ═══════════════
+
+    /// <summary>
+    /// 声明设置页。宿主在「设置 → 插件 → 已安装」里据此亮出「设置」按钮；
+    /// 值的落点就是本插件的私有 state（第 4 组那套 ReadState/WriteState）。
+    /// </summary>
+    public string RegisterSettings(SettingsPageSpec spec)
+    {
+        if (spec is null || spec.Fields is null)
+        {
+            Warn("RegisterSettings 传了空的设置页，已忽略。");
+            return "";
+        }
+
+        _manager.Registry.SetSettings(Id, spec);
+        Log($"已声明设置页「{spec.Title}」（{spec.Fields.Count} 项）");
+        _manager.NotifySettingsRegistered(Id);
+        return Id + "#settings";
+    }
+
+    public event EventHandler<PluginSettingChangedEventArgs>? SettingChanged;
+
+    /// <summary>宿主界面写入了某个设置项之后调一次（由 PluginManager 触发）。</summary>
+    internal void RaiseSettingChanged(string key, string? value)
+    {
+        try { SettingChanged?.Invoke(this, new PluginSettingChangedEventArgs(key, value)); }
+        catch (Exception ex) { Warn($"SettingChanged 回调抛异常：{ex.GetType().Name}: {ex.Message}"); }
+    }
 
     /// <summary>界面显示的时间 = 原时间 + 全局偏移（与下拉面板的算法一致）。</summary>
     string Shift(string hhm)

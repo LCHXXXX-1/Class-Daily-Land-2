@@ -17,31 +17,45 @@ public sealed class HomeworkManager
     {
         var existed = File.Exists(_paths.Homework);
         Items = AtomicJson.Read(_paths.Homework, Defaults.CreateHomework) ?? new List<HomeworkItem>();
+        Logger.Current?.Trace($"[作业] 加载完成：{Items.Count} 条（首次运行：{!existed}）");
         if (!existed) Save();
     }
 
     public void Save()
     {
+        Logger.Current?.Trace($"[作业] 保存 {Items.Count} 条作业并广播 Changed");
         AtomicJson.Write(_paths.Homework, Items);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Add(HomeworkItem item) { Items.Add(item); Save(); }
+    public void Add(HomeworkItem item)
+    {
+        Items.Add(item);
+        Logger.Current?.Trace($"[作业] 新增：{item.Subject} · {item.Content}（日期 {item.Date}），当前共 {Items.Count} 条");
+        Save();
+    }
     public void Insert(int index, HomeworkItem item)
     {
         index = Math.Clamp(index, 0, Items.Count);
         Items.Insert(index, item);
+        Logger.Current?.Trace($"[作业] 在第 {index + 1} 位插入：{item.Subject} · {item.Content}");
         Save();
     }
     public void Update(int index, HomeworkItem item)
     {
-        if (index < 0 || index >= Items.Count) return;
+        if (index < 0 || index >= Items.Count)
+        {
+            Logger.Current?.Warn($"[作业] 更新失败：索引 {index} 越界（共 {Items.Count} 条）");
+            return;
+        }
+        Logger.Current?.Trace($"[作业] 修改第 {index + 1} 条：{Items[index].Subject} · {Items[index].Content} → {item.Subject} · {item.Content}");
         Items[index] = item;
         Save();
     }
     public void RemoveAt(int index)
     {
         if (index < 0 || index >= Items.Count) return;
+        Logger.Current?.Trace($"[作业] 删除第 {index + 1} 条：{Items[index].Subject} · {Items[index].Content}");
         Items.RemoveAt(index);
         Save();
     }
@@ -52,11 +66,13 @@ public sealed class HomeworkManager
         var item = Items[from];
         Items.RemoveAt(from);
         Items.Insert(to, item);
+        Logger.Current?.Trace($"[作业] 移动「{item.Subject} · {item.Content}」：第 {from + 1} 位 → 第 {to + 1} 位");
         Save();
     }
     public void ReplaceAll(IEnumerable<HomeworkItem> items)
     {
         Items = items.ToList();
+        Logger.Current?.Trace($"[作业] 整体替换为 {Items.Count} 条");
         Save();
     }
 }
@@ -93,6 +109,7 @@ public sealed class StudentOnDuty
         if (!string.IsNullOrEmpty(Config.LastDate) && Names.Count > 0)
             Config.CurrentIndex = Wrap(Config.CurrentIndex + 1);
         Config.LastDate = stamp;
+        Logger.Current?.Trace($"[值日] 跨天顺延：{stamp} 的值日生游标 → {Config.CurrentIndex}（{TodayName}），名单 {Names.Count} 人");
         SaveConfig();
         return true;
     }

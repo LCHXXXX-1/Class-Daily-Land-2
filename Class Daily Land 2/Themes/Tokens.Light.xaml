@@ -17,6 +17,15 @@
     <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#80FFFFFF" />
     <SolidColorBrush x:Key="LayerFillColorAltBrush" Color="#8AFFFFFF" />
 
+    <!--
+      云母窗口专用（设置中心在 Mica 生效时改用这一对）。
+      普通 Layer(50% 白) + 卡片(70% 白) 叠起来是 85% 白 —— 云母等于被盖死，
+      用户看到的就是"有内容的地方一片白"。这里把内容层收到 25%、卡片 45%，
+      合成约 59%：云母透得出来，文字仍是深色压在浅底上，可读性不受影响。
+    -->
+    <SolidColorBrush x:Key="MicaLayerBrush" Color="#40FFFFFF" />
+    <SolidColorBrush x:Key="MicaCardBackgroundBrush" Color="#73FFFFFF" />
+
     <!-- 卡片 -->
     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#B3FFFFFF" />
     <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#80F6F6F6" />
@@ -35,6 +44,12 @@
     <SolidColorBrush x:Key="ControlStrongFillColorDefaultBrush" Color="#72000000" />
     <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#0A000000" />
     <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#06000000" />
+
+    <!-- WinUI 3 海拔描边：按钮/下拉等的边框上浅下深（底边那道深色是"厚度"的来源） -->
+    <LinearGradientBrush x:Key="ControlElevationBorderBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#0F000000" Offset="0" />
+        <GradientStop Color="#29000000" Offset="1" />
+    </LinearGradientBrush>
 
     <!-- 文字 -->
     <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FF1B1B1B" />

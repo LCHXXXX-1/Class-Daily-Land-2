@@ -32,11 +32,16 @@ public sealed class ScheduleManager
         AdvanceMinutes = Math.Clamp(File.AdvanceMinutes, 0, 60);
         OffsetSeconds = Math.Clamp(File.TimeOffsetSeconds, -3600, 3600);
         Engine = new ScheduleEngine(File);
+        Logger.Current?.Trace($"[课表] 加载完成：课表 {File.Timetables.Count} 张（当前「{File.Active}」，节次 {Active.Periods.Count(p => p.IsValid)} 个），" +
+                              $"提前 {AdvanceMinutes} 分钟，偏移 {OffsetSeconds}s，假期 {File.Holidays.Count} 段，调休 {File.MakeupDays.Count} 天" +
+                              (File.TempAdjust.Matches(DateTime.Today) ? "，今天命中临时调课" : "") +
+                              (existed ? "" : "（首次运行，写出默认课表）"));
         if (!existed) Save();   // 首次运行落盘默认课表，便于用户编辑
     }
 
     public void Save()
     {
+        Logger.Current?.Trace($"[课表] 保存 schedule.json（课表 {File.Timetables.Count} 张，活动表「{File.Active}」）");
         File.AdvanceMinutes = AdvanceMinutes;
         File.TimeOffsetSeconds = OffsetSeconds;
         File.Normalize();
@@ -74,6 +79,7 @@ public sealed class ScheduleManager
     public void SetActive(string name)
     {
         if (!File.Timetables.ContainsKey(name)) return;
+        Logger.Current?.Trace($"[课表] 切换活动课表：{File.Active} → {name}");
         File.Active = name;
         Save();
     }
@@ -82,6 +88,7 @@ public sealed class ScheduleManager
     public bool CreateTimetable(string name, string? copyFrom = null)
     {
         if (string.IsNullOrWhiteSpace(name) || File.Timetables.ContainsKey(name)) return false;
+        Logger.Current?.Trace($"[课表] 新建课表「{name}」{(copyFrom is not null ? $"（克隆自「{copyFrom}」）" : "")}，设为活动表");
         if (copyFrom is not null && File.Timetables.TryGetValue(copyFrom, out var src))
             File.Timetables[name] = Clone(src);
         else
@@ -95,6 +102,7 @@ public sealed class ScheduleManager
     {
         if (File.Timetables.Count <= 1) return false;      // 至少保留一张
         if (!File.Timetables.Remove(name)) return false;
+        Logger.Current?.Trace($"[课表] 删除课表「{name}」{(File.Active == name ? $"，活动表回退为「{File.Timetables.Keys.First()}」" : "")}");
         if (File.Active == name) File.Active = File.Timetables.Keys.First();
         Save();
         return true;
@@ -124,6 +132,7 @@ public sealed class ScheduleManager
 
     public void SetTempAdjust(string date, IReadOnlyList<string> courses)
     {
+        Logger.Current?.Trace($"[课表] 设置临时调课：{date}（{courses.Count} 节，内容：{string.Join("、", courses.Where(c => !string.IsNullOrWhiteSpace(c)))}）");
         File.TempAdjust ??= new TempAdjust();
         File.TempAdjust.Date = date ?? "";
         File.TempAdjust.Courses = courses.Select(c => c ?? "").ToList();
@@ -139,6 +148,7 @@ public sealed class ScheduleManager
     public bool AddHoliday(Holiday h)
     {
         if (!TempAdjust.TryParseDate(h.Start, out _)) return false;
+        Logger.Current?.Trace($"[课表] 新增假期「{h.Name}」：{h.Start} ~ {h.End}");
         File.Holidays.Add(h);
         Save();
         return true;
@@ -155,6 +165,7 @@ public sealed class ScheduleManager
     {
         if (!TempAdjust.TryParseDate(m.Date, out _)) return false;
         m.AsWeekday = Math.Clamp(m.AsWeekday, 0, 6);
+        Logger.Current?.Trace($"[课表] 新增调休补课日：{m.Date}，按周{m.AsWeekday + 1} 课表上课");
         File.MakeupDays.RemoveAll(x => string.Equals(x.Date, m.Date, StringComparison.Ordinal));
         File.MakeupDays.Add(m);
         Save();
@@ -188,9 +199,14 @@ public sealed class ScheduleManager
             AdvanceMinutes = Math.Clamp(File.AdvanceMinutes, 0, 60);
             OffsetSeconds = Math.Clamp(File.TimeOffsetSeconds, -3600, 3600);
             Save();
+            Logger.Current?.Trace($"[课表] 从 JSON 导入完成：{File.Timetables.Count} 张课表，活动表「{File.Active}」");
             return true;
         }
-        catch (Exception) { return false; }
+        catch (Exception ex)
+        {
+            Logger.Current?.Warn("[课表] JSON 导入失败：" + ex.Message);
+            return false;
+        }
     }
 }
 

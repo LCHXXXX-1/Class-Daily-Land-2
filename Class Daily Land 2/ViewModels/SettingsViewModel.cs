@@ -55,6 +55,54 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => Write("update_channel", string.Equals(value, "beta", StringComparison.OrdinalIgnoreCase) ? "beta" : "stable");
     }
 
+    /// <summary>
+    /// 更新源：auto（默认，GitHub 优先，失败自动换 Gitee）/ github / gitee。
+    /// 绑定到关于页的分段选择器。
+    /// </summary>
+    public string UpdateSource
+    {
+        get
+        {
+            var value = (S.Str("update_source") ?? "").Trim().ToLowerInvariant();
+            return value is "github" or "gitee" ? value : "auto";
+        }
+        set
+        {
+            var normalized = (value ?? "").Trim().ToLowerInvariant();
+            if (normalized is not ("github" or "gitee")) normalized = "auto";
+            Write("update_source", normalized);
+        }
+    }
+
+    /// <summary>
+    /// 插件市场的更新源：auto（默认，GitHub 优先，失败自动换 Gitee）/ github / gitee。
+    /// 与程序的更新源分开设置 —— 市场是插件包，程序是安装包，两边线路不一定一样。
+    /// </summary>
+    public string MarketSource
+    {
+        get
+        {
+            var value = (S.Str("market_source") ?? "").Trim().ToLowerInvariant();
+            return value is "github" or "gitee" ? value : "auto";
+        }
+        set
+        {
+            var normalized = (value ?? "").Trim().ToLowerInvariant();
+            if (normalized is not ("github" or "gitee")) normalized = "auto";
+            Write("market_source", normalized);
+        }
+    }
+
+    /// <summary>
+    /// 开发者选项（关于页最底部）。打开后才出现「测试报错」这类调试入口；
+    /// 关着的时候界面上一个字都不多。
+    /// </summary>
+    public bool DeveloperMode
+    {
+        get => S.Bool("developer_mode");
+        set => Write("developer_mode", value);
+    }
+
     /// <summary>上次检查更新的时间（空 = 还没检查过）。</summary>
     public string LastUpdateCheck => S.Str("last_update_check");
 
@@ -494,6 +542,13 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         get => S.Bool("homework_show_date");
         set => Write("homework_show_date", value);
+    }
+
+    /// <summary>作业历史快照保留天数（3 / 7 / 14 / 30，默认 7）。</summary>
+    public int HomeworkHistoryDays
+    {
+        get => S.Int("homework_history_days");
+        set => Write("homework_history_days", Math.Clamp(value, 1, 3650));
     }
 
     // ————————————————————— 维护 —————————————————————

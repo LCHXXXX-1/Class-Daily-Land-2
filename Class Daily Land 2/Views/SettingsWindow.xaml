@@ -23,24 +23,24 @@
     <Window.Resources>
 
         <!--
-          导航药丸：40 高 / 8 圆角 / 选中淡色胶囊底 + 强调色文字。
-          ★ 强调条**不在这里**：QML 版是一条会滑动的独立强调条
-          （见 NavMarker），每个条目各画一条就成了"切页时旧的消失、新的凭空出现"，
-          没有位移感。这里同理删掉了原来的 Bar。
+          导航药丸（WinUI 3 NavigationView）：36 高 / 5 圆角。
+          选中 = 中性灰底 + 主文字色 SemiBold，左侧再叠一条会滑动的强调条
+          （NavMarker，代码里单条独立强调条，跟高亮项走）。
         -->
         <Style x:Key="NavItem" TargetType="RadioButton">
             <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <!-- 高度走资源：触屏优化开着时窗口会把 NavItemHeight 覆盖成 54（见 TouchMode） -->
             <Setter Property="Height" Value="{DynamicResource NavItemHeight}" />
             <Setter Property="Margin" Value="0,2,0,0" />
-            <Setter Property="Padding" Value="12,0" />
+            <Setter Property="Padding" Value="11,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
                         <Grid>
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="8"
+                            <Border x:Name="Bd" Background="Transparent"
+                                    CornerRadius="{DynamicResource NavCornerRadius}"
                                     Padding="{TemplateBinding Padding}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -53,14 +53,15 @@
                                                Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
                                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                                VerticalAlignment="Center" />
-                                    <TextBlock x:Name="Lbl" Grid.Column="1" Margin="12,0,0,0"
+                                    <TextBlock x:Name="Lbl" Grid.Column="1" Margin="14,0,0,0"
                                                Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis"
                                                Foreground="{TemplateBinding Foreground}" />
                                 </Grid>
                             </Border>
-                            <Border x:Name="FocusRing" CornerRadius="8" BorderThickness="2"
+                            <Border x:Name="FocusRing" CornerRadius="{DynamicResource NavCornerRadius}"
+                                    BorderThickness="2"
                                     BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}"
                                     Visibility="Collapsed" />
                         </Grid>
@@ -69,9 +70,9 @@
                                 <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource NavSelectedBrush}" />
-                                <Setter TargetName="Ico" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
-                                <Setter TargetName="Lbl" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter TargetName="Ico" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                <Setter TargetName="Lbl" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                 <Setter TargetName="Lbl" Property="FontWeight" Value="SemiBold" />
                             </Trigger>
                             <MultiTrigger>
@@ -79,7 +80,7 @@
                                     <Condition Property="IsChecked" Value="True" />
                                     <Condition Property="IsMouseOver" Value="True" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource NavSelectedHoverBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
                             </MultiTrigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
@@ -105,18 +106,18 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
-                <Button Width="36" Height="32" Padding="0"
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                <Button Width="38" Height="32" Padding="0"
                         Style="{StaticResource SubtleButton}"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
                         Click="OnClose" ToolTip="返回">
                     <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                FontSize="16" Text="&#xE72B;" />
                 </Button>
-                <TextBlock Text="设置 · Class Daily Land 2" Margin="12,0,0,0"
+                <TextBlock Text="设置" Margin="10,0,0,0"
                            VerticalAlignment="Center"
                            FontSize="{DynamicResource FontSizeCaption}"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
@@ -133,24 +134,47 @@
             </StackPanel>
         </Grid>
 
-        <!-- 主体：固定 288 侧栏（不可折叠，照 QML 版）+ 内容 -->
+        <!-- 主体：264 侧栏（WinUI 3 NavigationView 宽）+ 内容 -->
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="0" />
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="NavPane" Grid.Column="0" Width="288" ClipToBounds="True"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
-                    BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
-                    BorderThickness="0,0,1,0">
+            <Border x:Name="NavPane" Grid.Column="0" Width="{DynamicResource NavPaneWidth}"
+                    ClipToBounds="True"
+                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
 
                 <Grid>
                     <DockPanel>
                         <StackPanel x:Name="AboutPanel" DockPanel.Dock="Bottom"
                                     Margin="8,0,8,10">
-                            <Border Height="1" Margin="0,0,0,8"
+                            <Border Height="1" Margin="4,0,4,8"
                                     Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                        </StackPanel>
+
+                        <StackPanel DockPanel.Dock="Top">
+                            <!-- 品牌块：应用名 + 「设置」副题（Win11 设置的侧栏顶部语境） -->
+                            <StackPanel Orientation="Horizontal" Margin="16,10,16,4" Height="34">
+                                <Border Width="28" Height="28" CornerRadius="7"
+                                        VerticalAlignment="Center"
+                                        Background="{DynamicResource AccentFillColorDefaultBrush}">
+                                    <TextBlock Text="C" FontSize="14" FontWeight="SemiBold"
+                                               FontFamily="{DynamicResource FontFamilyDisplay}"
+                                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                </Border>
+                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Class Daily Land 2"
+                                               FontSize="{DynamicResource FontSizeBody}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- 查找设置：实时过滤导航，Enter 跳到第一个匹配 -->
+                            <TextBox x:Name="SearchBox" Style="{StaticResource SearchTextBox}"
+                                     Tag="查找设置" Margin="12,10,12,8" Height="32" />
                         </StackPanel>
 
                         <ScrollViewer x:Name="NavScroll" VerticalScrollBarVisibility="Auto"
@@ -160,9 +184,9 @@
                         </ScrollViewer>
                     </DockPanel>
 
-                    <!-- 单条滑动强调条：3×17，跟着高亮项走（对位 QML 的 navMarker） -->
+                    <!-- 单条滑动强调条：3×16 药丸，跟着高亮项走 -->
                     <Canvas x:Name="MarkerCanvas" IsHitTestVisible="False">
-                        <Border x:Name="NavMarker" Width="3" Height="17" CornerRadius="1.5"
+                        <Border x:Name="NavMarker" Width="3" Height="16" CornerRadius="1.5"
                                 Background="{DynamicResource AccentFillColorDefaultBrush}"
                                 Visibility="Collapsed"
                                 Canvas.Left="0" Canvas.Top="0">
@@ -177,7 +201,7 @@
             <!--
               页面栈：两层，旧页留在下面往反方向整段移出、新页从反侧整段移入。
               0.92 倍页宽/高，中间留一点重叠 → 换页时不出现两条空白。
-              透明度恒为 1（不做任何淡化），这是 QML 版明确的观感要求。
+              透明度恒为 1（不做任何淡化）。
             -->
             <Border x:Name="ContentPane" Grid.Column="1" ClipToBounds="True"
                     Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}">
@@ -187,7 +211,7 @@
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   PanningMode="VerticalOnly" PanningDeceleration="0.001"
-                                  Padding="28,40,28,64">
+                                  Padding="40,28,40,64">
                         <StackPanel x:Name="PrevInner" MaxWidth="900" />
                     </ScrollViewer>
 
@@ -195,23 +219,24 @@
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   PanningMode="VerticalOnly" PanningDeceleration="0.001"
-                                  Padding="28,40,28,64">
+                                  Padding="40,28,40,64">
                         <StackPanel MaxWidth="900">
+                            <!-- Win11 设置的顶部面包屑：设置 › 当前类别 -->
+                            <TextBlock x:Name="MainCrumb" Margin="2,0,0,2"
+                                       FontSize="{DynamicResource FontSizeCaption}"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                       Text="设置" />
                             <StackPanel x:Name="ToastSlot" />
                             <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch" />
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!--
-                      二级页（课表管理 / 周末作息 / 假期 / 作业编辑器 …）：
-                      QML 版是**整页推进来**、带面包屑、不是盖一张卡片。
-                      这里同构：面包屑 + 返回，内容区铺满，转场和其它页一套。
-                    -->
+                    <!-- 二级页（周末作息 / 假期 / 作业编辑器 …）：整页推进 + 面包屑 -->
                     <ScrollViewer x:Name="SubScroll" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   PanningMode="VerticalOnly" PanningDeceleration="0.001"
-                                  Padding="28,32,28,64">
+                                  Padding="40,28,40,64">
                         <StackPanel MaxWidth="900">
                             <Button x:Name="SubBackButton" Style="{StaticResource SubtleButton}"
                                     HorizontalAlignment="Left" Padding="8,4,12,4"
@@ -232,7 +257,7 @@
             </Border>
         </Grid>
 
-        <!-- 二级页曾经盖在遮罩上；现在改成页内推进（SubScroll），这个 host 只给插件原生宿主等少数场合留位 -->
+        <!-- 插件原生宿主等少数场合留位 -->
         <Grid x:Name="DialogHost" Grid.RowSpan="2" Visibility="Collapsed"
               Background="{DynamicResource SmokeBrush}" />
 

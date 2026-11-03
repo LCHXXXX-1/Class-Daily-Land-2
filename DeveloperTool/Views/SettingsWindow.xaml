@@ -1,0 +1,74 @@
+<Window x:Class="DeveloperTool.Views.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="IDE 设置"
+        Width="460" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
+        FontSize="13">
+
+    <StackPanel Margin="18">
+        <TextBlock Text="IDE 设置" FontSize="16" FontWeight="SemiBold" />
+
+        <Border Style="{StaticResource HairLine}" Margin="0,12" />
+
+        <TextBlock Text="外观" HorizontalAlignment="Left" Margin="0,0,0,6"
+                   Style="{StaticResource SectionHeader}" />
+
+        <ComboBox x:Name="ThemeCombo" Style="{StaticResource ThemeComboBox}"
+                  SelectionChanged="OnThemeSelection">
+            <ComboBoxItem Content="深色主题" Tag="dark" />
+            <ComboBoxItem Content="浅色主题" Tag="light" />
+        </ComboBox>
+
+        <TextBlock x:Name="HintText" Margin="0,12,0,0" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource DimTextBrush}" />
+
+        <Border Style="{StaticResource HairLine}" Margin="0,14,0,12" />
+
+        <!-- ===== 账号 ===== -->
+        <TextBlock Text="账号" HorizontalAlignment="Left" Margin="0,0,0,6"
+                   Style="{StaticResource SectionHeader}" />
+
+        <TextBlock x:Name="AccountNameText" Text="未登录" FontSize="14" FontWeight="SemiBold" />
+        <TextBlock x:Name="AccountIdText" Margin="0,2,0,0" FontSize="12"
+                   Foreground="{DynamicResource DimTextBrush}" />
+        <TextBlock x:Name="AccountAdminText" Margin="0,2,0,0" FontSize="12"
+                   Foreground="{DynamicResource DimTextBrush}" />
+
+        <!-- 绑定状态：已绑定则按钮显示「已绑定」并禁用（解绑暂不做） -->
+        <Grid Margin="0,12,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="72" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="Gitee" VerticalAlignment="Center" />
+            <TextBlock x:Name="GiteeStateText" Grid.Column="1" VerticalAlignment="Center"
+                       FontSize="12" Text="未绑定" Foreground="{DynamicResource DimTextBrush}" />
+            <Button x:Name="GiteeBindButton" Grid.Column="2" Content="立即绑定" MinWidth="92"
+                    Style="{StaticResource ToolButton}" Click="OnBindGitee" />
+        </Grid>
+
+        <Grid Margin="0,8,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="72" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <TextBlock Text="GitHub" VerticalAlignment="Center" />
+            <TextBlock x:Name="GithubStateText" Grid.Column="1" VerticalAlignment="Center"
+                       FontSize="12" Text="未绑定" Foreground="{DynamicResource DimTextBrush}" />
+            <Button x:Name="GithubBindButton" Grid.Column="2" Content="立即绑定" MinWidth="92"
+                    Style="{StaticResource ToolButton}" Click="OnBindGithub" />
+        </Grid>
+
+        <TextBlock x:Name="AccountHint" Margin="0,10,0,0" FontSize="12" TextWrapping="Wrap"
+                   Foreground="{DynamicResource DimTextBrush}" />
+    </StackPanel>
+</Window>

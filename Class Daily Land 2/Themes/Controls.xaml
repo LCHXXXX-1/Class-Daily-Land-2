@@ -59,13 +59,13 @@
         <Setter Property="LineHeight" Value="{DynamicResource LineHeightTitle}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        <Setter Property="Margin" Value="0,4,0,24" />
+        <Setter Property="Margin" Value="0,8,0,6" />
     </Style>
 
     <Style x:Key="PageLead" TargetType="TextBlock">
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-        <Setter Property="Margin" Value="0,-18,0,26" />
+        <Setter Property="Margin" Value="0,0,0,28" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
@@ -99,7 +99,8 @@
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <!-- WinUI 3 海拔描边：上浅下深的渐变，底边那道深色是按钮「厚度」的来源 -->
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
@@ -119,16 +120,10 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
-                            <Setter TargetName="Bd" Property="RenderTransform">
-                                <Setter.Value><TranslateTransform Y="-1" /></Setter.Value>
-                            </Setter>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorTertiaryBrush}" />
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                            <Setter TargetName="Bd" Property="RenderTransform">
-                                <Setter.Value><TranslateTransform Y="0" /></Setter.Value>
-                            </Setter>
                             <Setter TargetName="Bd" Property="Opacity" Value="0.92" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -145,11 +140,45 @@
 
     <Style BasedOn="{StaticResource FluentButton}" TargetType="Button" />
 
+    <!--
+      有底色按钮（强调 / 危险色）专用模板：结构与 FluentButton 一样，但**不带**
+      "悬停时把底换成浅灰、按下时把前景换成灰字"的模板触发器。
+
+      为什么必须单独一份：模板触发器的优先级高于样式触发器。强调按钮套 FluentButton 模板时，
+      悬停会把 Background 换成 ControlFillColorSecondaryBrush（浅灰），而前景仍是白字 →
+      「浅灰底 + 白字」= 按钮看起来直接消失（其实还点得动）。这里只保留按下反馈与禁用态，
+      悬停/按下的颜色交给 AccentButton 自己的 Style 触发器。
+    -->
+    <ControlTemplate x:Key="FilledButtonTemplate" TargetType="Button">
+        <Border x:Name="Bd"
+                Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{DynamicResource ControlCornerRadius}"
+                RenderTransformOrigin="0.5,0.5">
+            <Border.RenderTransform><TranslateTransform X="0" Y="0" /></Border.RenderTransform>
+            <ContentPresenter Margin="{TemplateBinding Padding}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.92" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorDisabledBrush}" />
+                <Setter TargetName="Bd" Property="BorderBrush" Value="Transparent" />
+                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                <Setter TargetName="Bd" Property="Opacity" Value="1" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
     <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource FluentButton}">
         <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-        <Setter Property="Effect" Value="{DynamicResource AccentGlowEffect}" />
+        <!-- 见 FilledButtonTemplate 的注释：不套 FluentButton 的模板，否则悬停会变隐形 -->
+        <Setter Property="Template" Value="{StaticResource FilledButtonTemplate}" />
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
                 <Setter Property="Background" Value="{DynamicResource AccentFillColorSecondaryBrush}" />
@@ -157,7 +186,6 @@
             <Trigger Property="IsPressed" Value="True">
                 <Setter Property="Background" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
                 <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorSecondaryBrush}" />
-                <Setter Property="Effect" Value="{x:Null}" />
             </Trigger>
         </Style.Triggers>
     </Style>
@@ -229,13 +257,13 @@
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="TextBox">
-                    <!-- 焦点态画内下划线，不改 border-thickness（否则整框会跳 1px） -->
+                    <!-- WinUI 3 文本框：静置 = 细边 + 底部 1px 深色「托底」；聚焦 = 底边 2px 强调线 -->
                     <Border x:Name="Bd"
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
@@ -244,6 +272,9 @@
                         <Grid>
                             <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"
                                           VerticalAlignment="Center" />
+                            <Border x:Name="RestLine" Height="1" VerticalAlignment="Bottom"
+                                    Margin="1,0,1,1"
+                                    Background="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
                             <Border x:Name="Underline" Height="2" VerticalAlignment="Bottom"
                                     Margin="1,0,1,1" CornerRadius="1"
                                     Background="{DynamicResource AccentFillColorDefaultBrush}"
@@ -251,12 +282,17 @@
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                            <Setter TargetName="RestLine" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorDisabledBrush}" />
+                            <Setter TargetName="RestLine" Property="Visibility" Value="Collapsed" />
                             <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -328,14 +364,26 @@
                                        Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
                                        FontSize="{DynamicResource FontSizeBody}"
                                        Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Border x:Name="RestLine" Grid.ColumnSpan="2" Height="1" VerticalAlignment="Bottom"
+                                    Margin="1,0,1,1"
+                                    Background="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            <Border x:Name="Underline" Grid.ColumnSpan="2" Height="2" VerticalAlignment="Bottom"
+                                    Margin="1,0,1,1" CornerRadius="1"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Visibility="Collapsed" />
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="Text" Value="">
                             <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
                         </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                            <Setter TargetName="RestLine" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -585,11 +633,23 @@
                                        VerticalAlignment="Center"
                                        FontSize="{DynamicResource FontSizeCaption}"
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Border x:Name="RestLine" Grid.ColumnSpan="3" Height="1" VerticalAlignment="Bottom"
+                                    Margin="1,0,1,1" IsHitTestVisible="False"
+                                    Background="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
+                            <Border x:Name="Underline" Grid.ColumnSpan="3" Height="2" VerticalAlignment="Bottom"
+                                    Margin="1,0,1,1" CornerRadius="1" IsHitTestVisible="False"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Visibility="Collapsed" />
                         </Grid>
                     </Border>
                     <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                        </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                            <Setter TargetName="RestLine" Property="Visibility" Value="Collapsed" />
+                            <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorDisabledBrush}" />
@@ -612,7 +672,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
-                    <Border x:Name="Bd" Background="Transparent" CornerRadius="6"
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4"
                             Padding="{TemplateBinding Padding}" Margin="1">
                         <Grid>
                             <Path x:Name="Check" Width="10" Height="6" HorizontalAlignment="Left"
@@ -645,7 +705,7 @@
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
@@ -690,7 +750,7 @@
                             <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                     MaxHeight="{TemplateBinding MaxDropDownHeight}"
                                     Margin="0,0,0,0" Padding="4"
-                                    CornerRadius="10"
+                                    CornerRadius="{DynamicResource OverlayCornerRadius}"
                                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                                     BorderThickness="1"
                                     Background="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}"
@@ -714,13 +774,14 @@
         </Setter>
     </Style>
 
-    <!-- ===== 分段选择器 -->
+    <!-- ===== 分段选择器（WinUI 3 Segmented：选中 = 浮起的浅色卡 + 细描边，非强调色实底） -->
     <Style x:Key="SelectorChip" TargetType="Button">
         <Setter Property="FocusVisualStyle" Value="{StaticResource FluentFocusVisual}" />
         <Setter Property="Height" Value="26" />
         <Setter Property="Padding" Value="14,0" />
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
         <Setter Property="Cursor" Value="Hand" />
@@ -728,6 +789,8 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
                     <Border x:Name="chip" Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
                             CornerRadius="{DynamicResource ControlCornerRadius}"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -751,9 +814,9 @@
         <Setter Property="Margin" Value="1,0" />
         <Style.Triggers>
             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                <Setter Property="Effect" Value="{DynamicResource AccentGlowEffect}" />
+                <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
+                <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Tag" Value="selected" />
             </DataTrigger>
         </Style.Triggers>
@@ -768,7 +831,7 @@
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type fl:SelectorBar}">
                     <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                            CornerRadius="9" Padding="3">
+                            CornerRadius="7" Padding="3">
                         <ItemsPresenter />
                     </Border>
                 </ControlTemplate>
@@ -828,7 +891,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ListBoxItem">
-                    <Border x:Name="Bd" Background="Transparent" CornerRadius="6" Margin="1,0"
+                    <Border x:Name="Bd" Background="Transparent" CornerRadius="4" Margin="1,0"
                             Padding="{TemplateBinding Padding}">
                         <ContentPresenter VerticalAlignment="Center" />
                     </Border>
@@ -851,11 +914,13 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <Border x:Name="T" CornerRadius="7" Margin="4"
+                    <!-- WinUI 3 细滚动条：静置 4px，悬停变粗到 6px -->
+                    <Border x:Name="T" CornerRadius="3" Margin="3"
                             Background="{DynamicResource ControlStrongFillColorDefaultBrush}" />
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="T" Property="Margin" Value="3" />
+                            <Setter TargetName="T" Property="Margin" Value="2" />
+                            <Setter TargetName="T" Property="CornerRadius" Value="4" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -878,8 +943,8 @@
 
     <Style TargetType="ScrollBar">
         <Setter Property="Background" Value="Transparent" />
-        <Setter Property="Width" Value="12" />
-        <Setter Property="MinWidth" Value="12" />
+        <Setter Property="Width" Value="10" />
+        <Setter Property="MinWidth" Value="10" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
@@ -902,8 +967,8 @@
         <Style.Triggers>
             <Trigger Property="Orientation" Value="Horizontal">
                 <Setter Property="Width" Value="Auto" />
-                <Setter Property="Height" Value="12" />
-                <Setter Property="MinHeight" Value="12" />
+                <Setter Property="Height" Value="10" />
+                <Setter Property="MinHeight" Value="10" />
             </Trigger>
         </Style.Triggers>
     </Style>

@@ -27,16 +27,53 @@ public sealed class SettingsManager
 
     public void Load()
     {
+        Logger.Current?.Trace("[设置] 开始加载 settings.json");
         var raw = AtomicJson.ReadFlat(_paths.Settings);
+
+        // 一次性迁移：更新源/插件源的默认值已从 auto 改为 github。
+        // 老用户的 settings.json 里存的还是旧默认 "auto"（设置写入是全量落盘），
+        // 不迁移的话改默认值对存量用户就是空操作。
+        var migratedSource = false;
+        foreach (var key in new[] { "update_source", "market_source" })
+        {
+            if (raw.TryGetValue(key, out var value) &&
+                string.Equals(value as string, "auto", StringComparison.OrdinalIgnoreCase))
+            {
+                raw[key] = "github";
+                migratedSource = true;
+                Logger.Current?.Info($"[设置] 迁移：{key} 由 auto 改为 github（默认源切换）");
+            }
+        }
+
         Current = AppSettings.FromRaw(raw, out var repaired);
         RepairedKeys = repaired;
-        if (raw.Count == 0) SaveCore();   // 首次运行写出一份完整默认配置
-        else if (repaired.Count > 0) SaveCore();
+        Logger.Current?.Trace($"[设置] 加载完成：文件 {raw.Count} 键，模型 {AppSettings.All.Count()} 项，类型修正 {repaired.Count} 项");
+        if (raw.Count == 0)
+        {
+            Logger.Current?.Trace("[设置] 首次运行：写出完整默认配置");
+            SaveCore();
+        }
+        else if (repaired.Count > 0)
+        {
+            Logger.Current?.Trace($"[设置] 有 {repaired.Count} 项被修正，回写配置文件");
+            SaveCore();
+        }
+
+        if (migratedSource)
+        {
+            // 迁移结果立刻落盘：否则每次启动都会重新迁移一遍
+            Logger.Current?.Info("[设置] 默认源迁移完成，回写配置文件");
+            SaveCore();
+        }
     }
 
     void SaveCore() => AtomicJson.Write(_paths.Settings, Current.ToDictionary());
 
-    public void Save() => SaveCore();
+    public void Save()
+    {
+        Logger.Current?.Trace("[设置] 手动保存（退出前）");
+        SaveCore();
+    }
 
     // ——— 类型化读取 ———
     public int Int(string key) => Current.GetInt(key);
@@ -47,10 +84,19 @@ public sealed class SettingsManager
     public bool Set(string key, object? value, bool broadcast = true)
     {
         var before = Current.Get(key);
-        if (!Current.Set(key, value)) return false;
+        if (!Current.Set(key, value))
+        {
+            Logger.Current?.Trace($"[设置] 写入 {key} 被模型拒绝（未知键或类型不符），输入值：{value ?? "null"}");
+            return false;
+        }
         var after = Current.Get(key);
-        if (Equals(before, after)) return false;
+        if (Equals(before, after))
+        {
+            Logger.Current?.Trace($"[设置] {key} 值未变（{before ?? "null"}），跳过落盘");
+            return false;
+        }
 
+        Logger.Current?.Trace($"[设置] 变更 {key}：{before ?? "null"} → {after ?? "null"}（广播：{broadcast}）");
         SaveCore();
         if (broadcast) SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(new[] { key }));
         return true;
@@ -66,8 +112,10 @@ public sealed class SettingsManager
             if (!Current.Set(kv.Key, kv.Value)) continue;
             if (Equals(before, Current.Get(kv.Key))) continue;
             changed.Add(kv.Key);
+            Logger.Current?.Trace($"[设置] 批量变更 {kv.Key}：{before ?? "null"} → {Current.Get(kv.Key) ?? "null"}");
         }
         if (changed.Count == 0) return;
+        Logger.Current?.Trace($"[设置] 批量落盘，共 {changed.Count} 键：{string.Join(", ", changed)}");
         SaveCore();
         SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(changed));
     }
@@ -75,6 +123,7 @@ public sealed class SettingsManager
     public void ResetPage(string page)
     {
         if (!AppSettings.PageKeys.TryGetValue(page, out var keys)) return;
+        Logger.Current?.Trace($"[设置] 恢复本页默认：{page}（{keys.Count()} 键）");
         Current.ResetPage(page);
         SaveCore();
         SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(keys));
@@ -83,6 +132,7 @@ public sealed class SettingsManager
     /// <summary>恢复全部默认（只广播一次）。</summary>
     public void ResetAll()
     {
+        Logger.Current?.Warn($"[设置] 恢复全部默认（{AppSettings.All.Count()} 项）");
         foreach (var meta in AppSettings.All) Current.ResetToDefault(meta.Key);
         SaveCore();
         SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(AppSettings.All.Select(m => m.Key).ToList()));

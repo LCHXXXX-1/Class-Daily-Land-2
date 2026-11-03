@@ -34,10 +34,18 @@ public static class PluginInstaller
     {
         if (string.IsNullOrWhiteSpace(sourcePath))
             return InstallOutcome.Fail("没有指定要安装的文件或文件夹。");
+
+        Logger.Current?.Info($"[插件安装] 开始：{sourcePath} → {pluginsRoot}（覆盖={overwrite}）");
+
         if (!Directory.Exists(pluginsRoot))
         {
+            Logger.Current?.Info($"[插件安装] 插件目录不存在，创建：{pluginsRoot}");
             try { Directory.CreateDirectory(pluginsRoot); }
-            catch (Exception ex) { return InstallOutcome.Fail("创建插件目录失败：" + ex.Message); }
+            catch (Exception ex)
+            {
+                Logger.Current?.Error($"[插件安装] 创建插件目录失败：{pluginsRoot}（{ex.Message}）");
+                return InstallOutcome.Fail("创建插件目录失败：" + ex.Message);
+            }
         }
 
         try
@@ -46,10 +54,13 @@ public static class PluginInstaller
                 return InstallFromFolder(sourcePath, pluginsRoot, overwrite);
             if (File.Exists(sourcePath))
                 return InstallFromPackage(sourcePath, pluginsRoot, overwrite);
+
+            Logger.Current?.Warn($"[插件安装] 源路径不存在：{sourcePath}");
             return InstallOutcome.Fail("路径不存在：" + sourcePath);
         }
         catch (Exception ex)
         {
+            Logger.Current?.Error($"[插件安装] 失败：{sourcePath}（{ex.GetType().Name}: {ex.Message}）");
             return InstallOutcome.Fail("安装失败：" + ex.Message);
         }
     }
@@ -64,9 +75,14 @@ public static class PluginInstaller
         var sandbox = Path.Combine(pluginsRoot, "._install_" + Guid.NewGuid().ToString("N"));
         try
         {
+            Logger.Current?.Trace($"[插件安装] 解压 {packagePath} → {sandbox}");
             Directory.CreateDirectory(sandbox);
             var extracted = ExtractSafely(packagePath, sandbox, out var error);
-            if (extracted is null) return InstallOutcome.Fail(error ?? "解压失败。");
+            if (extracted is null)
+            {
+                Logger.Current?.Warn($"[插件安装] 解压失败：{packagePath}（{error ?? "未知原因"}）");
+                return InstallOutcome.Fail(error ?? "解压失败。");
+            }
 
             // 插件根：解压目录本身，或唯一的一级子目录（打 zip 时多套了一层文件夹很常见）
             var root = extracted;
@@ -74,7 +90,12 @@ public static class PluginInstaller
             {
                 var children = Directory.GetDirectories(root);
                 if (children.Length == 1 && PluginCatalog.LooksLikePlugin(children[0])) root = children[0];
-                else return InstallOutcome.Fail("包里找不到 plugin.json（应在压缩包根目录或唯一子目录下）。");
+                else
+                {
+                    Logger.Current?.Warn($"[插件安装] {packagePath} 里找不到 plugin.json（解压到 {root}）；" +
+                                        $"一级子目录 {children.Length} 个");
+                    return InstallOutcome.Fail("包里找不到 plugin.json（应在压缩包根目录或唯一子目录下）。");
+                }
             }
 
             return PlaceInto(root, pluginsRoot, overwrite);
@@ -116,21 +137,30 @@ public static class PluginInstaller
 
         try
         {
-            if (hadOld) Directory.Move(target, backup);
+            if (hadOld)
+            {
+                Logger.Current?.Trace($"[插件安装] 目标已存在，先备份：{target} → {backup}");
+                Directory.Move(target, backup);
+            }
+
+            Logger.Current?.Trace($"[插件安装] 复制 {sourceDir} → {target}");
             CopyDirectory(sourceDir, target);
         }
         catch (Exception ex)
         {
+            Logger.Current?.Error($"[插件安装] 写入插件目录失败：{target}（{ex.Message}）");
             // 还原：宁可回到装之前的样子，也不要留一个半截目录
             TryDeleteDirectory(target);
             if (hadOld && Directory.Exists(backup))
             {
-                try { Directory.Move(backup, target); } catch { /* 还原失败只能放弃 */ }
+                try { Directory.Move(backup, target); }
+                catch (Exception restoreEx) { Logger.Current?.Error($"[插件安装] 还原失败：{backup} → {target}（{restoreEx.Message}）"); }
             }
             return InstallOutcome.Fail("写入插件目录失败：" + ex.Message);
         }
 
-        if (hadOld) TryDeleteDirectory(backup);
+        if (hadOld) Retire(backup, pluginsRoot);
+        Logger.Current?.Info($"[插件安装] 完成 {manifest.Id} v{manifest.Version} → {target}");
         return InstallOutcome.Good(manifest.Id, target);
     }
 
@@ -147,17 +177,104 @@ public static class PluginInstaller
 
         var target = Path.Combine(pluginsRoot, id);
         if (!Directory.Exists(target))
+        {
+            Logger.Current?.Warn($"[插件卸载] 目录不存在，无需卸载：{target}");
             return InstallOutcome.Fail($"没有找到插件目录：{target}");
+        }
+
+        Logger.Current?.Info($"[插件卸载] 开始：{target}");
 
         try
         {
-            Directory.Delete(target, recursive: true);
+            if (Directory.Exists(target) && !DeleteWithRetry(target))
+            {
+                // 删不掉（旧 dll 句柄还没释放）：改名成扫描会忽略的 _trash-，下次启动清。
+                // 改名也可能因占用失败，那就如实告诉用户。
+                if (!Retire(target, pluginsRoot))
+                    return InstallOutcome.Fail("删除失败（插件文件仍被占用，重启后再卸载即可）：" + target);
+            }
             return InstallOutcome.Good(id, target);
         }
         catch (Exception ex)
         {
+            if (Retire(target, pluginsRoot)) return InstallOutcome.Good(id, target);
             return InstallOutcome.Fail("删除失败（可能文件被占用，先禁用或重启后重试）：" + ex.Message);
         }
+    }
+
+    // ————————————————————— 残留清理 —————————————————————
+
+    /// <summary>
+    /// 带重试的整目录删除。杀软/索引/刚卸载的 ALC 都可能短暂占着文件，
+    /// 退避重试三次比"一次失败就放弃"靠谱得多。
+    /// </summary>
+    static bool DeleteWithRetry(string directory, int attempts = 3, int delayMs = 120)
+    {
+        for (var attempt = 1; attempt <= attempts; attempt++)
+        {
+            try
+            {
+                Directory.Delete(directory, recursive: true);
+                return true;
+            }
+            catch (Exception)
+            {
+                if (attempt == attempts) return false;
+                try { Thread.Sleep(delayMs * attempt); } catch { /* 忽略 */ }
+            }
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// 让一个目录"退役"：能直接删就删；删不掉（文件被占用）就改名成 <c>_trash-xxxxxxxx</c>，
+    /// 这样 <see cref="PluginCatalog.Scan"/> 不会再把它当插件，下次启动也会被清掉。
+    /// 返回 true 表示已经不再是一个"插件目录"（删掉或改名成功都算）。
+    /// </summary>
+    static bool Retire(string directory, string pluginsRoot)
+    {
+        if (!Directory.Exists(directory)) return true;
+
+        // 先老老实实删（带重试），成功后什么残留都没有
+        if (DeleteWithRetry(directory)) return true;
+
+        // 删不掉：改名成扫描会忽略的 _trash-。注意 Windows 下"含被独占文件的目录"
+        // 连改名都会被拒（rename 需要 DELETE 共享），所以这一步系于句柄已经释放。
+        try
+        {
+            var trash = Path.Combine(pluginsRoot, "_trash-" + Guid.NewGuid().ToString("N")[..8]);
+            Directory.Move(directory, trash);
+            if (!DeleteWithRetry(trash)) { /* 名字已经是 _trash-，扫描忽略，启动时再清 */ }
+            return true;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 启动时清一遍上次留下的 <c>*.bak-*</c>（覆盖安装的备份）与 <c>_trash-*</c>（卸载待删）。
+    /// 返回清掉的个数 —— 这些目录不该让用户看见，更不该出现在插件列表里。
+    /// </summary>
+    public static int SweepLeftovers(string pluginsRoot)
+    {
+        if (string.IsNullOrWhiteSpace(pluginsRoot) || !Directory.Exists(pluginsRoot)) return 0;
+
+        var cleaned = 0;
+        try
+        {
+            foreach (var dir in Directory.GetDirectories(pluginsRoot))
+            {
+                if (!PluginCatalog.IsLeftover(Path.GetFileName(dir))) continue;
+                if (Retire(dir, pluginsRoot)) cleaned++;
+            }
+        }
+        catch (Exception)
+        {
+            // 扫描失败不影响启动
+        }
+        return cleaned;
     }
 
     // ————————————————————— 解压（带安全校验） —————————————————————

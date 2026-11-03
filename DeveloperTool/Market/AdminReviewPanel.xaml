@@ -1,0 +1,86 @@
+<UserControl x:Class="DeveloperTool.Market.AdminReviewPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题 + 刷新 -->
+        <DockPanel Grid.Row="0" Margin="0,0,0,10">
+            <Button Content="刷新" DockPanel.Dock="Right" MinWidth="72"
+                    Style="{StaticResource ToolButton}" Click="OnRefresh" />
+            <TextBlock Text="待审核插件" FontSize="16" FontWeight="SemiBold"
+                       VerticalAlignment="Center" />
+        </DockPanel>
+
+        <!-- 左：待审核列表；右：预览信息 -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="300" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 高度靠列宽* 撑满；空态/失败态盖在列表上 -->
+            <Grid Grid.Column="0">
+                <ListView x:Name="List" BorderThickness="1" SelectionMode="Single"
+                          Background="{DynamicResource PanelBackgroundBrush}"
+                          Foreground="{DynamicResource TextBrush}"
+                          BorderBrush="{DynamicResource BorderBrush}"
+                          SelectionChanged="OnSelectionChanged">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="插件包" Width="230"
+                                            DisplayMemberBinding="{Binding PackageName}" />
+                            <GridViewColumn Header="版本" Width="80"
+                                            DisplayMemberBinding="{Binding Version}" />
+                            <GridViewColumn Header="上传者 ID" Width="76"
+                                            DisplayMemberBinding="{Binding UploaderId}" />
+                            <GridViewColumn Header="上传时间" Width="120"
+                                            DisplayMemberBinding="{Binding TimeText}" />
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+
+                <TextBlock x:Name="EmptyText" Text="暂无数据" Visibility="Collapsed"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           FontSize="13" Foreground="{DynamicResource DimTextBrush}"
+                           IsHitTestVisible="False" />
+            </Grid>
+
+            <Border Grid.Column="2" BorderThickness="1" CornerRadius="3"
+                    Background="{DynamicResource PanelBackgroundBrush}"
+                    BorderBrush="{DynamicResource BorderBrush}">
+                <DockPanel Margin="1">
+                    <Border DockPanel.Dock="Top" Height="30" Style="{StaticResource ChromeBar}">
+                        <TextBlock Text="预览信息" Margin="12,0"
+                                   Style="{StaticResource SectionHeader}" />
+                    </Border>
+                    <TextBlock x:Name="DetailText" Margin="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextBrush}"
+                               Text="选择左侧插件查看详细信息。" />
+                </DockPanel>
+            </Border>
+        </Grid>
+
+        <!-- 操作条：通过 / 驳回（驳回理由在弹窗里输入） -->
+        <StackPanel Grid.Row="2" Margin="0,10,0,0" Orientation="Horizontal"
+                    HorizontalAlignment="Right">
+            <Button x:Name="RejectButton" Content="驳回…" MinWidth="88"
+                    Style="{StaticResource ToolButton}" Click="OnReject"
+                    ToolTip="驳回当前选中的插件（弹窗里必须填理由）" />
+            <Button x:Name="ApproveButton" Content="通过" MinWidth="88" Margin="8,0,0,0"
+                    Style="{StaticResource PrimaryButton}" Click="OnApprove"
+                    ToolTip="通过并发布当前选中的插件" />
+        </StackPanel>
+
+        <!-- 状态行：尚未加载 / 正在加载… / 共 N 个待审核 / 获取失败：{原因} -->
+        <TextBlock x:Name="Hint" Grid.Row="3" Margin="0,8,0,0" FontSize="12"
+                   TextWrapping="Wrap" Foreground="{DynamicResource DimTextBrush}"
+                   Text="尚未加载" />
+    </Grid>
+</UserControl>

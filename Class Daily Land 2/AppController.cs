@@ -1,5 +1,6 @@
 using ClassDailyLand2.App.Integrations.Audio;
 using ClassDailyLand2.App.Integrations.Disaster;
+using ClassDailyLand2.App.Market;
 using ClassDailyLand2.App.Plugins;
 using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Tray;
@@ -8,12 +9,14 @@ using ClassDailyLand2.App.Views.Dialogs;
 using ClassDailyLand2.App.Win32;
 using ClassDailyLand2.App.Windows;
 using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Diagnostics;
 using ClassDailyLand2.Core.Engine;
 using ClassDailyLand2.Core.Managers;
 using ClassDailyLand2.Core.Models;
 using ClassDailyLand2.Core.Plugins;
 using ClassDailyLand2.Core.Storage;
 using ClassDailyLand2.Plugin;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -39,9 +42,17 @@ public sealed class AppController
     public App App { get; }
     public DataPaths Paths { get; private set; } = null!;
     public Logger Log { get; private set; } = null!;
+
+    /// <summary>看门狗观察进程（开发者选项触发）。挂在字段上防止 GC 回收掉事件。</summary>
+    ClassDailyLand2.App.Diagnostics.ProcessWatchdog? _watchdog;
+
     public SettingsManager Settings { get; private set; } = null!;
     public ScheduleManager Schedule { get; private set; } = null!;
     public HomeworkManager Homework { get; private set; } = null!;
+
+    /// <summary>作业历史快照（settings\homeworks\yyyy-MM-dd.json）。</summary>
+    public HomeworkHistoryManager HomeworkHistory { get; private set; } = null!;
+
     public StudentOnDuty Duty { get; private set; } = null!;
     public AgreementManager Agreement { get; private set; } = null!;
 
@@ -63,6 +74,9 @@ public sealed class AppController
 
     /// <summary>检查更新编排（关于页与启动检查共用同一个实例）。</summary>
     public UpdateService Updates { get; private set; } = null!;
+
+    /// <summary>插件市场（索引 / 下载校验 / 安装编排）。</summary>
+    public MarketService Market { get; private set; } = null!;
 
     // 资源包热刷新的命名事件（更新器装完资源会 Set 一下）—— P4 接入
     // RegisteredWaitHandle? _resourcesRegistration;
@@ -87,15 +101,33 @@ public sealed class AppController
     {
         Paths = DataPaths.Create();
         Log = new Logger(Paths);
+        Logger.Current = Log;   // Core 层（AtomicJson / ScheduleEngine / Managers）经它写详细日志
         Log.Info("===== ClassDailyLand2 启动 =====");
+        Log.Trace($"[启动] 数据目录：{Paths.Root}（回退：{Paths.UsedFallback}）");
         if (Paths.UsedFallback) Log.Warn(Paths.FallbackNotice ?? "");
 
         Settings = new SettingsManager(Paths);
         Settings.Load();
+
+        // 内存日志上限（500~3000）跟着设置走，用户在日志页改完立刻生效
+        Log.Capacity = Settings.Int("log_max_lines");
+
+        // 异常退出检测：正常关闭会删掉运行标记；标记还在 = 上一次没走正常流程就结束了
+        CheckAbnormalExit();
         Schedule = new ScheduleManager(Paths);
         Schedule.Load();
         Homework = new HomeworkManager(Paths);
+        // 每次作业落盘（Changed 在 Save 里触发）都写一份当日快照；保留天数从 settings.json 读。
+        // 订阅放在 Load 之前：首次运行 homework.json 由 Load 里的 Save 生成时也能留下快照。
+        HomeworkHistory = new HomeworkHistoryManager(Paths, () => Settings.Int("homework_history_days"));
+        Homework.Changed += (_, _) =>
+        {
+            HomeworkHistory.SaveSnapshot(Homework.Items);
+            if (HomeworkHistory.LastError is { } error) Log?.Warn(error);
+        };
         Homework.Load();
+        HomeworkHistory.CleanOldSnapshots(Settings.Int("homework_history_days"));
+        if (HomeworkHistory.LastError is { } historyError) Log.Warn(historyError);
         Duty = new StudentOnDuty(Paths);
         Duty.Load();
         Agreement = new AgreementManager(Paths);
@@ -111,6 +143,7 @@ public sealed class AppController
         // 插件宿主：先建出来（注册表要能被窗口取数），窗口与托盘都接好后再真正加载，
         // 这样插件的 Initialize 里调 ShowMainWindow / OpenSettings 时窗口已经存在。
         Plugins = new PluginManager(this, Paths, Log);
+        Market = new MarketService(Plugins, Paths, Log, Settings);
         Updates = new UpdateService(Settings, Paths, msg => Log.Info(msg));
         Updates.StatusChanged += status =>
             App.Dispatcher.BeginInvoke(new Action(() =>
@@ -159,6 +192,9 @@ public sealed class AppController
         WireTray();
         SyncTrayChecks();
 
+        // 数据文件点名：哪个文件在、哪个缺，一眼就能看到（排查"功能不对劲"从这里开始）
+        LogDataFiles();
+
         // 托盘建好之后才加载插件：插件可能一上来就 Toast（需要托盘图标）
         Plugins.LoadAll();
 
@@ -170,6 +206,9 @@ public sealed class AppController
         if (lastMessage is not null)
             Tray?.Balloon("班级日常", lastMessage, 4);
         Tick();       // 立刻刷一次，不等 1 秒
+
+        // 启动提示：关掉窗口后程序还在跑，不说一句用户会以为已经退出了
+        Tray?.Balloon("Class Daily Land 2", "已进入后台运行，可在托盘图标查看", 3);
 
         if (Paths.UsedFallback) Tray?.Balloon("数据目录已回退", Paths.FallbackNotice ?? "");
 
@@ -219,6 +258,141 @@ public sealed class AppController
         Main.ExitRequested += Exit;
     }
 
+    /// <summary>运行标记：存在 = 本次运行还没正常结束。</summary>
+    string RunningMarkerPath => Path.Combine(Paths.Root, ".running.json");
+
+    /// <summary>
+    /// 异常退出检测：正常关闭（<see cref="Shutdown"/>）会删掉标记；启动时标记还在，
+    /// 说明上次是崩溃 / 断电 / 被强制结束 —— 按 <see cref="ErrorCodes.UnexpectedExit"/> 补报一次。
+    /// </summary>
+    void CheckAbnormalExit()
+    {
+        try
+        {
+            if (!File.Exists(RunningMarkerPath))
+            {
+                WriteRunningMarker();
+                return;
+            }
+
+            var previous = File.ReadAllText(RunningMarkerPath);
+            Log.Warn($"[异常退出] 上一次运行未正常结束：{previous}");
+
+            // 写入新标记要先于上报：如果这次又崩，下次还能接着报
+            WriteRunningMarker();
+
+            // 报告走独立进程：就算主程序随后再挂，窗口和日志也都活了下来
+            Views.Dialogs.ErrorReportWindow.Report(
+                "上次异常退出",
+                "上一次运行没有正常关闭就结束了（可能是崩溃、断电或被强制结束）。" +
+                "日志里最后几行是当时的现场，可以导出后反馈。", null, "系统 · 启动检查",
+                ErrorCodes.UnexpectedExit);
+        }
+        catch (Exception ex)
+        {
+            Log?.Warn("[异常退出] 检测失败：" + ex.Message);
+            try { WriteRunningMarker(); } catch { }
+        }
+    }
+
+    void WriteRunningMarker()
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            pid = Environment.ProcessId,
+            started_at = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss"),
+            version = Logger.AppVersion,
+        });
+        File.WriteAllText(RunningMarkerPath, payload);
+        Log.Trace($"[异常退出] 已写入运行标记 {RunningMarkerPath}");
+    }
+
+    void ClearRunningMarker()
+    {
+        try
+        {
+            if (File.Exists(RunningMarkerPath)) File.Delete(RunningMarkerPath);
+            Log.Trace("[异常退出] 运行标记已清除（本次正常关闭）");
+        }
+        catch (Exception ex)
+        {
+            Log?.Warn("[异常退出] 清除运行标记失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 开发者选项入口：**结束主窗口**。界面上、日志里都不出现"测试/模拟"字样 ——
+    /// 这是一次真实的异常退出，验证的正是两层兜底：
+    ///   1. 报信进程立即弹出「关键进程异常退出」（主窗口进程就是被结束的那个关键进程）；
+    ///   2. 下次启动还会按 ESY4003「上次异常退出」补报一次。
+    /// </summary>
+    public void DevTestTerminateMain()
+    {
+        Log.Warn("[看门狗] 主窗口进程被强制结束：程序未走正常关闭流程，运行标记保留，下次启动会补报 ESY4003");
+
+        // 顺序很重要：先把报告写盘、报信进程拉起来，再结束自己 —— 反了窗口就跟主程序一起没了
+        Views.Dialogs.ErrorReportWindow.Report(
+            "主窗口被强制结束",
+            "主窗口进程已被强制结束，程序没有走正常关闭流程。" +
+            "本窗口由独立的报信进程显示，不受主程序影响；" +
+            "下次启动程序时会补报一次「上次异常退出」，也可以直接在下方重启或重装。",
+            null, "系统 · 进程看门狗", ErrorCodes.ProcessTerminated);
+
+        // 给报信进程 1.5 秒拉起窗口，然后结束自己（Exit 不走 WPF 正常关闭 → 标记保留）
+        Task.Delay(1500).ContinueWith(_ => Environment.Exit(1));
+    }
+
+    static string SafePid(System.Diagnostics.Process process)
+    {
+        try { return process.Id.ToString(); } catch { return "?"; }
+    }
+
+    /// <summary>
+    /// 把程序期望的数据文件逐个点名：存在就记路径、大小与最后修改时间，缺失就明说
+    /// 「缺失 → 将使用默认值」。用户说"某个功能不对劲"时，看这几行就知道是不是文件没了。
+    /// </summary>
+    void LogDataFiles()
+    {
+        var items = new (string Name, string Path)[]
+        {
+            ("设置", Paths.Settings),
+            ("课表", Paths.Schedule),
+            ("作业", Paths.Homework),
+            ("作业历史", Paths.HomeworkHistory),
+            ("日志", Paths.Log),
+            ("姓名", Paths.Name),
+            ("配置", Paths.Config),
+            ("协议同意", Paths.Agreement),
+            ("插件目录", Paths.PluginsRoot),
+        };
+
+        Log.Info($"[数据文件] 根目录：{Paths.Root}");
+        foreach (var (name, path) in items)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                {
+                    var count = Directory.GetDirectories(path).Length;
+                    Log.Info($"[数据文件] {name}：{path}（目录，{count} 个子目录）");
+                }
+                else if (File.Exists(path))
+                {
+                    var info = new FileInfo(path);
+                    Log.Info($"[数据文件] {name}：{path}（{info.Length} 字节，最后修改 {info.LastWriteTime:yyyy-MM-dd HH:mm:ss}）");
+                }
+                else
+                {
+                    Log.Info($"[数据文件] {name}：缺失 → {path}（将使用默认值）");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"[数据文件] {name}：检查失败 → {path}（{ex.GetType().Name}: {ex.Message}）");
+            }
+        }
+    }
+
     void WireTray()
     {
         if (Tray is null) return;
@@ -238,6 +412,19 @@ public sealed class AppController
 
         // 插件菜单项：每次都现取，插件禁用后菜单立刻少一项
         Tray.PluginActions = () => Plugins?.Registry.TrayActions() ?? Array.Empty<TrayActionSpec>();
+
+        // 插件装好/卸掉各弹一条 Windows 通知 —— 市场页、拖包安装、文件夹安装、插件自更新都走同一个事件
+        Plugins.Installed += (_, name, version) =>
+            Tray?.Balloon("插件已安装", string.IsNullOrWhiteSpace(version) ? name : $"{name} {version}");
+        Plugins.Uninstalled += (_, name) => Tray?.Balloon("插件已卸载", name);
+
+        // 报错窗的恢复操作：主进程模式交给控制器（完整收尾）；报信进程模式自己干
+        Views.Dialogs.ErrorReportWindow.RestartHook = () => { Restart(); return true; };
+        Views.Dialogs.ErrorReportWindow.ReinstallHook = () => { _ = ReinstallLatestAsync(); return true; };
+
+        // 出错时除了弹窗，也在右下角冒一条 Windows 通知：窗口可能被挡住或在别的虚拟桌面
+        Views.Dialogs.ErrorReportWindow.Reported += (kind, module) =>
+            Tray?.Balloon($"Class Daily Land 2 · {kind}", $"出错模块：{module}。最近 200 行日志已保存，可导出", 5);
     }
 
     /// <summary>
@@ -347,6 +534,7 @@ public sealed class AppController
     void FireAlert(string text, bool isStart)
     {
         _alertInFlight = true;
+        Log?.Info($"[课表边沿] {(isStart ? "上课" : "下课")}瞬间：{text}");
         Island?.ShowAlert(text, isStart);
         var hold = Math.Clamp(Settings.Int("island_alert_hold_ms"), 200, 10000);
         _alertClear?.Stop();
@@ -362,6 +550,7 @@ public sealed class AppController
 
     void OnSettingsChanged(SettingsChangedEventArgs e)
     {
+        Log?.Trace($"[设置分发] 生效键：{string.Join(", ", e.Keys)}");
         foreach (var key in e.Keys)
         {
             switch (key)
@@ -377,6 +566,14 @@ public sealed class AppController
                     // 设置一改就立刻落到注册表：用户不用重启程序，也不用再点一次"应用"
                     if (!StartupManager.SetStartup(Settings.Bool("start_with_windows")))
                         Log?.Warn("开机自启写入注册表失败（可能被组策略拦住）");
+                    break;
+                case "homework_history_days":
+                    // 天数改小后立刻按新值清理，不用等到下一次保存
+                    HomeworkHistory?.CleanOldSnapshots(Settings.Int("homework_history_days"));
+                    break;
+                case "log_max_lines":
+                    // 调小时立刻裁掉多余的旧行，日志页马上就能看出变化
+                    if (Log is not null) Log.Capacity = Settings.Int("log_max_lines");
                     break;
             }
         }
@@ -632,7 +829,7 @@ public sealed class AppController
             return;
         }
 
-        var window = new Views.HomeworkEditorWindow(Homework)
+        var window = new Views.HomeworkEditorWindow(Homework, HomeworkHistory)
         {
             Owner = Main?.IsVisible == true ? Main : null,
         };
@@ -799,12 +996,80 @@ public sealed class AppController
         App.Shutdown();
     }
 
+    /// <summary>重新安装最新版本：复用更新器，**不比较版本号**，直接重新下载并替换程序文件。</summary>
+    public async Task ReinstallLatestAsync()
+    {
+        if (Updates is null) return;
+        if (_updateLaunched)
+        {
+            // 已经有更新器在跑：再拉一个会互相抢文件，明确告诉用户而不是没反应
+            Log?.Warn("[重装] 已有更新/重装任务在执行，忽略本次");
+            Tray?.Balloon("重新安装", "已有一个更新任务在进行中，请等它完成", 5);
+            return;
+        }
+
+        var result = await Updates.ReinstallLatestAsync().ConfigureAwait(true);
+        if (!result.Ok)
+        {
+            Log?.Warn("重新安装失败：" + result.Message);
+            Tray?.Balloon("重新安装失败", result.Message, 5);
+            return;
+        }
+
+        _updateLaunched = true;
+        HideForUpdater();
+
+        Log?.Info("[重装] 更新器已启动，主程序隐藏并保持后台运行");
+        Tray?.Balloon("正在重新安装", "更新器正在下载最新版，安装时会自动关闭程序", 5);
+    }
+
+    /// <summary>
+    /// 重启软件：先收尾（停定时器、卸插件、清运行标记），再启动新实例，最后关闭自己。
+    /// 新实例带 <c>--restart</c> 参数：单实例锁没释放时会等旧实例退出，而不是被当成第二实例唤醒旧的。
+    /// </summary>
+    public void Restart()
+    {
+        var exe = Environment.ProcessPath;
+        if (string.IsNullOrWhiteSpace(exe) || !File.Exists(exe))
+        {
+            Log?.Warn("[重启] 找不到自身可执行文件，无法重启");
+            return;
+        }
+
+        Log.Info("[重启] 用户请求重启软件");
+
+        // 先把"正常关闭"该做的做了：运行标记必须清掉，否则新实例会误报"上次异常退出"
+        try { Plugins?.ShutdownAll(); } catch (Exception ex) { Log?.Warn("[重启] 卸载插件失败：" + ex.Message); }
+        try { _watchdog?.Dispose(); } catch { }
+        ClearRunningMarker();
+
+        try
+        {
+            var info = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+            info.ArgumentList.Add("--restart");
+            System.Diagnostics.Process.Start(info);
+        }
+        catch (Exception ex)
+        {
+            Log?.Warn("[重启] 启动新实例失败：" + ex.Message);
+            Tray?.Balloon("重启失败", ex.Message, 5);
+            return;
+        }
+
+        Application.Current.Shutdown();
+    }
+
     public void Shutdown()
     {
         _tick.Stop();
         try { Plugins?.ShutdownAll(); }
         catch { /* 退出路径不抛 */ }
+        try { _watchdog?.Dispose(); }      // 观察进程还活着就一起带走（标记为预期退出，不会报错）
+        catch { /* 退出路径不抛 */ }
         Tray?.Dispose();
         Tray = null;
+
+        // 正常关闭：删掉运行标记，下次启动就不会报"上次异常退出"
+        ClearRunningMarker();
     }
 }

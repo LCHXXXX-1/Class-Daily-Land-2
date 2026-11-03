@@ -231,22 +231,29 @@
             </Grid>
         </Border>
 
-        <!-- 底部操作 -->
-        <StackPanel Grid.Row="3"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Right"
-                    Margin="0,16,0,0">
-            <Button Content="取消"
-                    Width="104"
+        <!-- 底部操作：左侧查看历史，右侧取消 / 确认 -->
+        <Grid Grid.Row="3" Margin="0,16,0,0">
+            <Button x:Name="HistoryButton"
+                    Content="查看历史记录"
+                    Width="130"
                     Height="36"
+                    HorizontalAlignment="Left"
+                    ToolTip="按日期查看以前保存的作业，可恢复某一天的内容"
                     Style="{StaticResource EditorButton}"
-                    Click="Cancel_Click" />
-            <Button Content="确认"
-                    Width="104"
-                    Height="36"
-                    Margin="10,0,0,0"
-                    Style="{StaticResource AccentButton}"
-                    Click="Confirm_Click" />
-        </StackPanel>
+                    Click="History_Click" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="取消"
+                        Width="104"
+                        Height="36"
+                        Style="{StaticResource EditorButton}"
+                        Click="Cancel_Click" />
+                <Button Content="确认"
+                        Width="104"
+                        Height="36"
+                        Margin="10,0,0,0"
+                        Style="{StaticResource AccentButton}"
+                        Click="Confirm_Click" />
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

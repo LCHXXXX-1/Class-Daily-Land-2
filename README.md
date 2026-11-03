@@ -15,6 +15,7 @@ Class Daily Land 2/                     主工程（WinExe）
   App.xaml / App.xaml.cs                入口：合并主题字典、ShutdownMode、单实例锁、异常留痕
   AppController.cs                      装配中心：1s tick、上课/下课边沿、设置分发、集成调度
   App/Plugins/                          插件宿主（可卸载 ALC / 管理器 / IPluginHost 实现）
+  App/Market/MarketService.cs           插件市场编排（拉索引 / 下载校验 / 交给安装器）
   Themes/                               设计令牌与控件样式
     Tokens.Base.xaml                    字体 / 字号 / 圆角 / 度量 / 动效曲线（与深浅色无关）
     Tokens.Light.xaml / Tokens.Dark.xaml 浅深两套色板（ThemeService 运行时整本替换）
@@ -40,6 +41,7 @@ Class Daily Land 2/                     主工程（WinExe）
     Models/                             ScheduleStatus / ScheduleFile / AppSettings / ...
     Managers/                           Settings / Schedule / Homework / StudentOnDuty / Agreement
     Plugins/                            插件纯逻辑：清单 / 扫描 / 启停 / 安装 / 显示位注册表
+    Market/                             插件市场纯逻辑：索引解析 / 双源取数 / 状态判定 / 下载校验
     Storage/AtomicJson.cs               临时文件 + File.Replace 原子写
     Storage/DataPaths.cs                数据根（输出目录 settings\，不可写回退 LOCALAPPDATA）
   Integrations/                         内置集成（不是插件，随程序一起编译）
@@ -72,9 +74,11 @@ Class Daily Land 2/                     主工程（WinExe）
   Resources/icon.ico                    应用图标
   settings/                             出厂默认配置（构建时复制到输出目录）
 
-ClassDailyLand2.Plugin.Abstractions/     插件契约（IPlugin / IPluginHost 48 成员 / 各显示位 Spec，无 WPF）
+ClassDailyLand2.Plugin.Abstractions/     插件契约（IPlugin / IPluginHost 50 成员 / 各显示位 Spec，无 WPF）
 samples/HelloPlugin/                    可编译的示例插件（九个显示位用了一大半）
-docs/plugins.md                         插件开发指南（清单字段 / 显示位 / 48 个 API / 线程纪律 / 排错）
+samples/GaokaoCountdown/                官方示例插件：下拉面板里的高考倒计时（插件市场首个条目）
+docs/plugins.md                         插件开发指南（清单字段 / 显示位 / 50 个 API / 线程纪律 / 排错）
+docs/market.md                          插件市场（索引格式 / 客户端结构 / 三道校验）
 docs/ROADMAP.md                         阶段划分与完成状态
 tests/ClassDailyLand2.Core.Tests/        xUnit（课表引擎 / 原子写 / 设置模型 / 值日顺延 /
                                         插件清单·扫描·启停·安装安全·显示位竞争 /
@@ -96,11 +100,51 @@ tests/ClassDailyLand2.Core.Tests/        xUnit（课表引擎 / 原子写 / 设�
 | 班级日常主窗 | 区块、标题徽标、右键菜单项 | 区块/菜单多值，徽标单值 |
 | 托盘 | 右键菜单项 | 多值 |
 
-`IPluginHost` 提供 **48 个成员**：元信息与日志 8、显示位注册 11、只读数据 14、
-插件私有存储 5、宿主动作 7、事件 3。完整说明、可抄的样板与排错表见 **[docs/plugins.md](docs/plugins.md)**。
+`IPluginHost` 提供 **50 个成员**：元信息与日志 8、显示位注册 11、只读数据 14、
+插件私有存储 5、宿主动作 7、事件 3、插件设置页 2。完整说明、可抄的样板与排错表见 **[docs/plugins.md](docs/plugins.md)**。
 
 已安装插件在「设置 → 插件」里管理：启用开关、重载、卸载、安装包（`.cblplugin` / `.zip`）、
 从文件夹安装、重新扫描、运行日志（同时写进 `app.log` 的 `[plugin:<id>]` 行）。
+
+### 插件自己的设置页
+
+插件可以在 `Initialize` 里用 `host.RegisterSettings(...)` **声明**一页设置（文本 / 数字 / 开关 / 下拉），
+宿主就会在已安装列表里给这一行亮出「设置」按钮，点开按声明渲染成原生控件：
+
+- 插件不碰任何 WPF 类型，主题、触屏放大、键盘操作与设置中心其余页面一致；
+- 值存在插件自己的 `data/state.json`，保存后触发 `SettingChanged`，插件立刻生效、不用重载；
+- 没声明的插件不会出现按钮 —— 空设置页比没有更糟。
+
+```csharp
+host.RegisterSettings(new SettingsPageSpec(
+    Title: "高考倒计时",
+    Fields: new[]
+    {
+        new SettingField("grade", "届别", SettingFieldKind.Choice, Options: grades),
+        new SettingField("show_on_island", "也在主岛显示", SettingFieldKind.Toggle, DefaultValue: "false"),
+    },
+    Summary: () => $"{_grade} 届 · 还有 {_days} 天"));
+```
+
+### 插件市场
+
+同一页的「插件市场」段直接列出全部可装插件：搜索、状态徽标（官方/认证/社区、可更新、需要更高版本）、
+一键安装 / 更新 / 降级，装完立即生效。
+
+市场**不需要服务器**：索引与安装包都在仓库的 `plugins` 分支上，客户端读 raw 地址
+（Gitee 主源 + GitHub 备源，包地址用相对路径拼，主备共用一条记录）。
+
+- 索引 `index.json` 一个文件装全部插件；作者只维护 `entries/<id>.json`，
+  由 `tools/market.mjs build` 聚合（`pack` 打包、`add` 上架）。
+- 安装前过三道校验：索引里的 sha256/size → 包内 `plugin.json` 的 id/version 必须等于索引条目 →
+  包内必须有 entry 指向的 dll 且不带契约程序集。都过了才交给 `PluginInstaller`。
+- 兼容性提前拦：`api_version` / `min_app_version` / `target_sdk_version` 不满足就灰显并说明原因，
+  不让用户等到"装完加载失败"。
+- 断网时显示上次缓存并标注时间；两个源都失败会把**每个源各自的错因**列出来。
+- 市场页右上角有**「立即同步」**：绕过 10 分钟缓存强制拉一次索引，成功/失败都给明确回音；
+  已安装行会跟着亮出「可更新 vX」并可直接更新。
+
+详见 **[docs/market.md](docs/market.md)**；上架规则在 `plugins` 分支的 `docs/publish.md`。
 
 ## 内置集成
 
@@ -133,6 +177,9 @@ tests/ClassDailyLand2.Core.Tests/        xUnit（课表引擎 / 原子写 / 设�
 - 主岛：地震时进入倒计时态，**红条**（`#FF453A`）+ 文案「灾害预警 · 震中 M6.4 · 横波还有 N 秒」，
   条宽 = 剩余 / 总倒计时。**此时插件的加长段、徽标、媒体片段一律让位**，红条独占 600px。
   点胶囊 = 确认收起。
+- 红条占多久分三种情况：**横波未到 → 一直占着到抵达**（这段读秒就是预警的全部价值）；
+  红级 → 留到用户点确认；其余已到达的小震 → 再留 `disaster_small_hold_sec`（默认 5 秒）
+  的「已到达」提示，随后把主岛交还课程（事件仍在副岛 / 下拉面板里）。
 - 设置页有省市县三级联动（只选到省也能用，自动退到省会）与**「模拟一次地震预警」**，
   不用等真地震就能看效果。
 
@@ -182,7 +229,7 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 | 上课/下课瞬间提示 | AppController 边沿检测 → Alert 态（绿字/白字，停留 `island_alert_hold_ms`） |
 | 深色主题即时生效 | `ThemeService` 换 Tokens.Light/Dark 字典（DynamicResource 整窗换色）+ 同步 `Palette` |
 | **圆角** | 只用 DWM 原生圆角（`DWMWA_WINDOW_CORNER_PREFERENCE=2`），没有任何手绘假圆角；Win10 保持原生直角 |
-| **云雾模糊** | Win11 云母（`DWMWA_SYSTEMBACKDROP_TYPE=2`）；Win10 1803+ 退到亚克力；更老/关掉则用不透明底色 |
+| **云雾模糊** | Win11 云母（`DWMWA_SYSTEMBACKDROP_TYPE=2`）；Win10 1803+ 退到亚克力；更老/关掉则用不透明底色。内容区只压 25% 薄雾、卡片 35%（普通窗口是 50%/70% —— 叠起来 85% 白会把云母盖死），所以有内容的地方也透得出云母 |
 | **手指上下滑动** | 所有滚动区 `PanningMode=VerticalOnly`（无条件），惯性 0.001 |
 | 改「提前提醒」生效 | settings.json 为准，同步进 schedule.json；文案 `下节 X · N分钟后` |
 | 重启后数据原样恢复 | 全部 JSON 原子写（tmp + File.Replace），坏文件自动隔离为 `.bad` |

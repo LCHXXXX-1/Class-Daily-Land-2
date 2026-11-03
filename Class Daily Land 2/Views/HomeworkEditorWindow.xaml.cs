@@ -39,17 +39,21 @@ public sealed class HomeworkGroupView
 public partial class HomeworkEditorWindow : Window
 {
     readonly HomeworkManager _hw;
+    readonly HomeworkHistoryManager? _history;
     readonly List<HomeworkItem> _backup;
 
     int _editingIndex = -1;
     bool _committed;
 
-    public HomeworkEditorWindow(HomeworkManager homework)
+    public HomeworkEditorWindow(HomeworkManager homework, HomeworkHistoryManager? history = null)
     {
         InitializeComponent();
 
         _hw = homework ?? throw new ArgumentNullException(nameof(homework));
+        _history = history;
         _backup = _hw.Items.Select(Clone).ToList();
+
+        HistoryButton.IsEnabled = _history is not null;
 
         ContentInput.TextChanged += (_, _) => UpdateAddButtonState();
         UpdateAddButtonState();
@@ -176,6 +180,28 @@ public partial class HomeworkEditorWindow : Window
         var doomed = new HashSet<int>(group.Rows.Select(r => r.Index));
         _hw.ReplaceAll(_hw.Items.Where((_, index) => !doomed.Contains(index)).Select(Clone).ToList());
 
+        CancelEdit(clearInputs: true);
+        Reload();
+    }
+
+    // ————————————————————— 历史记录 —————————————————————
+
+    void History_Click(object sender, RoutedEventArgs e)
+    {
+        if (_history is null) return;
+
+        var window = new HomeworkHistoryWindow(_history, _hw, OnHistoryRestored) { Owner = this };
+        window.ShowDialog();
+    }
+
+    /// <summary>
+    /// 从历史恢复后：把「取消」的基线换成恢复后的内容。
+    /// 否则用户恢复完直接关窗，OnClosing 会拿打开时的旧快照把恢复结果覆盖回去。
+    /// </summary>
+    void OnHistoryRestored()
+    {
+        _backup.Clear();
+        _backup.AddRange(_hw.Items.Select(Clone));
         CancelEdit(clearInputs: true);
         Reload();
     }

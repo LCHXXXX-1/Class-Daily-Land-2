@@ -21,7 +21,9 @@ public sealed record PluginInfo(
     string? Error,
     int ApiVersion,
     string? Homepage,
-    int Registrations);
+    int Registrations,
+    bool HasSettings = false,
+    string? SettingsTitle = null);
 
 /// <summary>
 /// 一个已加载插件的运行期状态：清单 + 上下文 + 实例 + 宿主门面。
@@ -55,7 +57,7 @@ internal sealed class PluginRuntime
 public sealed class PluginManager
 {
     /// <summary>本宿主实现的契约版本，与 <see cref="PluginManifest.HostApiVersion"/> 一致。</summary>
-    public static readonly Version ApiVersion = new(1, 0);
+    public static readonly Version ApiVersion = new(2, 0);
 
     /// <summary>
     /// 插件接口库版本（Abstractions 工程 csproj 里的 &lt;Version&gt;）。
@@ -99,6 +101,12 @@ public sealed class PluginManager
     /// <summary>插件列表 / 加载状态变化（UI 线程刷新用）。</summary>
     public event Action? Changed;
 
+    /// <summary>装好一个插件（id, 名称, 版本）。托盘通知用，装完/卸载完各弹一条 Windows 通知。</summary>
+    public event Action<string, string, string>? Installed;
+
+    /// <summary>卸掉一个插件（id, 名称）。</summary>
+    public event Action<string, string>? Uninstalled;
+
     /// <summary>有新日志（可能来自插件自己的线程，订阅方自行切回 UI 线程）。</summary>
     public event Action? LogAppended;
 
@@ -107,6 +115,12 @@ public sealed class PluginManager
     public void LoadAll()
     {
         Append("host", $"开始扫描插件目录：{PluginsRoot}");
+
+        // 先清一遍上次的残留（覆盖安装的 <id>.bak-* / 卸载失败的 _trash-*）：
+        // 这些目录不该出现在插件列表里，更不该让用户点了「卸载」还删不掉
+        var swept = PluginInstaller.SweepLeftovers(PluginsRoot);
+        if (swept > 0) Append("host", $"清理了 {swept} 个安装残留目录（覆盖安装的备份 / 卸载待删）");
+
         Refresh();
         var loaded = _runtimes.Count;
         var failed = _errors.Count;
@@ -134,6 +148,7 @@ public sealed class PluginManager
         }
 
         var present = scanned.Where(p => p.Ok).Select(p => p.Id).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        _log.Trace($"[插件] 目录扫描：{scanned.Count} 个包（有效 {present.Count} 个），当前运行 {_runtimes.Count} 个");
         foreach (var id in _runtimes.Keys.ToList())
             if (!present.Contains(id)) Unload(id, "目录已不存在");
 
@@ -177,6 +192,8 @@ public sealed class PluginManager
         var context = new PluginLoadContext(pkg.Directory);
         try
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            _log.Trace($"[插件] 开始加载 {pkg.Id}：入口 {manifest.EntryPath}，目标类型 {manifest.Type}，独立 ALC 已创建");
             var assembly = context.LoadEntry(manifest.EntryPath);
             var type = assembly.GetType(manifest.Type, throwOnError: false)
                        ?? assembly.GetTypes().FirstOrDefault(t =>
@@ -192,6 +209,7 @@ public sealed class PluginManager
             if (Activator.CreateInstance(type) is not IPlugin instance)
                 throw new InvalidOperationException($"{type.FullName} 无法实例化（需要无参构造函数）。");
 
+            _log.Trace($"[插件] {pkg.Id} 程序集加载成功，解析到类型 {type.FullName}，开始 Initialize");
             var runtime = new PluginRuntime(pkg, context, instance);
             runtime.Host = new PluginHostContext(this, runtime);
             _runtimes[pkg.Id] = runtime;
@@ -199,7 +217,7 @@ public sealed class PluginManager
             instance.Initialize(runtime.Host);
 
             var count = _registry.CountOf(pkg.Id);
-            Append(pkg.Id, $"已加载 {manifest.Name} v{manifest.Version}，注册 {count} 个显示位");
+            Append(pkg.Id, $"已加载 {manifest.Name} v{manifest.Version}，注册 {count} 个显示位（耗时 {sw.ElapsedMilliseconds}ms）");
         }
         catch (Exception ex)
         {
@@ -236,6 +254,13 @@ public sealed class PluginManager
 
         var removed = _registry.RemovePlugin(id);
         try { runtime.Context.Unload(); } catch { /* 有残留引用时卸载会被推迟，属正常 */ }
+
+        // ★ 可卸载 ALC 的回收是异步的：不催一次 GC，它持有的 dll 句柄会继续存在，
+        //   紧接着的"删目录 / 覆盖安装"就会报 Access denied（用户看到的就是"删不掉"）。
+        //   一次强制回收几十毫秒，换来卸载/升级当场就能落地。
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
 
         Append(id, $"已卸载（{reason}，清掉 {removed} 个显示位）");
     }
@@ -310,11 +335,19 @@ public sealed class PluginManager
         if (_errors.TryGetValue(outcome.PluginId!, out var error))
             return new InstallOutcome(false, outcome.PluginId, "已复制到插件目录，但加载失败：" + error, outcome.InstalledPath);
 
+        // 托盘通知：安装成功才弹（失败由调用方 toast + 日志，不再弹一条"装好了"）
+        var info = Plugins.FirstOrDefault(p => string.Equals(p.Id, outcome.PluginId, StringComparison.OrdinalIgnoreCase));
+        try { Installed?.Invoke(outcome.PluginId!, info?.Name ?? outcome.PluginId!, info?.Version ?? ""); }
+        catch (Exception ex) { Append("host", "安装通知回调异常：" + ex.Message); }
+
         return outcome;
     }
 
     public InstallOutcome Uninstall(string id)
     {
+        // 名字要在卸载前拿：卸完插件目录没了，Plugins 列表里也就查不到它了
+        var displayName = Plugins.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase))?.Name ?? id;
+
         Unload(id, "卸载");
         var outcome = PluginInstaller.Uninstall(id, PluginsRoot);
         if (outcome.Ok)
@@ -324,6 +357,9 @@ public sealed class PluginManager
             _packages.RemoveAll(p => string.Equals(p.Id, id, StringComparison.OrdinalIgnoreCase));
             _errors.Remove(id);
             Append("host", "已卸载 " + id);
+
+            try { Uninstalled?.Invoke(id, displayName); }
+            catch (Exception ex) { Append("host", "卸载通知回调异常：" + ex.Message); }
         }
         else
         {
@@ -331,6 +367,70 @@ public sealed class PluginManager
         }
         Changed?.Invoke();
         return outcome;
+    }
+
+    // ————————————————————— 插件自己的设置页 —————————————————————
+
+    /// <summary>插件声明的设置页；没声明过返回 null（界面据此决定要不要亮「设置」按钮）。</summary>
+    public SettingsPageSpec? SettingsPageOf(string id) =>
+        string.IsNullOrWhiteSpace(id) ? null : _registry.Settings(id);
+
+    /// <summary>已安装列表里那行小字（插件自己算的，比如「2029 届 · 还有 218 天」）。</summary>
+    public string? SettingsSummary(string id)
+    {
+        var page = SettingsPageOf(id);
+        if (page?.Summary is null) return null;
+        try
+        {
+            return page.Summary();
+        }
+        catch (Exception ex)
+        {
+            Append(id, "设置摘要回调异常：" + Describe(ex));
+            return null;
+        }
+    }
+
+    /// <summary>读一个设置项的当前值；没写过返回 null，界面用声明里的默认值。</summary>
+    public string? ReadPluginSetting(string id, string key)
+    {
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(key)) return null;
+
+        if (_runtimes.TryGetValue(id, out var runtime) && runtime.Host is { } host)
+            return host.ReadState(key);
+
+        // 插件被禁用（没有运行实例）时照样读得到：直接翻它的 data/state.json
+        var path = Path.Combine(PluginsRoot, id, "data", "state.json");
+        var state = AtomicJson.Read(path, () => new Dictionary<string, string?>(StringComparer.Ordinal));
+        return state.TryGetValue(key, out var value) ? value : null;
+    }
+
+    /// <summary>
+    /// 写一个设置项：先落内存与磁盘，再触发插件的 <c>SettingChanged</c>，
+    /// 让插件立刻刷新自己的缓存，而不是等下一次 Tick。
+    /// </summary>
+    public bool WritePluginSetting(string id, string key, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(key)) return false;
+
+        if (!_runtimes.TryGetValue(id, out var runtime) || runtime.Host is null)
+        {
+            Append(id, "插件未在运行，设置没有保存（先在插件页启用它）");
+            return false;
+        }
+
+        runtime.Host.WriteState(key, value);
+        runtime.Host.FlushState();
+        runtime.Host.RaiseSettingChanged(key, value);
+
+        Append(id, $"设置项 {key} = {(value is null ? "(清空)" : value)}");
+        return true;
+    }
+
+    /// <summary>插件刚声明了设置页：让「已安装」列表刷新一次（亮出「设置」按钮）。</summary>
+    internal void NotifySettingsRegistered(string id)
+    {
+        try { Changed?.Invoke(); } catch { /* UI 刷新失败不影响插件加载 */ }
     }
 
     // ————————————————————— 运行期驱动 —————————————————————
@@ -388,7 +488,9 @@ public sealed class PluginManager
                     Error: error ?? pkg.Error,
                     ApiVersion: pkg.Manifest?.ApiVersion ?? PluginManifest.HostApiVersion,
                     Homepage: pkg.Manifest?.Homepage,
-                    Registrations: _registry.CountOf(pkg.Id)));
+                    Registrations: _registry.CountOf(pkg.Id),
+                    HasSettings: _registry.Settings(pkg.Id) is not null,
+                    SettingsTitle: _registry.Settings(pkg.Id)?.Title));
             }
             return list;
         }

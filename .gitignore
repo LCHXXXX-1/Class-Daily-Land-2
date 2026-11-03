@@ -369,6 +369,9 @@ FodyWeavers.xsd
 
 # 运行期个人数据（设置/课表/作业/值日生），首次运行会自动生成
 /Class Daily Land 2/settings/*.json
+
+# 插件市场的本地暂存区（内容最终落在 plugins 分支，不进 master）
+/market/
  
 # 自动排除的旧组件与脚本 
 ClassDailyLand.Plugin.Abstractions/ 
@@ -391,3 +394,6 @@ ClassDailyLand2.Updater/
 samples/ 
 output/ 
 *.bat 
+
+# 更新器构建产物（源码在仓库外）
+updater-dist/

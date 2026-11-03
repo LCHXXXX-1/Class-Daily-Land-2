@@ -34,13 +34,27 @@ public sealed class UpdateService
         _log = log;
     }
 
-    /// <summary>主源 + 备用源（来自 <see cref="VersionInfo"/>），去重去空。</summary>
-    static readonly string[] VersionUrls = BuildVersionUrls();
-
-    static string[] BuildVersionUrls()
+    /// <summary>
+    /// 按设置里的「更新源」排出尝试顺序，去重去空。
+    /// <list type="bullet">
+    ///   <item><c>auto</c>（默认）：GitHub 优先，GitHub 失败/没有就自动换 Gitee</item>
+    ///   <item><c>github</c>：只走 GitHub</item>
+    ///   <item><c>gitee</c>：只走 Gitee（国内网络更稳）</item>
+    /// </list>
+    /// 顺序即优先级：<see cref="UpdateSources.FetchAsync"/> 就是按这个顺序逐个试的。
+    /// </summary>
+    static string[] BuildVersionUrls(string preference)
     {
+        var preferred = (preference ?? "").Trim().ToLowerInvariant();
+        var order = preferred switch
+        {
+            "github" => new[] { VersionInfo.VersionUrlFallback },
+            "gitee" => new[] { VersionInfo.VersionUrl },
+            _ => new[] { VersionInfo.VersionUrlFallback, VersionInfo.VersionUrl },
+        };
+
         var list = new List<string>();
-        foreach (var url in new[] { VersionInfo.VersionUrl, VersionInfo.VersionUrlFallback })
+        foreach (var url in order)
         {
             if (string.IsNullOrWhiteSpace(url)) continue;
             if (list.Any(x => string.Equals(x, url, StringComparison.OrdinalIgnoreCase))) continue;
@@ -65,7 +79,7 @@ public sealed class UpdateService
     /// 检查更新。<paramref name="silent"/> = true 时"已最新/失败"只写日志不改 UI 状态（启动检查用）。
     /// 并发调用会直接返回上一次的结果（按钮连点 5 次只发 1 个请求）。
     /// </summary>
-    public async Task<UpdateStatus> CheckAsync(bool silent = false, CancellationToken ct = default)
+    public async Task<UpdateStatus> CheckAsync(bool silent = false, CancellationToken ct = default, bool forceOffer = false)
     {
         if (Interlocked.Exchange(ref _inFlight, 1) == 1)
         {
@@ -81,7 +95,8 @@ public sealed class UpdateService
 
             if (!silent) SetStatus(UpdateStage.Checking, "正在检查更新…", clear: true);
 
-            var urls = VersionUrls;
+            // 每次检查都按当前设置重排：用户改了更新源不必重启
+            var urls = BuildVersionUrls(_settings.Str("update_source"));
             var (file, source, error) = await UpdateSources.FetchAsync(urls, ct).ConfigureAwait(false);
 
             if (file is null)
@@ -100,13 +115,14 @@ public sealed class UpdateService
             var local = AppVersion.Value;
 
             // ── 程序本体 ──
+            // forceOffer：重装场景。远端版本 ≤ 本机也照常给 offer —— 重装就是"同版本再装一遍"。
             var appBlock = string.Equals(channel, "beta", StringComparison.OrdinalIgnoreCase)
                 ? file.Beta
                 : file.Stable;
-            var appOffer = BuildOffer(appBlock, channel, UpdateKind.App, source, primaryUrl, fallbackUrl, local);
+            var appOffer = BuildOffer(appBlock, channel, UpdateKind.App, source, primaryUrl, fallbackUrl, local, forceOffer);
 
-            // 被「稍后再说」跳过的版本不再提示，除非它是强制更新
-            if (appOffer is not null && !appOffer.IsMandatory &&
+            // 被「稍后再说」跳过的版本不再提示，除非它是强制更新（重装时也不跳）
+            if (!forceOffer && appOffer is not null && !appOffer.IsMandatory &&
                 string.Equals(_settings.Str("update_skipped_version"), appOffer.Version.ToString(), StringComparison.OrdinalIgnoreCase))
             {
                 _log?.Invoke($"跳过版本 {appOffer.Version}（用户点过稍后再说）");
@@ -174,7 +190,8 @@ public sealed class UpdateService
 
     /// <summary>校验一块更新信息并组装 <see cref="UpdateOffer"/>；不满足条件返回 null。</summary>
     static UpdateOffer? BuildOffer(object? block, string channel, UpdateKind kind, string source,
-                                   string primaryUrl, string fallbackUrl, SemVer baseline)
+                                   string primaryUrl, string fallbackUrl, SemVer baseline,
+                                   bool includeSameVersion = false)
     {
         string version, releaseDate, downloadUrl, sha256;
         List<string> changelog;
@@ -216,7 +233,8 @@ public sealed class UpdateService
         // 哈希缺失/格式错 = 这条更新没法安全安装，直接不当作"有更新"
         if (!Hashing.LooksLikeSha256(sha256)) return null;
 
-        if (ver <= baseline) return null;
+        // 正常升级：远端必须比本机新。重装（includeSameVersion）例外 —— 同版本也要给 offer。
+        if (!includeSameVersion && ver <= baseline) return null;
 
         return new UpdateOffer(kind, channel, ver, releaseDate, changelog, mandatory,
             downloadUrl, sha256, size, source, primaryUrl, "", fallbackUrl);
@@ -398,6 +416,28 @@ public sealed class UpdateService
     }
 
     // ─────────────────────────── 启动更新器 ───────────────────────────
+
+    /// <summary>
+    /// 重新安装最新版本：**不比较版本号**，把最新的包重新下载并替换一遍。
+    /// 给"程序文件疑似损坏 / 更新到一半断了 / 想要干净文件"的自救用 —— 正常升级别走这里。
+    /// 手里没有 offer 时会先检查一次；两个源都不可达就失败。
+    /// </summary>
+    public async Task<UpdateLaunchResult> ReinstallLatestAsync(CancellationToken ct = default)
+    {
+        var offer = Status.App;
+        if (offer is null)
+        {
+            _log?.Invoke("[重装] 手里没有版本信息，先检查一次（forceOffer：同版本也给 offer）");
+            var status = await CheckAsync(silent: false, ct: ct, forceOffer: true).ConfigureAwait(false);
+            offer = status.App;
+        }
+
+        if (offer is null)
+            return UpdateLaunchResult.Fail("没能获取最新版本信息（检查失败或更新源上没有可用的包），无法重装");
+
+        _log?.Invoke($"[重装] 重新安装 v{offer.Version}（本机 v{AppVersion.Current}，来自 {offer.Source}）");
+        return await ApplyAsync(offer, ct).ConfigureAwait(false);
+    }
 
     /// <summary>
     /// 用户点「立即更新」后调用：优先启动预复制好的副本（四个参数，秒开）；

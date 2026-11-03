@@ -91,7 +91,9 @@
 	-->
 	<Target Name="CopyUpdater" AfterTargets="Build">
 		<PropertyGroup>
-			<_UpdaterOutDir>..\ClassDailyLand2.Updater\bin\$(Configuration)\$(TargetFramework)\win-x64</_UpdaterOutDir>
+			<!-- 更新器源码在仓库外（桌面"更新器"目录），本仓库只收构建产物 updater-dist\；
+		     重新构建更新器：在源码目录 dotnet build -c Release -r win-x64，然后把输出同步到 updater-dist -->
+		<_UpdaterOutDir>..\updater-dist</_UpdaterOutDir>
 		</PropertyGroup>
 
 		<Error Condition="!Exists('$(_UpdaterOutDir)\Updater.exe')" Text="更新器没有编译出 Updater.exe：$(_UpdaterOutDir) 不存在或为空。请先构建 ClassDailyLand2.Updater 工程。" />
@@ -126,13 +128,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<!--
-		  更新器只作为"构建依赖"引用：不进编译引用（ReferenceOutputAssembly=false）、
-		  也不往输出目录复制（Private=false）。
-		  这样 MSBuild 会按正常图先构建它（含 Restore），CopyUpdater 才有东西可搬。
-		  双方都是框架依赖，不会再触发"self-contained 工程不能引用"的 NETSDK1150。
-		-->
-		<ProjectReference Include="..\ClassDailyLand2.Updater\ClassDailyLand2.Updater.csproj" ReferenceOutputAssembly="false" Private="false" />
+	<!--
+	  更新器源码已移出本仓库（位于仓库外的"更新器"源码目录），本仓库只收**构建产物**：
+	  仓库根的 updater-dist\（Updater.exe + deps.json + runtimeconfig + 依赖 dll）。
+	  CopyUpdater 目标把它整目录复制到输出 Update\ 下。
+	  重新构建更新器：在源码目录 dotnet build -c Release -r win-x64，再把输出同步到 updater-dist。
+	-->
+	<!--（不再引用 ..\ClassDailyLand2.Updater 工程：那份旧源码保留在仓库里仅作参考，不再参与构建）-->
 	</ItemGroup>
 
 </Project>

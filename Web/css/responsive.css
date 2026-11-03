@@ -1,0 +1,264 @@
+/* ============================================================
+   responsive.css — 断点适配
+   断点：1080 / 900 / 640
+   ============================================================ */
+
+/* ---------- 1080px：三列收为两列 ---------- */
+@media (max-width: 1080px) {
+  :root {
+    --sp-9: 76px;
+    --sp-8: 52px;
+  }
+
+  .cards,
+  .cards--three {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .api-strip__list {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .card--wide {
+    grid-column: span 2;
+  }
+}
+
+/* ---------- 900px：Hero 与双栏改为单列 ---------- */
+@media (max-width: 900px) {
+  .hero__inner {
+    grid-template-columns: 1fr;
+    gap: var(--sp-7);
+    text-align: center;
+  }
+
+  .hero__lead {
+    margin-inline: auto;
+  }
+
+  .hero__actions,
+  .hero__stats {
+    justify-content: center;
+  }
+
+  .hero__stats {
+    gap: var(--sp-6);
+  }
+
+  .pill {
+    margin-inline: auto;
+  }
+
+  .split {
+    grid-template-columns: 1fr;
+    gap: var(--sp-7);
+  }
+
+  .split__copy {
+    text-align: center;
+  }
+
+  .checklist {
+    text-align: left;
+    max-width: 460px;
+    margin-inline: auto;
+  }
+
+  .checklist li {
+    text-align: left;
+  }
+
+  .split__visual {
+    max-width: 480px;
+    margin-inline: auto;
+    width: 100%;
+  }
+
+  .states {
+    grid-template-columns: 1fr;
+    gap: var(--sp-6);
+  }
+
+  .downloads {
+    grid-template-columns: 1fr;
+  }
+
+  .section__head {
+    margin-bottom: var(--sp-7);
+  }
+
+  .island--big {
+    --island-w: 330px;
+  }
+}
+
+/* ---------- 640px：手机 ---------- */
+@media (max-width: 640px) {
+  :root {
+    --sp-9: 58px;
+    --sp-8: 40px;
+    --nav-h: 60px;
+  }
+
+  .container {
+    padding-inline: var(--sp-4);
+  }
+
+  /* 导航：收起为抽屉 */
+  .nav__links {
+    position: fixed;
+    inset: var(--nav-h) 0 auto 0;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    margin: 0;
+    padding: var(--sp-3) var(--sp-4) var(--sp-5);
+    background: color-mix(in srgb, var(--bg-0) 94%, transparent);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--border);
+    box-shadow: var(--shadow-md);
+    transform: translateY(-12px);
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--dur) var(--ease),
+                transform var(--dur) var(--ease),
+                visibility var(--dur) var(--ease);
+  }
+
+  .nav__links.is-open {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+
+  .nav__links a {
+    padding: 13px 10px;
+    font-size: var(--fs-base);
+    border-radius: var(--r-sm);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .nav__links a:last-child {
+    border-bottom: 0;
+  }
+
+  .nav__links a::after {
+    display: none;
+  }
+
+  .nav__toggle {
+    display: flex;
+  }
+
+  .nav__actions .btn {
+    display: none;
+  }
+
+  .brand__text small {
+    display: none;
+  }
+
+  /* 卡片一律单列 */
+  .cards,
+  .cards--three {
+    grid-template-columns: 1fr;
+  }
+
+  .card--wide {
+    grid-column: auto;
+  }
+
+  .api-strip__list {
+    grid-template-columns: 1fr;
+  }
+
+  .cards .card {
+    padding: var(--sp-5);
+  }
+
+  .section__title {
+    font-size: var(--fs-xl);
+  }
+
+  /* 灵动岛在窄屏改宽度而不是缩放，避免被父容器裁掉 */
+  .island {
+    --island-w: 220px;
+  }
+
+  .island[data-state="upcoming"],
+  .island[data-state="countdown"] {
+    --island-w: 290px;
+  }
+
+  .island[data-state="alert"] {
+    --island-w: 100%;
+    max-width: 100%;
+  }
+
+  .island--big {
+    --island-w: 300px;
+    transform: none;
+  }
+
+  .island--big[data-state="upcoming"],
+  .island--big[data-state="countdown"] {
+    --island-w: 300px;
+  }
+
+  .island--big[data-state="alert"] {
+    --island-w: 100%;
+  }
+
+  .stage {
+    padding: var(--sp-5) var(--sp-3);
+  }
+
+  .hero__actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .footer__inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .footer__note {
+    text-align: left;
+  }
+}
+
+/* ---------- 很窄（<380px）：继续收窄灵动岛 ---------- */
+@media (max-width: 380px) {
+  .island {
+    --island-w: 186px;
+    padding: 8px 14px;
+  }
+
+  .island[data-state="upcoming"],
+  .island[data-state="countdown"] {
+    --island-w: 250px;
+  }
+
+  .island--big {
+    --island-w: 260px;
+  }
+
+  .island--big[data-state="upcoming"],
+  .island--big[data-state="countdown"] {
+    --island-w: 260px;
+  }
+
+  .island__course {
+    font-size: 0.84rem;
+  }
+}
+
+/* ---------- 高对比度偏好 ---------- */
+@media (prefers-contrast: more) {
+  :root {
+    --border: rgba(255, 255, 255, 0.28);
+    --border-strong: rgba(255, 255, 255, 0.45);
+    --text-soft: #ccd4e6;
+  }
+}

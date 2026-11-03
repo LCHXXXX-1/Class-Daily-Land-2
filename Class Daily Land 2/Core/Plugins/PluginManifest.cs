@@ -12,8 +12,12 @@ namespace ClassDailyLand2.Core.Plugins;
 /// </summary>
 public sealed partial class PluginManifest
 {
-    /// <summary>宿主实现的契约大版本。清单里 apiVersion 大于它的插件拒绝加载。</summary>
-    public const int HostApiVersion = 1;
+    /// <summary>
+    /// 宿主实现的契约大版本。清单里 apiVersion 大于它的插件拒绝加载。
+    /// v2 相对 v1 只**新增**了「插件设置页」（RegisterSettings / SettingChanged），
+    /// 老插件（apiVersion = 1）照旧能跑。
+    /// </summary>
+    public const int HostApiVersion = 2;
 
     public string Id { get; init; } = "";
     public string Name { get; init; } = "";

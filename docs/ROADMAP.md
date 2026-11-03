@@ -54,7 +54,7 @@
 
 ## 阶段 3 —— 插件系统（已完成 2026-10-24）
 - 契约工程 `ClassDailyLand2.Plugin.Abstractions`（独立、无 WPF 依赖）：
-  `IPlugin` / `IPluginHost`（**48 个成员**）/ 9 个显示位 Spec
+  `IPlugin` / `IPluginHost`（**50 个成员**）/ 9 个显示位 Spec
 - 宿主：每插件一个**可卸载** `AssemblyLoadContext`（契约走默认上下文），
   `plugins\<id>\plugin.json` + 反射实例化；禁用/重载**不用重启应用**
 - 显示位：主岛（文案补充 / 加长段 / 右侧徽标）、副岛、下拉面板（多值并排）、
@@ -65,12 +65,44 @@
   覆盖安装先备份失败可回滚；卸载删目录
 - 设置中心「插件」页：已安装列表（名称/版本/作者/契约版本/注册数）、启用开关、
   重载、卸载、安装插件包、从文件夹安装、重新扫描、运行日志（同时写 app.log）
-- `docs/plugins.md`：清单字段、48 个 API、线程与性能纪律、常见错误对照表
+- `docs/plugins.md`：清单字段、50 个 API、线程与性能纪律、常见错误对照表
 - 示例插件 `samples/HelloPlugin`（可编译，四个显示位都用了一遍）
 - 测试 +35 例（清单校验 / 目录扫描 / 启停状态 / 安装安全 / 显示位竞争与异常隔离）
 
-## 阶段 4 —— 可选增强（本次不做）
-- 插件市场（GitHub / Gitee / 官方三源）+ 哈希校验 + 依赖包管理（本地安装已在阶段 3 完成）
+## 阶段 4 —— 插件市场（已完成 2026-11-01）
+- 索引与安装包放仓库 `plugins` 分支，零服务器：主源 Gitee raw + 备源 GitHub raw，
+  包地址用相对 `path` 拼，主备共用一条记录（详见 `docs/market.md`）
+- `tools/market.mjs`：`pack`（打包并剔除 pdb / 源码 / data、校验 dll 平铺与入口）
+  / `add`（算 sha256、写 entries）/ `build`（聚合 index.json）/ `verify`
+- `Core/Market/`：索引解析（单条坏数据只丢这一条）、双源取数（破 CDN + 每源重试）、
+  本地缓存（12 小时）、兼容性判定（契约 / 主程序 / SDK 三道门槛）、下载校验（sha256 + 包内清单）
+- 「设置 → 插件」新增「插件市场」段：搜索、状态徽标、安装 / 更新 / 降级、断网显示缓存
+- 首个真实条目 `lch.gaokao-countdown`（下拉面板里的高考倒计时），源码同分支 `sources/`
+- 测试 +21 例（索引容错 / 状态判定 / 包校验 / 地址拼接）
+- 实机反馈后补的四处修复：
+  - 覆盖安装留下的 `<id>.bak-*` 被当成插件列出（"加载失败：缺少 plugin.json"）→
+    `PluginCatalog.IsLeftover` 识别并跳过，启动时 `SweepLeftovers` 清掉
+  - 卸载/升级时旧 dll 句柄未释放导致 `Directory.Delete` 失败 → 卸载后强制回收一次
+    （`GC.Collect` + `WaitForPendingFinalizers`），删除带退避重试；仍删不掉则改名 `_trash-*`
+     交给下次启动清理（Windows 下"含被占用文件的目录"连 rename 都会被拒，所以顺序很关键）
+  - 市场缓存新鲜度 12 小时 → 10 分钟：作者发版后用户最多十分钟就能看到
+  - 「已安装」行显示 `可更新 vX` 徽标 + 行内「更新」按钮，顶部另有提示条
+- 测试 +9 例（残留目录识别与清理 / 占用时的卸载行为）
+
+## 阶段 4.5 —— 插件自己的设置页（契约 v2，已完成 2026-11-01）
+- 契约新增 `SettingsPageSpec` / `SettingField` / `SettingOption` / `SettingFieldKind`
+  与宿主成员 `RegisterSettings` / `SettingChanged`（48 → 50 个成员），`HostApiVersion` 1 → 2
+  （纯新增，apiVersion=1 的老插件照旧加载）
+- 声明式：插件只描述设置项，宿主按 Kind 渲染 TextBox / NumberBox / FluentToggle / ComboBox，
+  插件不碰任何 WPF 类型；主题、触屏放大、键盘操作与设置中心其余页面一致
+- 值存在插件自己的 `data/state.json`；保存时逐项写盘并触发 `SettingChanged`，插件立即生效
+- 「已安装」列表：声明过设置页的插件才出现「设置」按钮，并把插件算的一句话（如
+  「2029 届 · 还有 949 天」）显示在元信息行
+- 示例插件 `lch.gaokao-countdown` 1.1.x：届别（哪一年高考）可自选 + 「也在主岛显示」开关
+- 测试 +6 例（设置页注册表：声明/覆盖/随插件清理/不计入显示位数）
+
+## 阶段 5 —— 可选增强（未做）
+- 插件市场进阶：`icons/` 图标、评分与举报入口、包签名、依赖声明
 - Mica 主题（DWM API）
 - Banner 态紧急警报条（枚举与渲染骨架已预留）
-- 启动检查更新的真实数据源
+- 上传工具链：把 `entries` 校验搬到 CI，避免人工忘跑 `verify`

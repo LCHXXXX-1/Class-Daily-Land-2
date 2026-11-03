@@ -1,0 +1,224 @@
+/* ============================================================
+   base.css — 重置、排版基线、通用工具类
+   ============================================================ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* 顶部固定导航的偏移 */
+  scroll-padding-top: calc(var(--nav-h) + 16px);
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100%;
+  font-family: var(--font-sans);
+  font-size: var(--fs-base);
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg-0);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+h1, h2, h3, h4 {
+  margin: 0;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+p {
+  margin: 0;
+}
+
+ul, ol, dl, dd {
+  margin: 0;
+  padding: 0;
+}
+
+li {
+  list-style: none;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+code, pre {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* 行内代码 */
+code {
+  padding: 0.12em 0.42em;
+  border-radius: 6px;
+  background: var(--brand-soft);
+  color: var(--text);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+::selection {
+  background: rgba(91, 140, 255, 0.35);
+  color: #fff;
+}
+
+/* ---------- 焦点可见性（无障碍） ---------- */
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 3px;
+  border-radius: var(--r-xs);
+}
+
+/* ---------- 跳到主内容 ---------- */
+.skip-link {
+  position: fixed;
+  top: calc(-1 * var(--sp-9));
+  left: var(--sp-4);
+  z-index: 200;
+  padding: 10px 16px;
+  border-radius: var(--r-sm);
+  background: var(--brand);
+  color: #fff;
+  transition: top var(--dur) var(--ease);
+}
+
+.skip-link:focus {
+  top: var(--sp-4);
+}
+
+/* ---------- 通用工具 ---------- */
+.grad-text {
+  background: var(--grad-text);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.ico {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- 自定义滚动条 ---------- */
+::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(140, 155, 190, 0.32);
+  border: 3px solid var(--bg-1);
+  border-radius: var(--r-pill);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(140, 155, 190, 0.5);
+}
+
+/* ============================================================
+   氛围背景：极光光斑 + 网格底纹
+   ============================================================ */
+
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(1100px 700px at 12% -8%, rgba(91, 140, 255, 0.16), transparent 62%),
+    radial-gradient(900px 620px at 92% 4%, rgba(139, 92, 246, 0.14), transparent 60%),
+    radial-gradient(1000px 800px at 50% 108%, rgba(34, 211, 238, 0.10), transparent 62%),
+    linear-gradient(180deg, var(--bg-0) 0%, var(--bg-1) 45%, var(--bg-0) 100%);
+}
+
+.aurora__blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.42;
+  will-change: transform;
+}
+
+.aurora__blob--a {
+  width: 46vw;
+  height: 46vw;
+  top: -12vw;
+  left: -8vw;
+  background: radial-gradient(circle, rgba(91, 140, 255, 0.75), transparent 68%);
+  animation: drift-a 26s var(--ease) infinite alternate;
+}
+
+.aurora__blob--b {
+  width: 38vw;
+  height: 38vw;
+  top: 6vw;
+  right: -10vw;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.7), transparent 68%);
+  animation: drift-b 32s var(--ease) infinite alternate;
+}
+
+.aurora__blob--c {
+  width: 42vw;
+  height: 42vw;
+  bottom: -16vw;
+  left: 34vw;
+  background: radial-gradient(circle, rgba(34, 211, 238, 0.6), transparent 68%);
+  animation: drift-c 38s var(--ease) infinite alternate;
+}
+
+.grid-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.5;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 78%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, #000 30%, transparent 78%);
+}
+
+@media (prefers-color-scheme: light) {
+  .grid-overlay {
+    background-image:
+      linear-gradient(rgba(16, 24, 48, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(16, 24, 48, 0.04) 1px, transparent 1px);
+  }
+}

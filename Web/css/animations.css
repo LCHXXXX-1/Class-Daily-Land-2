@@ -1,0 +1,113 @@
+/* ============================================================
+   animations.css — 关键帧与滚动进场动画
+   ============================================================ */
+
+/* ---------- 关键帧 ---------- */
+
+@keyframes drift-a {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(6vw, 4vh, 0) scale(1.12); }
+  100% { transform: translate3d(-3vw, 8vh, 0) scale(1.04); }
+}
+
+@keyframes drift-b {
+  0%   { transform: translate3d(0, 0, 0) scale(1.06); }
+  50%  { transform: translate3d(-7vw, 6vh, 0) scale(1); }
+  100% { transform: translate3d(4vw, -4vh, 0) scale(1.14); }
+}
+
+@keyframes drift-c {
+  0%   { transform: translate3d(0, 0, 0) scale(1); }
+  50%  { transform: translate3d(5vw, -6vh, 0) scale(1.1); }
+  100% { transform: translate3d(-6vw, -2vh, 0) scale(1); }
+}
+
+@keyframes pulse-ring {
+  0%   { transform: scale(0.85); opacity: 0.9; }
+  70%  { transform: scale(1.7); opacity: 0; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
+@keyframes sweep {
+  0%   { transform: translateX(-120%); }
+  55%  { transform: translateX(120%); }
+  100% { transform: translateX(120%); }
+}
+
+@keyframes scroll-hint {
+  0%   { transform: translate(-50%, 0); opacity: 1; }
+  70%  { transform: translate(-50%, 13px); opacity: 0; }
+  100% { transform: translate(-50%, 13px); opacity: 0; }
+}
+
+@keyframes panel-scroll {
+  0%, 12%   { transform: translateY(0); }
+  88%, 100% { transform: translateY(-16px); }
+}
+
+/* 数字滚动进入时的轻微上浮 */
+@keyframes count-pop {
+  0%   { transform: translateY(6px) scale(0.94); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* ============================================================
+   滚动进场（由 reveal.js 添加 .is-visible）
+   ============================================================ */
+
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(26px);
+  transition:
+    opacity var(--dur-reveal) var(--ease-out),
+    transform var(--dur-reveal) var(--ease-out);
+  transition-delay: var(--reveal-delay, 0ms);
+  will-change: opacity, transform;
+}
+
+[data-reveal].is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* 进入后释放图层，避免长期占用合成层 */
+[data-reveal].is-settled {
+  will-change: auto;
+}
+
+/* 错峰延迟统一由 HTML 上的 data-reveal-delay 提供
+   （reveal.js 会把它写成内联的 --reveal-delay，优先级高于此处）。 */
+[data-reveal-delay] {
+  --reveal-delay: 0ms;
+}
+
+/* ============================================================
+   尊重「减少动态效果」系统设置
+   ============================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+  }
+
+  .aurora__blob,
+  .hero__scroll span::after,
+  .island[data-state="alert"]::after,
+  .panel-mock__hw {
+    animation: none !important;
+  }
+}

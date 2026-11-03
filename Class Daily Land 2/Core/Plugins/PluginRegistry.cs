@@ -39,6 +39,13 @@ public sealed class PluginRegistry
 
     readonly object _gate = new();
     readonly List<Entry> _entries = new();
+
+    /// <summary>
+    /// 插件声明的设置页（每个插件最多一个）。不放进 <see cref="_entries"/>：
+    /// 那样会污染「注册了 N 个显示位」的计数，设置页不是显示位。
+    /// </summary>
+    readonly Dictionary<string, SettingsPageSpec> _settings = new(StringComparer.OrdinalIgnoreCase);
+
     readonly Action<string>? _onError;
     long _seq;
 
@@ -88,12 +95,36 @@ public sealed class PluginRegistry
     /// <summary>禁用 / 重载 / 卸载插件时清掉它的全部注册。</summary>
     public int RemovePlugin(string pluginId)
     {
-        lock (_gate) return _entries.RemoveAll(e => e.PluginId == pluginId);
+        lock (_gate)
+        {
+            _settings.Remove(pluginId);
+            return _entries.RemoveAll(e => e.PluginId == pluginId);
+        }
     }
 
     public void Clear()
     {
-        lock (_gate) _entries.Clear();
+        lock (_gate)
+        {
+            _entries.Clear();
+            _settings.Clear();
+        }
+    }
+
+    // ————————————————————— 插件设置页 —————————————————————
+
+    /// <summary>登记（或覆盖）某插件的设置页声明。</summary>
+    public void SetSettings(string pluginId, SettingsPageSpec spec)
+    {
+        if (string.IsNullOrWhiteSpace(pluginId) || spec is null) return;
+        lock (_gate) _settings[pluginId] = spec;
+    }
+
+    /// <summary>取某插件的设置页声明；没声明过返回 null（界面据此决定要不要亮「设置」按钮）。</summary>
+    public SettingsPageSpec? Settings(string pluginId)
+    {
+        if (string.IsNullOrWhiteSpace(pluginId)) return null;
+        lock (_gate) return _settings.TryGetValue(pluginId, out var spec) ? spec : null;
     }
 
     // ————————————————————— 求值 —————————————————————

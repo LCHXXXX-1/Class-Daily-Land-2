@@ -16,6 +16,10 @@
     <SolidColorBrush x:Key="LayerFillColorDefaultBrush" Color="#4D3A3A3A" />
     <SolidColorBrush x:Key="LayerFillColorAltBrush" Color="#1A000000" />
 
+    <!-- 云母窗口专用：深色下现状已经足够透（卡片本来就是 5% 白），这里保持同值，只为让两个主题键对齐 -->
+    <SolidColorBrush x:Key="MicaLayerBrush" Color="#4D3A3A3A" />
+    <SolidColorBrush x:Key="MicaCardBackgroundBrush" Color="#0DFFFFFF" />
+
     <!-- 卡片 -->
     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#0DFFFFFF" />
     <SolidColorBrush x:Key="CardBackgroundFillColorSecondaryBrush" Color="#08FFFFFF" />
@@ -34,6 +38,12 @@
     <SolidColorBrush x:Key="ControlStrongFillColorDefaultBrush" Color="#8BFFFFFF" />
     <SolidColorBrush x:Key="SubtleFillColorSecondaryBrush" Color="#0FFFFFFF" />
     <SolidColorBrush x:Key="SubtleFillColorTertiaryBrush" Color="#0BFFFFFF" />
+
+    <!-- WinUI 3 海拔描边：按钮/下拉等的边框上浅下深（深色下底边反而更亮） -->
+    <LinearGradientBrush x:Key="ControlElevationBorderBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#12FFFFFF" Offset="0" />
+        <GradientStop Color="#18FFFFFF" Offset="1" />
+    </LinearGradientBrush>
 
     <!-- 文字 -->
     <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFFFF" />

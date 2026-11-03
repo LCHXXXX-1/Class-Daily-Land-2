@@ -31,6 +31,8 @@ public static class AtomicJson
         Directory.CreateDirectory(dir);
         var tmp = full + ".tmp";
         var json = JsonSerializer.SerializeToUtf8Bytes(value, Options);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        Logger.Current?.Trace($"[文件写] 开始 {full}（类型 {value.GetType().Name}，序列化 {json.Length} 字节）");
 
         var gate = LockFor(full);
         gate.Wait();
@@ -40,6 +42,8 @@ public static class AtomicJson
             {
                 try
                 {
+                    if (attempt > 1)
+                        Logger.Current?.Trace($"[文件写] 第 {attempt} 次重试 {full}（前次被占用，已退避 {40 * (attempt - 1)}ms）");
                     if (File.Exists(tmp)) TryDelete(tmp);
                     File.WriteAllBytes(tmp, json);
                     FlushToDisk(tmp);
@@ -60,6 +64,7 @@ public static class AtomicJson
                     {
                         File.Move(tmp, full, overwrite: true);
                     }
+                    Logger.Current?.Trace($"[文件写] 完成 {full}（{json.Length} 字节，{sw.ElapsedMilliseconds}ms，尝试 {attempt} 次）");
                     return;
                 }
                 catch (IOException) when (attempt < 5)
@@ -71,6 +76,12 @@ public static class AtomicJson
                     Thread.Sleep(40 * attempt);
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            // 写盘彻底失败：一定要留一条 ERROR（调用方可能只是静默 catch 掉）
+            Logger.Current?.Error($"[文件写] 失败 {full}（{ex.GetType().Name}: {ex.Message}，已重试 5 次）");
+            throw;
         }
         finally
         {
@@ -98,17 +109,34 @@ public static class AtomicJson
     public static T Read<T>(string path, Func<T> factory, bool quarantineBad = true)
     {
         var full = Path.GetFullPath(path);
-        if (!File.Exists(full)) return factory();
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        if (!File.Exists(full))
+        {
+            Logger.Current?.Info($"[文件读] 缺失 {full}，使用默认 {typeof(T).Name}");
+            return factory();
+        }
         try
         {
             var text = File.ReadAllText(full, Encoding.UTF8);
-            if (string.IsNullOrWhiteSpace(text)) return factory();
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                Logger.Current?.Trace($"[文件读] {full} 为空白，使用默认 {typeof(T).Name}");
+                return factory();
+            }
             var node = JsonNode.Parse(text);
-            if (node is null) return factory();
-            return node.Deserialize<T>(Options) ?? factory();
+            if (node is null)
+            {
+                Logger.Current?.Trace($"[文件读] {full} 解析为 null，使用默认 {typeof(T).Name}");
+                return factory();
+            }
+            var result = node.Deserialize<T>(Options) ?? factory();
+            Logger.Current?.Trace($"[文件读] 完成 {full}（{text.Length} 字符 → {typeof(T).Name}，{sw.ElapsedMilliseconds}ms）");
+            return result;
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
+            Logger.Current?.Warn($"[文件读] {full} 损坏（{ex.GetType().Name}: {ex.Message}），回退默认值" +
+                                 (quarantineBad ? "，原文件隔离为 .bad" : ""));
             if (quarantineBad)
             {
                 try { File.Move(full, full + ".bad", overwrite: true); } catch { }
@@ -122,18 +150,33 @@ public static class AtomicJson
     {
         var result = new Dictionary<string, object?>(StringComparer.Ordinal);
         var full = Path.GetFullPath(path);
-        if (!File.Exists(full)) return result;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        if (!File.Exists(full))
+        {
+            Logger.Current?.Info($"[文件读] 缺失 {full}，返回空键值集");
+            return result;
+        }
         try
         {
             var text = File.ReadAllText(full, Encoding.UTF8);
-            if (string.IsNullOrWhiteSpace(text)) return result;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                Logger.Current?.Trace($"[文件读] {full} 为空白，返回空键值集");
+                return result;
+            }
             var node = JsonNode.Parse(text) as JsonObject;
-            if (node is null) return result;
+            if (node is null)
+            {
+                Logger.Current?.Trace($"[文件读] {full} 不是 JSON 对象，返回空键值集");
+                return result;
+            }
             foreach (var kv in node)
                 result[kv.Key] = Unwrap(kv.Value);
+            Logger.Current?.Trace($"[文件读] 完成 {full}（{text.Length} 字符 → {result.Count} 个键，{sw.ElapsedMilliseconds}ms）");
         }
-        catch (JsonException)
+        catch (JsonException ex)
         {
+            Logger.Current?.Warn($"[文件读] {full} JSON 解析失败（{ex.Message}），原文件隔离为 .bad");
             try { File.Move(full, full + ".bad", overwrite: true); } catch { }
         }
         return result;

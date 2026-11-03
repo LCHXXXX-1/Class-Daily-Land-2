@@ -92,6 +92,25 @@
                                VerticalAlignment="Center" Text="" />
                 </StackPanel>
 
+                <!-- 更新源：默认 GitHub 优先，GitHub 拉不到就自动换 Gitee -->
+                <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock Text="更新源"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               VerticalAlignment="Center" />
+                    <fl:SelectorBar x:Name="SourceBar" Margin="12,0,0,0"
+                                    SelectedValue="{Binding UpdateSource, Mode=TwoWay}">
+                        <fl:SelectorItem Value="auto" Label="自动" />
+                        <fl:SelectorItem Value="github" Label="GitHub" />
+                        <fl:SelectorItem Value="gitee" Label="Gitee" />
+                    </fl:SelectorBar>
+                    <TextBlock Margin="12,0,0,0"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               VerticalAlignment="Center"
+                               Text="自动 = 先试 GitHub，拉不到再换 Gitee" />
+                </StackPanel>
+
                 <StackPanel Orientation="Horizontal" Margin="0,18,0,0">
                     <Button x:Name="CheckUpdateButton" Style="{StaticResource AccentButton}"
                             Click="OnCheckUpdateClick">
@@ -115,8 +134,46 @@
                             <TextBlock Text="立即更新" Margin="8,0,0,0" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
+
+                    <!-- 维护：不比较版本号，重新下载最新版并替换（文件损坏/更新中断的自救） -->
+                    <Button x:Name="ReinstallButton" Style="{StaticResource SubtleButton}"
+                            Margin="8,0,0,0" Click="OnReinstallClick"
+                            ToolTip="重新下载最新版并替换程序文件。设置与插件会保留，安装时会自动关闭程序">
+                        <StackPanel Orientation="Horizontal">
+                            <fl:Icon Size="16" Data="{StaticResource Icon.Download}" VerticalAlignment="Center" />
+                            <TextBlock Text="重新安装最新版本" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+
+                    <Button x:Name="RestartButton" Style="{StaticResource SubtleButton}"
+                            Margin="8,0,0,0" Click="OnRestartClick"
+                            ToolTip="关闭并重新启动程序">
+                        <StackPanel Orientation="Horizontal">
+                            <fl:Icon Size="16" Data="{StaticResource Icon.Restart}" VerticalAlignment="Center" />
+                            <TextBlock Text="重启软件" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
             </StackPanel>
         </fl:Card>
+
+        <!-- 开发者选项：默认关，打开后才出现「测试报错」 -->
+        <fl:SettingGroup Title="开发者选项" Icon="{StaticResource Icon.Tune}">
+            <fl:SettingRow Title="开启开发者选项" Hint="正常使用不需要打开，只影响调试入口">
+                <fl:FluentToggle x:Name="DeveloperToggle" Label="开发者选项" />
+            </fl:SettingRow>
+            <fl:SettingRow x:Name="TestErrorRow" Title="测试报错"
+                           Hint="走一遍真实的报错流程：写一条 ERROR 日志 → 留存最近 200 行 → 弹出报错窗口"
+                           Visibility="Collapsed">
+                <Button x:Name="TestErrorButton" Content="触发一次测试报错"
+                        Style="{StaticResource SubtleButton}" Click="OnTestErrorClick" />
+            </fl:SettingRow>
+            <fl:SettingRow x:Name="ErrorCodeRow" Title="错误码清单"
+                           Hint="每个错误码对应什么含义、属于哪个模块、用什么日志级别"
+                           Visibility="Collapsed">
+                <Button x:Name="ErrorCodeButton" Content="查看错误码"
+                        Style="{StaticResource SubtleButton}" Click="OnShowErrorCodesClick" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
     </StackPanel>
 </UserControl>

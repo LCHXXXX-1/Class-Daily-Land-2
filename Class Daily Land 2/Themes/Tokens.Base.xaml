@@ -30,24 +30,24 @@
     <FontWeight x:Key="WeightMedium">Medium</FontWeight>
     <FontWeight x:Key="WeightSemiBold">SemiBold</FontWeight>
 
-    <!-- ===== 形状与度量 ===== -->
-    <CornerRadius x:Key="ControlCornerRadius">6</CornerRadius>       <!-- 按钮/输入框 -->
-    <CornerRadius x:Key="OverlayCornerRadius">14</CornerRadius>     <!-- 对话框、浮层 -->
-    <CornerRadius x:Key="CardCornerRadius">12</CornerRadius>        <!-- 卡片 -->
-    <CornerRadius x:Key="TileCornerRadius">9</CornerRadius>         <!-- 图标磁贴 -->
-    <CornerRadius x:Key="NavCornerRadius">8</CornerRadius>          <!-- 导航药丸 -->
-    <CornerRadius x:Key="GroupTileCornerRadius">7</CornerRadius>    <!-- 分区头磁贴 26px -->
+    <!-- ===== 形状与度量（WinUI 3：控件 4 / 卡片与浮层 8 / 导航项 5） ===== -->
+    <CornerRadius x:Key="ControlCornerRadius">4</CornerRadius>      <!-- 按钮/输入框 -->
+    <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>      <!-- 对话框、浮层 -->
+    <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>         <!-- 卡片 -->
+    <CornerRadius x:Key="TileCornerRadius">6</CornerRadius>         <!-- 图标磁贴 -->
+    <CornerRadius x:Key="NavCornerRadius">5</CornerRadius>          <!-- 导航药丸 -->
+    <CornerRadius x:Key="GroupTileCornerRadius">6</CornerRadius>    <!-- 分区头磁贴 26px -->
 
     <sys:Double x:Key="ControlHeight">32</sys:Double>
     <sys:Double x:Key="ControlHeightSm">28</sys:Double>
-    <sys:Double x:Key="RowMinHeight">62</sys:Double>
+    <sys:Double x:Key="RowMinHeight">68</sys:Double>
     <sys:Double x:Key="StrokeWidth">1</sys:Double>
     <sys:Double x:Key="NavPaneWidth">264</sys:Double>
     <sys:Double x:Key="ContentMaxWidth">980</sys:Double>
     <sys:Double x:Key="TitleBarHeight">48</sys:Double>
     <sys:Double x:Key="CaptionButtonWidth">46</sys:Double>
-    <sys:Double x:Key="CaptionButtonHeight">34</sys:Double>
-    <sys:Double x:Key="NavItemHeight">40</sys:Double>
+    <sys:Double x:Key="CaptionButtonHeight">32</sys:Double>
+    <sys:Double x:Key="NavItemHeight">36</sys:Double>
     <sys:Double x:Key="GroupTileSize">26</sys:Double>
     <sys:Double x:Key="SliderFieldWidth">170</sys:Double>
     <sys:Double x:Key="SliderTrackHeight">4</sys:Double>
@@ -59,9 +59,9 @@
     <sys:Double x:Key="IconSize20">20</sys:Double>
     <sys:Double x:Key="IconStrokeThickness">1.5</sys:Double>
 
-    <Thickness x:Key="RowPadding">18,14,18,14</Thickness>
-    <Thickness x:Key="CardPadPadding">18,18,18,18</Thickness>
-    <Thickness x:Key="ContentPadding">40,24,40,64</Thickness>
+    <Thickness x:Key="RowPadding">20,13,20,13</Thickness>
+    <Thickness x:Key="CardPadPadding">20,18,20,18</Thickness>
+    <Thickness x:Key="ContentPadding">40,28,40,64</Thickness>
     <Thickness x:Key="NavPanePadding">12,0,12,14</Thickness>
     <Thickness x:Key="DialogHeadPadding">26,22,26,12</Thickness>
     <Thickness x:Key="DialogBodyPadding">26,0,26,4</Thickness>

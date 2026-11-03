@@ -153,11 +153,13 @@ public sealed class ScheduleEngine
     public ScheduleStatus Compute(DateTime now, int advanceMinutes = 2, int offsetSeconds = 0)
     {
         var today = now.Date;
+        Logger.Current?.Trace($"[课表计算] 输入 now={now:yyyy-MM-dd HH:mm:ss}（{now.DayOfWeek}），提前 {advanceMinutes} 分钟，偏移 {offsetSeconds} 秒");
 
         // 1) 临时调课优先（只替换课程，节次仍按当天规则取）
         List<(int Index, Period Period, string Course)> items;
         if (_file.TempAdjust.Matches(today))
         {
+            Logger.Current?.Trace("[课表计算] 今天命中临时调课，逐节覆盖课程名");
             var periods = PeriodsFor(today);
             var temp = _file.TempAdjust.Courses ?? new List<string>();
             items = new List<(int, Period, string)>();
@@ -173,16 +175,28 @@ public sealed class ScheduleEngine
             var holiday = HolidayFor(today);
             // 2) 假期（调休日已在 PeriodsFor 中优先，此处 holiday 只含真假期）
             if (holiday is not null && MakeupFor(today) is null)
+            {
+                var name = string.IsNullOrWhiteSpace(holiday.Name) ? "假期" : holiday.Name.Trim();
+                Logger.Current?.Trace($"[课表计算] 今天处于假期「{name}」（{holiday.Start} ~ {holiday.End}），状态 = holiday");
                 return ScheduleStatus.Empty with
                 {
                     Status = StatusHoliday,
-                    Name = string.IsNullOrWhiteSpace(holiday.Name) ? "假期" : holiday.Name.Trim(),
+                    Name = name,
                 };
+            }
             items = CoursesOfDay(today);
+            var makeup = MakeupFor(today);
+            if (makeup is not null)
+                Logger.Current?.Trace($"[课表计算] 今天是调休补课日，按周{makeup.AsWeekday + 1} 课表取课");
         }
 
         // 3) 今天没有任何课
-        if (items.Count == 0) return ScheduleStatus.Empty with { Status = StatusNone, Name = null };
+        if (items.Count == 0)
+        {
+            Logger.Current?.Trace("[课表计算] 今天没有任何课程条目，状态 = none");
+            return ScheduleStatus.Empty with { Status = StatusNone, Name = null };
+        }
+        Logger.Current?.Trace($"[课表计算] 今天共 {items.Count} 节有课，逐节比对时间窗");
 
         var advanceSec = Math.Max(0, advanceMinutes) * 60;
         foreach (var (index, period, course) in items)
@@ -201,6 +215,9 @@ public sealed class ScheduleEngine
             {
                 var remain = ClampSec((int)(effEnd - now).TotalSeconds);
                 var duration = ClampSec((int)(effEnd - effStart).TotalSeconds);
+                Logger.Current?.Trace(
+                    $"[课表计算] 命中上课中：第 {index + 1} 节「{course}」（{startStr}~{endStr}），" +
+                    $"有效窗 {effStart:HH:mm:ss}~{effEnd:HH:mm:ss}，剩余 {remain}s（{CeilMin(remain)} 分钟），时长 {duration}s");
                 return new ScheduleStatus(
                     StatusOngoing, course, period.Name, startStr, endStr,
                     UntilSec: 0, UntilMin: 0, AdvanceSec: advanceSec,
@@ -212,6 +229,9 @@ public sealed class ScheduleEngine
             {
                 var until = ClampSec((int)(effStart - now).TotalSeconds);
                 var duration = ClampSec((int)(effEnd - effStart).TotalSeconds);
+                Logger.Current?.Trace(
+                    $"[课表计算] 命中待上课：第 {index + 1} 节「{course}」（{startStr}~{endStr}），" +
+                    $"有效开始 {effStart:HH:mm:ss}，还有 {until}s（{CeilMin(until)} 分钟）");
                 return new ScheduleStatus(
                     StatusUpcoming, course, period.Name, startStr, endStr,
                     UntilSec: until, UntilMin: CeilMin(until), AdvanceSec: advanceSec,
@@ -222,6 +242,7 @@ public sealed class ScheduleEngine
 
         // 4) 全部过完
         var last = items[^1];
+        Logger.Current?.Trace($"[课表计算] {items.Count} 节课全部结束，状态 = done（最后一节「{last.Course}」）");
         return new ScheduleStatus(
             StatusDone, last.Course, last.Period.Name,
             TimeUtil.Format(StartMin(last.Period)), TimeUtil.Format(EndMin(last.Period)),

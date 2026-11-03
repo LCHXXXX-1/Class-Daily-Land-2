@@ -5,47 +5,94 @@
     <StackPanel>
         <TextBlock Style="{StaticResource PageTitle}" Text="插件" />
         <TextBlock Style="{StaticResource PageLead}"
-                   Text="插件可以往灵动岛、副岛、下拉面板和「班级日常」主窗里加内容。这里管理已安装的插件。" />
+                   Text="插件可以往灵动岛、副岛、下拉面板和「班级日常」主窗里加内容。这里既能管理已安装的插件，也能从插件市场一键安装。" />
 
-        <!-- 一个都没有时给一条能照着做的提示，而不是空列表 -->
-        <fl:InfoBar x:Name="NoPluginNotice" Severity="Information" Title="还没有安装插件"
-                    Message="插件是一个文件夹（含 plugin.json 与 .dll）。用下面的「安装插件包」选 .cblplugin，或把文件夹放进 plugins 目录后点「重新扫描」。"
-                    IsClosable="False" Margin="0,0,0,20" />
+        <!-- 两段：已安装 / 插件市场。市场不单独占一页，避免侧栏继续变长 -->
+        <fl:SelectorBar x:Name="PluginTabs" Margin="0,0,0,16" SelectedValue="installed">
+            <fl:SelectorItem Value="installed" Label="已安装" />
+            <fl:SelectorItem Value="market" Label="插件市场" />
+        </fl:SelectorBar>
 
-        <fl:SettingGroup Title="已安装插件" Icon="{StaticResource Icon.Puzzle}" TileColor="#FF0F6CBD">
-            <StackPanel x:Name="PluginHostPanel" />
-            <TextBlock x:Name="EmptyHint" Style="{StaticResource EdEmpty}" Margin="18,16"
-                       Text="暂无插件" />
-        </fl:SettingGroup>
+        <!-- ＝＝＝＝＝＝＝＝＝＝＝ 已安装 ＝＝＝＝＝＝＝＝＝＝＝ -->
+        <StackPanel x:Name="InstalledPanel">
+            <!-- 市场里有新版时的一条提示：不打断，只告诉用户去市场更新 -->
+            <fl:InfoBar x:Name="UpdateNotice" Severity="Information" Title="有插件可更新"
+                        Message="" IsClosable="False" Margin="0,0,0,16" Visibility="Collapsed" />
 
-        <fl:SettingGroup Title="安装与管理" Icon="{StaticResource Icon.Download}" TileColor="#FF107C10">
-            <fl:LinkRow x:Name="InstallPackageLink" Title="安装插件包…"
-                        Hint="支持 .cblplugin 与 .zip，source 里带 plugin.json 即可"
-                        Icon="{StaticResource Icon.Download}" TileColor="#FF107C10" />
-            <fl:LinkRow x:Name="InstallFolderLink" Title="从文件夹安装…"
-                        Hint="开发插件时直接选编译输出目录"
-                        Icon="{StaticResource Icon.Upload}" TileColor="#FFB146C2" />
-            <fl:LinkRow x:Name="RescanLink" Title="重新扫描插件目录"
-                        Hint="手工拷进 plugins 目录后点这里，不用重启"
-                        Icon="{StaticResource Icon.Restart}" TileColor="#FF8764B8" />
-            <fl:LinkRow x:Name="OpenFolderLink" Title="打开插件文件夹"
-                        Hint="在文件资源管理器中打开"
-                        Icon="{StaticResource Icon.Folder}" TileColor="#FF038387" />
-        </fl:SettingGroup>
+            <!-- 一个都没有时给一条能照着做的提示，而不是空列表 -->
+            <fl:InfoBar x:Name="NoPluginNotice" Severity="Information" Title="还没有安装插件"
+                        Message="插件是一个文件夹（含 plugin.json 与 .dll）。去「插件市场」一键安装，或用下面的「安装插件包」选 .cblplugin，或把文件夹放进 plugins 目录后点「重新扫描」。"
+                        IsClosable="False" Margin="0,0,0,20" />
 
-        <fl:SettingGroup Title="运行日志" Icon="{StaticResource Icon.Tune}" TileColor="#FF8661C5">
-            <TextBox x:Name="LogBox" IsReadOnly="True" MinHeight="150" MaxHeight="240"
-                     BorderThickness="0" Background="Transparent"
-                     FontFamily="{DynamicResource FontFamilyMono}"
-                     FontSize="{DynamicResource FontSizeCaption}"
-                     Padding="16,12" TextWrapping="Wrap"
-                     VerticalScrollBarVisibility="Auto"
-                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                     Text="（还没有日志）" />
-            <fl:LinkRow x:Name="ClearLogLink" Title="清空日志" Hint="只清界面上的记录，app.log 不受影响"
-                        Icon="{StaticResource Icon.Restart}" TileColor="#FF8661C5" />
-        </fl:SettingGroup>
+            <fl:SettingGroup Title="已安装插件" Icon="{StaticResource Icon.Puzzle}" TileColor="#FF0F6CBD">
+                <StackPanel x:Name="PluginHostPanel" />
+                <TextBlock x:Name="EmptyHint" Style="{StaticResource EdEmpty}" Margin="18,16"
+                           Text="暂无插件" />
+            </fl:SettingGroup>
 
-        <TextBlock x:Name="SummaryText" Style="{StaticResource CaptionText}" Margin="4,0,0,0" />
+            <fl:SettingGroup Title="安装与管理" Icon="{StaticResource Icon.Download}" TileColor="#FF107C10">
+                <fl:LinkRow x:Name="InstallPackageLink" Title="安装插件包…"
+                            Hint="支持 .cblplugin 与 .zip，包里带 plugin.json 即可"
+                            Icon="{StaticResource Icon.Download}" TileColor="#FF107C10" />
+                <fl:LinkRow x:Name="InstallFolderLink" Title="从文件夹安装…"
+                            Hint="开发插件时直接选编译输出目录"
+                            Icon="{StaticResource Icon.Upload}" TileColor="#FFB146C2" />
+                <fl:LinkRow x:Name="RescanLink" Title="重新扫描插件目录"
+                            Hint="手工拷进 plugins 目录后点这里，不用重启"
+                            Icon="{StaticResource Icon.Restart}" TileColor="#FF8764B8" />
+                <fl:LinkRow x:Name="OpenFolderLink" Title="打开插件文件夹"
+                            Hint="在文件资源管理器中打开"
+                            Icon="{StaticResource Icon.Folder}" TileColor="#FF038387" />
+            </fl:SettingGroup>
+
+            <fl:SettingGroup Title="运行日志" Icon="{StaticResource Icon.Tune}">
+                <fl:LinkRow x:Name="LogLink" Title="查看详细日志"
+                            Hint="插件加载、显示位注册与异常都记在这里；已独立到左侧「日志」页"
+                            Icon="{StaticResource Icon.Book}" />
+            </fl:SettingGroup>
+
+            <TextBlock x:Name="SummaryText" Style="{StaticResource CaptionText}" Margin="4,0,0,0" />
+        </StackPanel>
+
+        <!-- ＝＝＝＝＝＝＝＝＝＝＝ 插件市场 ＝＝＝＝＝＝＝＝＝＝＝ -->
+        <StackPanel x:Name="MarketPanel" Visibility="Collapsed">
+            <fl:InfoBar x:Name="MarketBar" Severity="Information" Title="插件市场"
+                        Message="正在获取插件市场…" IsClosable="False" Margin="0,0,0,12" />
+
+            <!-- 更新源：默认 GitHub 优先，GitHub 拉不到就自动换 Gitee -->
+            <StackPanel Orientation="Horizontal" Margin="4,0,0,10">
+                <TextBlock Text="更新源" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                <fl:SelectorBar x:Name="MarketSourceBar" Margin="10,0,0,0">
+                    <fl:SelectorItem Value="auto" Label="自动" />
+                    <fl:SelectorItem Value="github" Label="GitHub" />
+                    <fl:SelectorItem Value="gitee" Label="Gitee" />
+                </fl:SelectorBar>
+                <TextBlock Style="{StaticResource CaptionText}" Margin="10,0,0,0" VerticalAlignment="Center"
+                           Text="自动 = 先试 GitHub，拉不到再换 Gitee" />
+            </StackPanel>
+
+            <!-- 搜索 + 立即同步：按钮放右上角，列表再长也随手可点 -->
+            <Grid Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBox x:Name="MarketSearch" Grid.Column="0" Style="{StaticResource SearchTextBox}"
+                         Tag="搜索插件名称、作者或标签…" Margin="0,0,12,0" />
+                <Button x:Name="MarketSyncButton" Grid.Column="1" Style="{StaticResource AccentButton}"
+                        Content="立即同步" Padding="16,4,16,5" VerticalAlignment="Center"
+                        ToolTip="绕过本地缓存，按当前更新源立刻拉一次索引" />
+            </Grid>
+
+            <fl:SettingGroup Title="全部插件" Icon="{StaticResource Icon.Puzzle}" TileColor="#FF8764B8">
+                <StackPanel x:Name="MarketHost" />
+                <TextBlock x:Name="MarketEmpty" Style="{StaticResource EdEmpty}" Margin="18,16"
+                           Text="没有匹配的插件" Visibility="Collapsed" />
+            </fl:SettingGroup>
+
+            <TextBlock Style="{StaticResource CaptionText}" Margin="4,12,0,0"
+                       Text="「立即同步」绕过本地缓存重新拉索引（主源 Gitee，失败自动换 GitHub）。安装包会做 sha256 校验并核对包内清单。" />
+            <TextBlock x:Name="MarketSummary" Style="{StaticResource CaptionText}" Margin="4,4,0,0" />
+        </StackPanel>
     </StackPanel>
 </UserControl>

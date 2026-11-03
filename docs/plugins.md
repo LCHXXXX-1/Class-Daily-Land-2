@@ -21,7 +21,7 @@
 - [4. 生命周期](#4-生命周期)
 - [5. 九个显示位详解](#5-九个显示位详解)
 - [6. 数据模型](#6-数据模型)
-- [7. API 全表（48 个成员）](#7-api-全表48-个成员)
+- [7. API 全表（50 个成员）](#7-api-全表50-个成员)
 - [8. 实战：写一个「下节课倒计时 + 天气」插件](#8-实战写一个下节课倒计时--天气插件)
 - [9. 打包与分发](#9-打包与分发)
 - [10. 调试手册](#10-调试手册)
@@ -650,7 +650,7 @@ public enum BadgeTone { Default, Accent, Success, Warning, Danger }
 
 ---
 
-## 7. API 全表（48 个成员）
+## 7. API 全表（50 个成员）
 
 ### 一、元信息与日志（8）
 
@@ -751,6 +751,51 @@ host.SettingsChanged += (_, e) =>
 
 host.IslandClicked += (_, _) => _needRefresh = true;
 ```
+
+### 七、插件自己的设置页（2）
+
+声明式：插件只描述"有哪些设置项"，宿主负责画控件、存取值、发通知。插件**不碰任何 WPF 类型**，
+所以深色/浅色主题、触屏放大、键盘操作跟设置中心其余页面完全一致。
+
+| 成员 | 签名 | 备注 |
+| --- | --- | --- |
+| `RegisterSettings` | `string RegisterSettings(SettingsPageSpec)` | 声明（或覆盖）本插件的设置页；不调用就表示没有可配的东西 |
+| `SettingChanged` | `event ... PluginSettingChangedEventArgs` | 宿主界面改完值后触发（UI 线程），带 `Key` 与 `Value` |
+
+```csharp
+host.RegisterSettings(new SettingsPageSpec(
+    Title: "高考倒计时",
+    Fields: new[]
+    {
+        new SettingField("grade", "届别", SettingFieldKind.Choice,
+            Hint: "2029 届 = 2029 年 6 月 7 日高考。",
+            Options: new[] { new SettingOption("2028", "2028 届"), new SettingOption("2029", "2029 届") }),
+
+        new SettingField("show_on_island", "也在主岛显示", SettingFieldKind.Toggle, DefaultValue: "false"),
+    },
+    Summary: () => $"{_grade} 届 · 还有 {_days} 天"));   // 已安装列表里那行小字
+
+host.SettingChanged += (_, e) =>
+{
+    // 宿主已经写好值（host.ReadState 能读到），这里只需刷新自己的缓存
+    Reload(host);
+};
+```
+
+| 字段类型 | 渲染成 | 值的形态 |
+| --- | --- | --- |
+| `SettingFieldKind.Text` | `TextBox` | 原样字符串；清空即 `null` |
+| `SettingFieldKind.Number` | `NumberBox` | 整数字符串；`Min`/`Max` 都为 0 表示不限 |
+| `SettingFieldKind.Toggle` | `FluentToggle` | `"true"` / `"false"` |
+| `SettingFieldKind.Choice` | `ComboBox` | `SettingOption.Value` |
+
+**约定**
+
+- 键名就是 `ReadState/WriteState` 的键，落在插件自己的 `data/state.json`，别和别的插件重名（虽然本来就隔离）。
+- `DefaultValue` 只影响界面初值；插件读不到值时仍应自己兜底（第一次运行宿主不会替你写默认值）。
+- 一次保存会逐项写盘并逐项触发 `SettingChanged`，所以回调要**幂等且便宜**。
+- 设置页只在插件加载成功后才会出现（`RegisterSettings` 是在 `Initialize` 里调的），
+  插件被禁用时按钮消失，但值仍保留在 `state.json`。
 
 ---
 

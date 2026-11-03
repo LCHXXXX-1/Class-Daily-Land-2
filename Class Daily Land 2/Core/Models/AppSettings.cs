@@ -40,6 +40,14 @@ public sealed class AppSettings
 
         // —— 更新（关于页）——
         new("update_channel", ValueKind.Str, "stable"),               // stable / beta
+        new("update_source", ValueKind.Str, "github"),                 // github / gitee / auto（GitHub 优先→Gitee）；默认 github
+
+        // —— 插件市场（插件页）——
+        new("market_source", ValueKind.Str, "github"),                 // github / gitee / auto（GitHub 优先→Gitee）；默认 github
+
+        // —— 日志与诊断 ——
+        new("log_max_lines", ValueKind.Int, 2000, 500, 3000),         // 内存里保留的日志行数（500~3000）
+        new("developer_mode", ValueKind.Bool, false),                 // 开发者选项（关于页最底部，打开后出「测试报错」）
         new("update_skipped_version", ValueKind.Str, ""),             // 「稍后再说」跳过的版本
         new("resources_version", ValueKind.Str, ""),                  // 已装资源包版本（空 = 只有内嵌资源）
 
@@ -72,6 +80,7 @@ public sealed class AppSettings
 
         // —— 作业 ——
         new("homework_show_date", ValueKind.Bool, true),
+        new("homework_history_days", ValueKind.Int, 7),              // 历史快照保留天数
 
         // —— 媒体（内置集成：主岛媒体片段）——
         new("audio_enabled", ValueKind.Bool, true),
@@ -124,10 +133,12 @@ public sealed class AppSettings
             "show_sub_island", "sub_island_default_collapsed", "sub_island_auto_collapse_sec",
         },
         [PageSchedule] = new[] { "schedule_advance_minutes", "schedule_time_offset_seconds" },
-        [PageHomework] = new[] { "homework_show_date" },
-        // 关于页：更新通道、被跳过的版本、上次检查时间、已装资源包版本
-        [PageAbout] = new[] { "update_channel", "update_skipped_version", "last_update_check", "resources_version" },
-        [PagePlugins] = Array.Empty<string>(),
+        [PageHomework] = new[] { "homework_show_date", "homework_history_days" },
+        // 关于页：更新通道、更新源、被跳过的版本、上次检查时间、已装资源包版本、开发者选项
+        [PageAbout] = new[] { "update_channel", "update_source", "update_skipped_version", "last_update_check", "resources_version", "developer_mode" },
+        // 日志页：内存里保留多少行
+        ["logs"] = new[] { "log_max_lines" },
+        [PagePlugins] = new[] { "market_source" },
         [PageMedia] = new[]
         {
             "audio_enabled", "audio_show_on", "audio_hide_after_sec",

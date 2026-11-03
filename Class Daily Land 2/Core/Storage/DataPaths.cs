@@ -17,6 +17,10 @@ public sealed class DataPaths
     public string Settings => Path.Combine(Root, "settings.json");
     public string Schedule => Path.Combine(Root, "schedule.json");
     public string Homework => Path.Combine(Root, "homework.json");
+
+    /// <summary>homeworks\：按日期归档的作业快照目录（yyyy-MM-dd.json）。</summary>
+    public string HomeworkHistory => Path.Combine(Root, "homeworks");
+
     public string Name => Path.Combine(Root, "name.json");
     public string Config => Path.Combine(Root, "config.json");
     public string Agreement => Path.Combine(Root, "agreement.json");

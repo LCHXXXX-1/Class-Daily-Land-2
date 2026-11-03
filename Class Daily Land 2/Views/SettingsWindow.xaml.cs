@@ -14,11 +14,11 @@ using System.Windows.Threading;
 namespace ClassDailyLand2.App.Views;
 
 /// <summary>
-/// 设置中心（对齐 QML 版那套 Windows 11 设置）：
-/// 1232×762、48px 标题栏、288px 固定侧栏（**不可折叠**，Win11 设置里没有汉堡）、
-/// 内容区左右各 28 内边距、内容列 900。
+/// 设置中心（WinUI 3 / Win11「设置」观感）：
+/// 1232×762、48px 标题栏、264px 固定侧栏（品牌块 + 「查找设置」搜索框 + 导航，不可折叠）、
+/// 内容区 40px 横向内边距、内容列 900。
 ///
-/// 三处动画都从 QML 版搬过来：
+/// 三处动画：
 ///   1. 导航强调条  —— 单条独立强调条，200ms OutCubic 跟着高亮项滑动
 ///   2. 页面转场    —— 280ms、0.92 倍页宽/高整段平移、按方向、**完全不淡化**
 ///   3. 二级浮层    —— forward 从右推进来 / back 送回右边，页面同时整段让位
@@ -70,12 +70,28 @@ public partial class SettingsWindow : Window
             new("timetable", "课表编辑", "\uE70F", () => new TimetableEditorPage()),
             new(AppSettings.PageHomework, "作业", "\uE8A5", () => new HomeworkPage()),
             new(AppSettings.PagePlugins, "插件", "\uE74C", () => new PluginsPage()),
+            new("logs", "日志", "\uE81E", () => new LogPage()),
             new("advanced", "高级", "\uE90F", () => new AdvancedPage()),
             new(AppSettings.PageAbout, "关于", "\uE946", () => new AboutPage()),
         };
 
         InitializeComponent();
         BuildNav();
+
+        // 「查找设置」：输入即过滤导航，Enter 跳到第一个匹配项
+        SearchBox.TextChanged += (_, _) => FilterNav(SearchBox.Text);
+        SearchBox.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter) return;
+            e.Handled = true;
+            foreach (var entry in _entries)
+            {
+                if (!_navButtons.TryGetValue(entry.Id, out var b) || b.Visibility != Visibility.Visible)
+                    continue;
+                Select(entry.Id);
+                break;
+            }
+        };
 
         // 手指滑动：无条件开。设置页是最常被触摸操作的地方，
         // 只有滚轮能滚的界面在平板上等于"卡死"。
@@ -185,6 +201,9 @@ public partial class SettingsWindow : Window
 
         if (kind == WindowBackdrop.None)
         {
+            // 云母没生效：把云母态覆盖撤掉，卡片回到 App 级画刷（否则会留着一层过透的卡片）
+            Resources.Remove("CardBackgroundFillColorDefaultBrush");
+
             Background = (Brush)FindResource("SolidBackgroundFillColorBaseBrush");
             TitleBar.Background = Background;
             NavPane.Background = Background;
@@ -192,11 +211,16 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        // 云母 / 亚克力：窗口和侧栏都透明，让背板透上来，内容区只压一层半透明
+        // 云母 / 亚克力：窗口和侧栏都透明，让背板透上来，内容区只压一层薄雾
         Background = Brushes.Transparent;
         TitleBar.Background = Brushes.Transparent;
         NavPane.Background = Brushes.Transparent;
-        ContentPane.Background = (Brush)FindResource("LayerFillColorDefaultBrush");
+        ContentPane.Background = (Brush)FindResource("MicaLayerBrush");
+
+        // ★ 内容卡片也换成「云母态」画刷。
+        //   默认 Layer(50%) + 卡片(70%) 叠出来是 85% 白，有内容的地方云母完全看不见；
+        //   覆盖窗口级资源后只有设置中心受影响，其它窗口照旧。
+        Resources["CardBackgroundFillColorDefaultBrush"] = FindResource("MicaCardBackgroundBrush");
     }
 
     // ————————————————————— 导航 —————————————————————
@@ -222,6 +246,22 @@ public partial class SettingsWindow : Window
             if (id == AppSettings.PageAbout) AboutPanel.Children.Add(button);
             else NavItemsPanel.Children.Add(button);
         }
+    }
+
+    /// <summary>按关键字过滤导航项（空串 = 全部恢复）。「关于」也参与过滤。</summary>
+    void FilterNav(string? keyword)
+    {
+        var key = (keyword ?? "").Trim();
+        foreach (var entry in _entries)
+        {
+            if (!_navButtons.TryGetValue(entry.Id, out var button)) continue;
+            var hit = key.Length == 0 ||
+                      entry.Label.Contains(key, StringComparison.OrdinalIgnoreCase);
+            button.Visibility = hit ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // 当前选中项被过滤掉时，强调条一起藏起来（SyncMarker 内部按 IsVisible 处理）
+        if (IsLoaded) SyncMarker(_selectedNav, animate: false);
     }
 
     /// <summary>
@@ -324,6 +364,9 @@ public partial class SettingsWindow : Window
             _pages[id] = page;
             if (page is HomePage home) home.NavigateRequested += Select;
         }
+
+        // 顶部面包屑：设置 › 类别（首页只显示「设置」）
+        MainCrumb.Text = id == PageHome ? "设置" : $"设置 › {_entries.First(e => e.Id == id).Label}";
 
         var previous = PageHost.Content as UIElement;
         PageHost.Content = page;

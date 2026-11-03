@@ -1,0 +1,33 @@
+<Window x:Class="DeveloperTool.Market.OAuthWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="登录插件市场"
+        Width="900" Height="900"
+        MinWidth="460" MinHeight="520"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        Background="{DynamicResource WindowBackgroundBrush}"
+        Foreground="{DynamicResource TextBrush}"
+        FontFamily="Cascadia Mono, Consolas, Microsoft YaHei UI"
+        FontSize="13"
+        Loaded="OnLoaded">
+
+    <Grid>
+        <!-- 授权页整窗铺满；跳回 redirect_uri 时导航被拦下，窗口随即关闭 -->
+        <wv2:WebView2 x:Name="Browser"
+                      NavigationStarting="OnNavigationStarting"
+                      HorizontalAlignment="Stretch"
+                      VerticalAlignment="Stretch" />
+
+        <!-- 首屏白屏遮罩：第一次导航开始或初始化失败时收起 -->
+        <Border x:Name="LoadingMask"
+                Background="{DynamicResource WindowBackgroundBrush}"
+                IsHitTestVisible="False">
+            <TextBlock Text="正在打开授权页…"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{DynamicResource DimTextBrush}" />
+        </Border>
+    </Grid>
+</Window>

@@ -85,6 +85,7 @@ public sealed class AudioService : IDisposable
         HideAfterSec = Math.Clamp(s.Int("audio_hide_after_sec"), 0, 120);
         MaxWidth = Math.Clamp(s.Int("audio_max_width"), 120, 400);
         ShowTitle = s.Bool("audio_show_title");
+        _log.Trace($"[媒体] 应用设置：启用={Enabled}，位置={ShowOn}，暂停后保留={HideAfterSec}s，宽度={MaxWidth}px，显示歌名={ShowTitle}");
     }
 
     // ————————————————————— 每秒驱动 —————————————————————
@@ -95,8 +96,16 @@ public sealed class AudioService : IDisposable
         _inClass = inClass;
         var shouldRun = Enabled && !_inClass && SmtcBridge.Available;
 
-        if (shouldRun && !_bridge.Running) _bridge.Start();
-        else if (!shouldRun && _bridge.Running) _bridge.Stop();
+        if (shouldRun && !_bridge.Running)
+        {
+            _log.Trace("[媒体] 启动 SMTC 后台轮询");
+            _bridge.Start();
+        }
+        else if (!shouldRun && _bridge.Running)
+        {
+            _log.Trace($"[媒体] 停止 SMTC 后台轮询（启用={Enabled}，上课中={_inClass}，桥可用={SmtcBridge.Available}）");
+            _bridge.Stop();
+        }
 
         if (!shouldRun && !_testMode) _current = null;
 
@@ -189,6 +198,7 @@ public sealed class AudioService : IDisposable
         _current = new MediaInfo(title, artist, true, 0, null);
         _last = _current;
         _lastPlayingUtc = DateTime.UtcNow;
+        _log.Trace($"[媒体] 注入测试媒体：{title} / {artist}");
     }
 
     public void ClearTestMedia()
@@ -197,6 +207,7 @@ public sealed class AudioService : IDisposable
         _current = null;
         _last = null;
         _lastPlayingUtc = DateTime.MinValue;
+        _log.Trace("[媒体] 清除测试媒体，恢复真实采样");
     }
 
     public void Shutdown() => _bridge.Stop();
@@ -237,7 +248,18 @@ public sealed class AudioService : IDisposable
         // 后台线程 → 只存字段；界面在下一个 tick 自己去取。
         // 测试注入期间忽略真实采样，否则预览会被真播放的内容顶掉。
         if (_testMode) return;
+        var previous = _current;
         _current = info.HasContent ? info : null;
+
+        // 只在"曲目/状态真的变了"时写日志（采样每 400ms 一次，全记会刷屏）
+        var changed = (previous?.Title != _current?.Title) ||
+                      (previous?.Artist != _current?.Artist) ||
+                      (previous?.Playing != _current?.Playing);
+        if (!changed) return;
+        if (_current is { HasContent: true } cur)
+            _log.Trace($"[媒体] 采样变化：{cur.Title} / {cur.Artist}（{(cur.Playing ? "播放中" : "已暂停")}，revision {cur.Revision}）");
+        else
+            _log.Trace("[媒体] 采样变化：当前无媒体内容，片段将在保留时长后收起");
     }
 
     public void Dispose() => _bridge.Dispose();

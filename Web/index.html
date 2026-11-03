@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Class Daily Land · 班级日常 — 把课堂信息倒进灵动岛</title>
+<meta name="description" content="Class Daily Land（班级日常）是一款 Windows 课堂信息常驻面板：灵动岛倒计时、多课表与临时调课、值日生与出勤、作业滚动播报，配合插件市场可自由扩展。">
+<meta name="theme-color" content="#080b14">
+<meta property="og:title" content="Class Daily Land · 班级日常">
+<meta property="og:description" content="Windows 课堂信息常驻面板：灵动岛倒计时 · 多课表 · 值日与出勤 · 作业播报 · 插件市场">
+<meta property="og:type" content="website">
+<link rel="icon" href="assets/icon.ico" sizes="any">
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/animations.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+<!-- 页面整体氛围：动态光晕 + 网格底纹 -->
+<div class="aurora" aria-hidden="true">
+  <span class="aurora__blob aurora__blob--a"></span>
+  <span class="aurora__blob aurora__blob--b"></span>
+  <span class="aurora__blob aurora__blob--c"></span>
+</div>
+<div class="grid-overlay" aria-hidden="true"></div>
+
+<a class="skip-link" href="#main">跳到主要内容</a>
+
+<!-- ===================== 导航 ===================== -->
+<header class="nav" id="nav">
+  <div class="container nav__inner">
+    <a class="brand" href="#top" aria-label="Class Daily Land 首页">
+      <img class="brand__logo" src="assets/icon.ico" alt="" width="34" height="34">
+      <span class="brand__text">
+        <strong>Class Daily Land</strong>
+        <small>班级日常</small>
+      </span>
+    </a>
+
+    <nav class="nav__links" id="navLinks" aria-label="主导航">
+      <a href="#features">功能</a>
+      <a href="#island">灵动岛</a>
+      <a href="#plugins">插件</a>
+      <a href="#devtool">开发者工具</a>
+      <a href="#download">下载</a>
+    </nav>
+
+    <div class="nav__actions">
+      <a class="btn btn--ghost btn--sm" href="#download">下载</a>
+      <button class="nav__toggle" id="navToggle" type="button"
+              aria-label="展开导航" aria-expanded="false" aria-controls="navLinks">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </div>
+  <div class="nav__progress" id="scrollProgress" aria-hidden="true"></div>
+</header>
+
+<main id="main">
+
+<!-- ===================== Hero ===================== -->
+<section class="hero" id="top">
+  <div class="container hero__inner">
+
+    <div class="hero__copy">
+      <p class="pill" data-reveal>
+        <span class="pill__dot"></span>
+        Windows 10 / 11
+      </p>
+
+      <h1 class="hero__title" data-reveal data-reveal-delay="60">
+        把课堂信息<br>
+        <span class="grad-text">倒进灵动岛</span>
+      </h1>
+
+      <p class="hero__lead" data-reveal data-reveal-delay="120">
+        课表、倒计时、值日生、出勤、各科作业 —— 全部塞进屏幕顶部那枚小小的胶囊里，
+        外加右侧一块常驻面板。不用切窗口，抬头就能看见。
+      </p>
+
+      <div class="hero__actions" data-reveal data-reveal-delay="180">
+        <a class="btn btn--primary btn--lg" href="#download">
+          <span>免费下载</span>
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
+        </a>
+        <a class="btn btn--ghost btn--lg" href="#features">先看看功能</a>
+      </div>
+
+      <dl class="hero__stats" data-reveal data-reveal-delay="240">
+        <div class="stat">
+          <dt>插件扩展点</dt>
+          <dd><span data-count="6">0</span> 类</dd>
+        </div>
+        <div class="stat">
+          <dt>内置插件</dt>
+          <dd><span data-count="3">0</span> 个</dd>
+        </div>
+        <div class="stat">
+          <dt>课表数量</dt>
+          <dd>无限</dd>
+        </div>
+      </dl>
+    </div>
+
+    <!-- 灵动岛实况演示：纯 CSS/JS 绘制，不加特效库 -->
+    <div class="hero__stage" data-reveal data-reveal-delay="160">
+      <div class="stage">
+        <div class="stage__glow" aria-hidden="true"></div>
+
+        <!-- 模拟桌面上的灵动岛 -->
+        <div class="island-showcase" id="islandShowcase">
+          <div class="island" id="demoIsland" data-state="compact" role="img"
+               aria-label="灵动岛演示：显示当前课程与上课倒计时">
+            <div class="island__ring">
+              <svg viewBox="0 0 36 36" aria-hidden="true">
+                <circle class="ring__track" cx="18" cy="18" r="15.5"></circle>
+                <circle class="ring__fill" id="ringFill" cx="18" cy="18" r="15.5"></circle>
+              </svg>
+            </div>
+            <div class="island__body">
+              <p class="island__label" id="islandLabel">下节 · 第 3 节</p>
+              <p class="island__course" id="islandCourse">数学</p>
+            </div>
+            <div class="island__time" id="islandTime">10:00</div>
+          </div>
+
+          <p class="stage__hint" id="stageHint">正在演示：上课前提醒</p>
+        </div>
+
+        <!-- 模拟右侧主面板 -->
+        <div class="panel-mock" aria-hidden="true">
+          <div class="panel-mock__head">
+            <span class="panel-mock__title">班级日常</span>
+            <span class="panel-mock__badge">实时</span>
+          </div>
+          <ul class="panel-mock__list">
+            <li><b>今日值日生</b><span>李思远</span></li>
+            <li><b>应到 / 实到</b><span>42 / 41</span></li>
+          </ul>
+          <div class="panel-mock__hw">
+            <p class="panel-mock__hwt">数学 <em>(周五交)</em></p>
+            <p>1. 习题册 P42 — P45</p>
+            <p>2. 错题本整理第 3 章</p>
+            <p class="panel-mock__hwt">语文</p>
+            <p>1. 背诵《赤壁赋》全文</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="hero__scroll" aria-hidden="true">
+    <span></span>
+  </div>
+</section>
+
+<!-- ===================== 功能 ===================== -->
+<section class="section" id="features">
+  <div class="container">
+    <header class="section__head">
+      <p class="eyebrow" data-reveal>核心功能</p>
+      <h2 class="section__title" data-reveal data-reveal-delay="60">
+        课堂上真正用得上的那几件事
+      </h2>
+      <p class="section__sub" data-reveal data-reveal-delay="120">
+        所有功能都围绕"抬头一眼就知道现在该干什么"设计，不需要老师或学生额外操作。
+      </p>
+    </header>
+
+    <div class="cards">
+      <article class="card card--wide" data-reveal>
+        <div class="card__icon" aria-hidden="true">🕒</div>
+        <h3>灵动岛 · 课程倒计时</h3>
+        <p>
+          上课前按设定提前量亮起并进入倒计时，下课时弹提醒。
+          胶囊形态、呼吸动画与环形进度实时变化，全屏放 PPT 时自动收起，
+          下课或空白时段自动回到简略状态。
+        </p>
+        <ul class="ticks">
+          <li>提前提醒分钟数可调</li>
+          <li>紧急预警条可压过课程文本强制显示</li>
+          <li>系统时间偏移校准（±30 分钟）</li>
+        </ul>
+      </article>
+
+      <article class="card" data-reveal data-reveal-delay="60">
+        <div class="card__icon" aria-hidden="true">📅</div>
+        <h3>多课表与临时调课</h3>
+        <p>
+          建任意多张课表随时切换；某天临时换课直接用"临时调课"覆盖当天，
+          不动原课表。支持假期、调休补课与周末独立作息。
+        </p>
+      </article>
+
+      <article class="card" data-reveal data-reveal-delay="120">
+        <div class="card__icon" aria-hidden="true">🙋</div>
+        <h3>值日生与出勤</h3>
+        <p>
+          每日值日生按名单轮换，右键即可切换到上一位 / 下一位；
+          应到与实到人数随手改，面板上实时显示。
+        </p>
+      </article>
+
+      <article class="card" data-reveal data-reveal-delay="180">
+        <div class="card__icon" aria-hidden="true">📚</div>
+        <h3>作业滚动播报</h3>
+        <p>
+          按科目分组的作业清单在面板里自动平滑滚动，到顶到底自动停顿。
+          手指或鼠标一碰就暂停几秒，不跟你的操作抢画面。
+        </p>
+      </article>
+
+      <article class="card" data-reveal data-reveal-delay="240">
+        <div class="card__icon" aria-hidden="true">🎨</div>
+        <h3>主题与外观</h3>
+        <p>
+          跟随系统 / 浅色 / 深色三档主题，Windows 11 云母材质与圆角窗口。
+          面板宽度、字号、透明度、动画时长全部可调，也能一键调出设置中心。
+        </p>
+      </article>
+
+      <article class="card" data-reveal data-reveal-delay="300">
+        <div class="card__icon" aria-hidden="true">🧩</div>
+        <h3>插件市场</h3>
+        <p>
+          从内置市场发现、安装与更新插件，装完即可用，被禁用的插件不会加载。
+          插件可注册灵动岛文本、加长片段、预警条、下拉面板与独立设置页。
+        </p>
+      </article>
+
+      <article class="card" data-reveal data-reveal-delay="360">
+        <div class="card__icon" aria-hidden="true">🖱️</div>
+        <h3>触摸屏友好</h3>
+        <p>
+          所有滚动控件（含插件自带的与下拉列表）都支持手指拖拽与惯性滑动，
+          一体机、触摸大屏上直接上手。
+        </p>
+      </article>
+
+      <article class="card" data-reveal data-reveal-delay="420">
+        <div class="card__icon" aria-hidden="true">🔔</div>
+        <h3>托盘与自动更新</h3>
+        <p>
+          常驻系统托盘，右键菜单快速操作。启动时后台静默检查新版本，
+          也可随时手动检查，更新由独立启动器完成。
+        </p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 灵动岛状态 ===================== -->
+<section class="section section--alt" id="island">
+  <div class="container">
+    <header class="section__head">
+      <p class="eyebrow" data-reveal>灵动岛</p>
+      <h2 class="section__title" data-reveal data-reveal-delay="60">
+        一枚胶囊，四种状态
+      </h2>
+      <p class="section__sub" data-reveal data-reveal-delay="120">
+        点击下面任意状态，看它在屏幕顶部的真实表现。
+      </p>
+    </header>
+
+    <div class="states" data-reveal data-reveal-delay="160">
+      <div class="states__preview">
+        <div class="island island--big" id="stateIsland" data-state="compact">
+          <div class="island__ring">
+            <svg viewBox="0 0 36 36" aria-hidden="true">
+              <circle class="ring__track" cx="18" cy="18" r="15.5"></circle>
+              <circle class="ring__fill" cx="18" cy="18" r="15.5"></circle>
+            </svg>
+          </div>
+          <div class="island__body">
+            <p class="island__label" id="stateLabel">上课中 · 第 2 节</p>
+            <p class="island__course" id="stateCourse">英语</p>
+          </div>
+          <div class="island__time" id="stateTime">08:55</div>
+        </div>
+      </div>
+
+      <div class="states__tabs" role="tablist" aria-label="灵动岛状态">
+        <button class="state-tab is-active" role="tab" aria-selected="true"
+                data-target="compact" type="button">
+          <strong>简略</strong>
+          <span>课时较远，只留必要信息</span>
+        </button>
+        <button class="state-tab" role="tab" aria-selected="false"
+                data-target="upcoming" type="button">
+          <strong>上课前</strong>
+          <span>按提前量亮起并开始倒计时</span>
+        </button>
+        <button class="state-tab" role="tab" aria-selected="false"
+                data-target="countdown" type="button">
+          <strong>倒计时</strong>
+          <span>环形进度随剩余时间收缩</span>
+        </button>
+        <button class="state-tab" role="tab" aria-selected="false"
+                data-target="alert" type="button">
+          <strong>下课提醒</strong>
+          <span>下课瞬间弹出并保持一会儿</span>
+        </button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 插件 ===================== -->
+<section class="section" id="plugins">
+  <div class="container">
+    <header class="section__head">
+      <p class="eyebrow" data-reveal>插件生态</p>
+      <h2 class="section__title" data-reveal data-reveal-delay="60">
+        自带三个，市场里还有更多
+      </h2>
+      <p class="section__sub" data-reveal data-reveal-delay="120">
+        插件是标准的 Python 模块，通过插件 API 挂到灵动岛与设置页上；缺失的第三方依赖由宿主自动下载并校验安装。
+      </p>
+    </header>
+
+    <div class="cards cards--three">
+      <article class="card card--plugin" data-reveal>
+        <div class="plugin__top">
+          <span class="plugin__avatar" aria-hidden="true">⏰</span>
+          <div>
+            <h3>时钟</h3>
+            <p class="plugin__meta">class.lchxxxx-1.clock · v1.0.0</p>
+          </div>
+        </div>
+        <p>在灵动岛下拉面板里显示当前时间与日期，展开即见。</p>
+      </article>
+
+      <article class="card card--plugin" data-reveal data-reveal-delay="60">
+        <div class="plugin__top">
+          <span class="plugin__avatar" aria-hidden="true">⛅</span>
+          <div>
+            <h3>天气</h3>
+            <p class="plugin__meta">class.hexwisp72.weather · v1.0.0</p>
+          </div>
+        </div>
+        <p>IP 定位 + Open-Meteo 数据，副岛上播放每种天气的专属动画，可在设置里预览。</p>
+      </article>
+
+      <article class="card card--plugin" data-reveal data-reveal-delay="120">
+        <div class="plugin__top">
+          <span class="plugin__avatar" aria-hidden="true">🎵</span>
+          <div>
+            <h3>媒体播放</h3>
+            <p class="plugin__meta">class.hexwisp72.audio · v1.0.0</p>
+          </div>
+        </div>
+        <p>读取 Windows SMTC，把正在播放的歌名与歌手显示在主岛或副岛，停止后自动隐藏。</p>
+      </article>
+    </div>
+
+    <div class="api-strip" data-reveal data-reveal-delay="180">
+      <p class="api-strip__title">插件可以挂到这些位置</p>
+      <ul class="api-strip__list">
+        <li><code>add_island_text()</code><span>灵动岛文字</span></li>
+        <li><code>add_island_extra()</code><span>主岛加长片段</span></li>
+        <li><code>add_island_banner()</code><span>紧急预警条</span></li>
+        <li><code>add_subisland()</code><span>副岛内容</span></li>
+        <li><code>add_panel()</code><span>下拉面板</span></li>
+        <li><code>add_settings_page()</code><span>独立设置页</span></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 开发者工具 ===================== -->
+<section class="section section--alt" id="devtool">
+  <div class="container split">
+    <div class="split__copy">
+      <p class="eyebrow" data-reveal>开发者工具</p>
+      <h2 class="section__title" data-reveal data-reveal-delay="60">
+        做一个自己的插件
+      </h2>
+      <p class="section__sub" data-reveal data-reveal-delay="120">
+        DeveloperTool 是给插件作者准备的独立 GUI：写代码、填元信息、打包成
+        <code>.cblplugin</code>，登录后直接上传到插件市场等审核。
+      </p>
+
+      <ul class="checklist" data-reveal data-reveal-delay="180">
+        <li>GitHub Device Flow 登录，不用在工具里填密码</li>
+        <li>一键打包成插件包，自动生成 <code>plugin.json</code></li>
+        <li>查看自己的上传记录与审核状态、驳回理由</li>
+        <li>管理员可在工具内直接审核通过或驳回</li>
+        <li>内置版本检查，工具自身也能更新</li>
+      </ul>
+
+      <div class="hero__actions" data-reveal data-reveal-delay="240">
+        <a class="btn btn--primary" data-download="devtool" href="https://gitee.com/lchxxxx/class-daily-land/releases/download/DeveloperTool/DeveloperTool-1.3.zip">
+          <span>下载开发者工具</span>
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
+        </a>
+      </div>
+    </div>
+
+    <div class="split__visual" data-reveal data-reveal-delay="120">
+      <div class="codeshot" aria-hidden="true">
+        <div class="codeshot__bar">
+          <span></span><span></span><span></span>
+          <em>plugin.json</em>
+        </div>
+        <pre class="codeshot__body"><code>{
+  "name": "clock",
+  "display_name": "时钟",
+  "version": "1.0.0",
+  "entry": "main.py",
+  "author_id": "lchxxxx-1",
+  "author_name": "LCHXXXX-1",
+  "description": "在灵动岛下拉面板显示当前时间"
+}</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 下载 ===================== -->
+<section class="section" id="download">
+  <div class="container">
+    <header class="section__head">
+      <p class="eyebrow" data-reveal>下载</p>
+      <h2 class="section__title" data-reveal data-reveal-delay="60">
+        选择你要的那一个
+      </h2>
+      <p class="section__sub" data-reveal data-reveal-delay="120">
+        两者都托管在 Gitee Releases。下载后直接运行安装程序即可。
+      </p>
+    </header>
+
+    <div class="downloads">
+      <article class="dl-card dl-card--feature" data-reveal>
+        <div class="dl-card__head">
+          <span class="dl-card__tag">主程序</span>
+          <h3>Class Daily Land</h3>
+        </div>
+        <p class="dl-card__desc">
+          完整的班级日常：灵动岛、主面板、多课表、值日与出勤、作业播报、
+          系统托盘与插件市场，全都在这一个安装包里。
+        </p>
+        <ul class="ticks">
+          <li>Windows 10 / 11（64 位）</li>
+          <li>安装后自动注册卸载项与开始菜单快捷方式</li>
+          <li>启动即可用，无需单独配置</li>
+        </ul>
+        <a class="btn btn--primary btn--block"
+           data-download="app"
+           href="https://gitee.com/lchxxxx/class-daily-land-2/releases/download/install/ClassDailyLand2_Setup_Online.exe">
+          <span>下载主程序</span>
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
+        </a>
+      </article>
+
+      <article class="dl-card" data-reveal data-reveal-delay="80">
+        <div class="dl-card__head">
+          <span class="dl-card__tag dl-card__tag--alt">开发</span>
+          <h3>DeveloperTool</h3>
+        </div>
+        <p class="dl-card__desc">
+          插件作者的打包与发布工具。把写好的插件打成 <code>.cblplugin</code>，
+          登录后上传到市场，并跟踪审核进度。
+        </p>
+        <ul class="ticks">
+          <li>GitHub 账号登录（Device Flow）</li>
+          <li>打包 / 上传 / 审核状态一站式</li>
+          <li>管理员账号可直接在工具内审核</li>
+        </ul>
+        <a class="btn btn--ghost btn--block"
+           data-download="devtool"
+           href="https://gitee.com/lchxxxx/class-daily-land/releases/download/DeveloperTool/DeveloperTool-1.3.zip">
+          <span>下载开发者工具</span>
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
+        </a>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== 收尾 ===================== -->
+<section class="cta">
+  <div class="container cta__inner" data-reveal>
+    <h2>装好了就抬头看一眼</h2>
+    <p>课表排好之后，剩下的交给灵动岛。</p>
+    <a class="btn btn--primary btn--lg"
+       data-download="app"
+       href="https://gitee.com/lchxxxx/class-daily-land-2/releases/download/install/ClassDailyLand2_Setup_Online.exe">
+      <span>立即下载</span>
+      <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m0 0 4.5-4.5M12 15l-4.5-4.5M4 20h16"/></svg>
+    </a>
+  </div>
+</section>
+
+</main>
+
+<!-- ===================== 页脚 ===================== -->
+<footer class="footer">
+  <div class="container footer__inner">
+    <div class="footer__brand">
+      <img class="footer__brand-logo" src="assets/icon.ico" alt="" width="28" height="28">
+      <div>
+        <strong>Class Daily Land</strong>
+        <p>班级日常 · 课堂信息常驻面板</p>
+      </div>
+    </div>
+
+    <nav class="footer__links" aria-label="页脚导航">
+      <a href="#features">功能</a>
+      <a href="#island">灵动岛</a>
+      <a href="#plugins">插件</a>
+      <a href="#devtool">开发者工具</a>
+      <a href="#download">下载</a>
+    </nav>
+
+    <p class="footer__note">
+      页面为静态介绍页，下载均指向 Gitee Releases。
+    </p>
+  </div>
+</footer>
+
+<script src="js/config.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/nav.js"></script>
+<script src="js/reveal.js"></script>
+<script src="js/island.js"></script>
+<script src="js/downloads.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

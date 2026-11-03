@@ -26,5 +26,17 @@
                                  Label="作业条目显示日期" />
             </fl:SettingRow>
         </fl:SettingGroup>
+
+        <fl:SettingGroup Title="历史记录" Icon="{StaticResource Icon.Clock}" TileColor="#FF8764B8"
+                         Note="每天保存一份作业快照，可随时只读查看或恢复">
+            <fl:SettingRow Title="快照保留天数" Hint="超过保留天数的旧快照会自动清理">
+                <ComboBox x:Name="HistoryDaysBox" Width="140" SelectionChanged="OnHistoryDaysChanged">
+                    <ComboBoxItem Content="暂存 3 天" Tag="3" />
+                    <ComboBoxItem Content="暂存 7 天" Tag="7" />
+                    <ComboBoxItem Content="暂存 14 天" Tag="14" />
+                    <ComboBoxItem Content="暂存 30 天" Tag="30" />
+                </ComboBox>
+            </fl:SettingRow>
+        </fl:SettingGroup>
     </StackPanel>
 </UserControl>

@@ -1,0 +1,124 @@
+<Window x:Class="ClassDailyLand2.App.Views.Dialogs.ErrorCodeListWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Class Daily Land 2 · 错误码清单"
+        Width="760"
+        Height="600"
+        MinHeight="360"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        FontFamily="{DynamicResource FontFamilyText}"
+        FontSize="{DynamicResource FontSizeBody}">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题条 -->
+        <Grid Grid.Row="0" Height="40" Background="Transparent" MouseLeftButtonDown="OnDragArea">
+            <TextBlock Text="错误码清单" Margin="18,0,46,0" VerticalAlignment="Center"
+                       FontSize="14.5" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Button HorizontalAlignment="Right" Width="40" Height="40"
+                    Style="{StaticResource SubtleButton}" Content="✕" FontSize="12" Padding="0"
+                    ToolTip="关闭" Click="OnCloseClick" />
+        </Grid>
+
+        <TextBlock Grid.Row="1" Margin="18,0,18,10" TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   Text="编码规则：E + 模块码(2 位) + 类型(1 位) + 序号(3 位)，共 7 位。类型 1 参数、2 业务规则、3 外部/IO、4 未预期。" />
+
+        <!-- 表头 -->
+        <Border Grid.Row="2" Margin="18,0,18,0" BorderThickness="0">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="12,0,12,6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="150" />
+                        <ColumnDefinition Width="130" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="70" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="错误码 / 名称" FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Column="1" Text="模块" FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Column="2" Text="含义" FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                    <TextBlock Grid.Column="3" Text="级别" FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </Grid>
+
+                <Border Grid.Row="1" CornerRadius="4" BorderThickness="1"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        Background="{DynamicResource SolidBackgroundFillColorSecondaryBrush}">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="CodeList" Margin="12,8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="150" />
+                                            <ColumnDefinition Width="130" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="70" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding Code}"
+                                                       FontFamily="{DynamicResource FontFamilyMono}"
+                                                       FontSize="12"
+                                                       Foreground="{DynamicResource AccentFillColorDefaultBrush}" />
+                                            <TextBlock Text="{Binding Name}"
+                                                       FontSize="12"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                                        </StackPanel>
+
+                                        <TextBlock Grid.Column="1" Text="{Binding ModuleName}"
+                                                   VerticalAlignment="Top"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                                        <TextBlock Grid.Column="2" Text="{Binding Meaning}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,16,0"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                                        <TextBlock Grid.Column="3" Text="{Binding Level}"
+                                                   VerticalAlignment="Top"
+                                                   FontSize="12"
+                                                   FontFamily="{DynamicResource FontFamilyMono}"
+                                                   Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="3" Margin="18,12,18,14">
+            <TextBlock x:Name="CountText" VerticalAlignment="Center"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+            <Button Content="关闭" HorizontalAlignment="Right" Style="{StaticResource SubtleButton}"
+                    Click="OnCloseClick" />
+        </Grid>
+    </Grid>
+</Window>

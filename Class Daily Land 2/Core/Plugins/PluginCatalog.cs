@@ -45,10 +45,23 @@ public static class PluginCatalog
         {
             var folder = Path.GetFileName(dir);
             // 隐藏目录与临时目录（. 或 _ 开头）不参与扫描
-            if (folder.StartsWith('.') || folder.StartsWith('_')) continue;
+            if (folder.StartsWith('.') || folder.StartsWith('_'))
+            {
+                Logger.Current?.Trace($"[插件] 跳过隐藏/临时目录 {dir}");
+                continue;
+            }
+
+            // 覆盖安装留下的备份目录（<id>.bak-时间戳）：不是插件，别把它列成"加载失败"
+            if (IsLeftover(folder))
+            {
+                Logger.Current?.Trace($"[插件] 跳过覆盖安装留下的备份目录 {dir}");
+                continue;
+            }
 
             if (!PluginManifest.TryLoad(dir, out var manifest, out var error))
             {
+                // 缺清单是最常见的"插件目录里东西不见了"，说清是哪个目录、缺什么文件
+                Logger.Current?.Warn($"[插件] {dir} 无法作为插件加载：{error ?? "无法加载"}");
                 result.Add(new PluginPackage(folder, dir, null, error ?? "无法加载。"));
                 continue;
             }
@@ -56,10 +69,13 @@ public static class PluginCatalog
             // id 与目录名不一致不算错误（安装时会以 id 命名目录），但如果撞 id 必须拦一个
             if (!seen.Add(manifest.Id))
             {
+                Logger.Current?.Warn($"[插件] {dir} 的 id「{manifest.Id}」与另一个插件重复，已忽略这一个");
                 result.Add(new PluginPackage(manifest.Id, dir, null,
                     $"id「{manifest.Id}」与另一个插件重复，已忽略这一个。"));
                 continue;
             }
+
+            Logger.Current?.Trace($"[插件] 识别到 {manifest.Id} @ {dir}（v{manifest.Version}，入口 {manifest.Entry}）");
 
             result.Add(new PluginPackage(manifest.Id, dir, manifest, null));
         }
@@ -70,4 +86,17 @@ public static class PluginCatalog
     /// <summary>目录里是否有 plugin.json（安装时判断解压出来的是不是插件包）。</summary>
     public static bool LooksLikePlugin(string directory) =>
         Directory.Exists(directory) && File.Exists(Path.Combine(directory, ManifestFile));
+
+    /// <summary>
+    /// 是不是「留下的垃圾目录」：覆盖安装的备份（<c>&lt;id&gt;.bak-20261101120000</c>）
+    /// 与卸载失败的待删目录（<c>_trash-xxxx</c>）。
+    ///
+    /// <para>它们不该出现在插件列表里 —— 备份目录缺 plugin.json，会被渲染成
+    /// 「加载失败：缺少 plugin.json」；用户点卸载时，旧 dll 的句柄往往还没释放，
+    /// 于是删不掉，观感就成了"这东西卸不掉"。</para>
+    /// </summary>
+    public static bool IsLeftover(string folderName) =>
+        !string.IsNullOrEmpty(folderName) &&
+        (folderName.Contains(".bak-", StringComparison.OrdinalIgnoreCase) ||
+         folderName.StartsWith("_trash-", StringComparison.OrdinalIgnoreCase));
 }

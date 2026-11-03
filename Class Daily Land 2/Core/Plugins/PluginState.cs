@@ -21,7 +21,11 @@ public sealed class PluginState
     public static PluginState Load(string path)
     {
         var state = new PluginState(path);
-        if (!File.Exists(path)) return state;
+        if (!File.Exists(path))
+        {
+            Logger.Current?.Trace($"[插件] plugins.json 不存在，全部插件按启用处理（{path}）");
+            return state;
+        }
 
         try
         {
@@ -38,10 +42,11 @@ public sealed class PluginState
             {
                 if (!string.IsNullOrWhiteSpace(id)) state._disabled.Add(id.Trim());
             }
+            Logger.Current?.Trace($"[插件] 状态文件载入：禁用 {state._disabled.Count} 个（{string.Join("、", state._disabled)}）");
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
-            // 读不了就当全部启用：比起"插件全消失"，多启一个更容易被发现和修
+            Logger.Current?.Warn($"[插件] plugins.json 读取失败（{ex.GetType().Name}: {ex.Message}），按全部启用处理");
         }
         return state;
     }

@@ -135,6 +135,10 @@ public sealed class DisasterService : IDisposable
         _icl.Enabled = QuakeEnabled;
         _wolfx.Enabled = QuakeEnabled;
         _nmc.Enabled = WeatherEnabled && !string.IsNullOrEmpty(Province) && Province != Cities.NoWeather;
+
+        _log.Trace($"[灾害] 应用设置：总开关={Enabled}，地震={QuakeEnabled}（{QuakeIntervalSec}s），气象={WeatherEnabled}（{WeatherIntervalSec}s），" +
+                   $"位置={Province}/{City}/{District}，坐标={(Lat is null ? "未设置" : $"{Lat:0.####},{Lon:0.####}")}，" +
+                   $"阈值={Threshold:0.#}，红条={BannerEnabled}，提醒={NotifyEnabled}");
     }
 
     // ————————————————————— 每秒 tick —————————————————————
@@ -164,12 +168,14 @@ public sealed class DisasterService : IDisposable
         _iclInFlight = true;
         var startMs = (long)((now - 7200) * 1000);
         var url = string.Format(DisasterSources.IclListUrl, startMs);
+        _log.Trace($"[灾害] 轮询 ICL 主源（间隔 {QuakeIntervalSec}s）：{url}");
 
         _ = Task.Run(async () =>
         {
             var (doc, error) = await DisasterSources.FetchJsonAsync(url).ConfigureAwait(false);
             if (doc is null)
             {
+                _log.Warn($"[灾害] ICL 主源请求失败：{error}");
                 Post(() =>
                 {
                     _icl.OnFail(error, Now);
@@ -181,6 +187,11 @@ public sealed class DisasterService : IDisposable
             using (doc)
             {
                 var events = DisasterSources.ParseIclEvents(doc.RootElement);
+                foreach (var ev in events)
+                    _log.Trace($"[灾害] ICL 事件：{ev.Epicenter} M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，" +
+                               $"震中 {ev.Lat:0.####},{ev.Lon:0.####}，发震 {QuakeCalc.FmtClock(ev.OriginTs)}，" +
+                               $"uid={ev.Uid}，revision {ev.Revision}（上报数 {ev.ReportCount?.ToString() ?? "-"}，最大烈度 {ev.MaxIntensity?.ToString("0.#") ?? "-"}）");
+                _log.Trace($"[灾害] ICL 本轮解析出 {events.Count} 条事件");
                 Post(() =>
                 {
                     _icl.OnOk(Now);
@@ -201,6 +212,7 @@ public sealed class DisasterService : IDisposable
 
         _lastIclPoll = now;
         _wolfxInFlight = true;
+        _log.Trace($"[灾害] ICL 连续失败，改轮询 Wolfx 备源（{DisasterSources.WolfxEewUrls.Count} 个端点）");
 
         _ = Task.Run(async () =>
         {
@@ -222,6 +234,7 @@ public sealed class DisasterService : IDisposable
 
             if (all.Count == 0 && errors.Count == DisasterSources.WolfxEewUrls.Count)
             {
+                _log.Warn($"[灾害] Wolfx 四个端点全部失败（连续第 {_wolfxFailStreak + 1} 次）：{string.Join("；", errors)}");
                 Post(() =>
                 {
                     _wolfx.OnFail(string.Join("; ", errors), Now);
@@ -231,11 +244,15 @@ public sealed class DisasterService : IDisposable
                 return;
             }
 
+            foreach (var ev in all)
+                _log.Trace($"[灾害] Wolfx({ev.Source}) 事件：{ev.Epicenter} M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，" +
+                           $"发震 {QuakeCalc.FmtClock(ev.OriginTs)}，uid={ev.Uid}，revision {ev.Revision}");
             Post(() =>
             {
                 _wolfx.OnOk(Now);
                 _wolfxInFlight = false;
                 _wolfxFailStreak = 0;
+                _log.Trace($"[灾害] Wolfx 本轮 {all.Count} 条事件（{errors.Count} 个端点失败）");
                 IngestQuakes(all);
             });
         });
@@ -250,6 +267,7 @@ public sealed class DisasterService : IDisposable
         _lastWeatherPoll = now;
         _nmcInFlight = true;
         var url = DisasterSources.NmcUrl(Province);
+        _log.Trace($"[灾害] 轮询中央气象台（{Province}，间隔 {WeatherIntervalSec}s）");
 
         _ = Task.Run(async () =>
         {
@@ -268,6 +286,10 @@ public sealed class DisasterService : IDisposable
             using (doc)
             {
                 var alerts = DisasterSources.ParseNmcAlerts(doc.RootElement, Province, strict: false);
+                foreach (var a in alerts)
+                    _log.Trace($"[灾害] 气象预警：{a.Title}（信号 {a.Signal}，等级 {a.Level}，地区 {a.County}，" +
+                               $"发布 {QuakeCalc.FmtClockHm(a.IssuedTs)}，uid={a.Uid}）");
+                _log.Trace($"[灾害] 中央气象台本轮 {alerts.Count} 条预警");
                 Post(() =>
                 {
                     _nmc.OnOk(Now);
@@ -286,11 +308,16 @@ public sealed class DisasterService : IDisposable
 
     void IngestQuakes(IEnumerable<QuakeEvent> incoming)
     {
+        var list = incoming.ToList();
         lock (_gate)
         {
-            var (merged, _) = DisasterSources.MergeQuakes(_quakes, incoming.ToList());
+            var before = _quakes.Count;
+            var (merged, _) = DisasterSources.MergeQuakes(_quakes, list);
             _quakes = DisasterSources.PruneQuakes(merged, Now);
             _cacheDirty = true;
+            if (list.Count > 0)
+                _log.Trace($"[灾害] 合并地震事件：本次 {list.Count} 条（其中 {list.Count(u => !_quakes.ContainsKey(u.Uid))} 条全新），" +
+                           $"事件库 {before} → {_quakes.Count} 条（超时 / 无修订的旧事件已被裁剪）");
         }
         FetchDetailsIfNeeded();
     }
@@ -307,6 +334,7 @@ public sealed class DisasterService : IDisposable
                 .ToList();
         }
         if (need.Count == 0) return;
+        _log.Trace($"[灾害] 为 {need.Count} 条 ICL 事件补逐县详情：{string.Join("、", need.Select(n => n.Epicenter))}");
 
         foreach (var ev in need)
         {
@@ -314,11 +342,16 @@ public sealed class DisasterService : IDisposable
             _ = Task.Run(async () =>
             {
                 var (doc, _) = await DisasterSources.FetchJsonAsync(url).ConfigureAwait(false);
-                if (doc is null) return;
+                if (doc is null)
+                {
+                    _log.Trace($"[灾害] 事件 {ev.Epicenter}（uid={ev.Uid}）的逐县详情请求失败");
+                    return;
+                }
                 using (doc)
                 {
                     var counties = DisasterSources.ParseIclDetail(doc.RootElement);
                     if (counties.Count == 0) return;
+                    _log.Trace($"[灾害] 事件 {ev.Epicenter} 收到 {counties.Count} 个县的逐县数据");
                     Post(() =>
                     {
                         lock (_gate)
@@ -342,9 +375,18 @@ public sealed class DisasterService : IDisposable
 
     void RefreshFocus(double now)
     {
+        var previousFocus = Focus;
         var evaluations = EvaluateQuakes(now);
         Focus = evaluations.FirstOrDefault();
         Others = evaluations.Skip(1).Take(4).Cast<object>().ToList();
+
+        // 事件消失了就把"首次看到"的时间一起丢掉，否则字典会随运行时长无限增长
+        if (_firstSeen.Count > 0)
+        {
+            var alive = new HashSet<string>(evaluations.Select(e => e.Uid), StringComparer.Ordinal);
+            foreach (var key in _firstSeen.Keys.Where(k => !alive.Contains(k)).ToList())
+                _firstSeen.Remove(key);
+        }
 
         if (Focus is null)
         {
@@ -358,6 +400,16 @@ public sealed class DisasterService : IDisposable
         }
         else _weatherFocus = null;
 
+        // 主焦点换了才记一行（每秒都在刷，没换时刷屏没意义）
+        if (Focus?.Uid != previousFocus?.Uid || Focus?.Event.Revision != previousFocus?.Event.Revision)
+        {
+            if (Focus is { } f)
+                _log.Trace($"[灾害] 主焦点：{f.Event.Epicenter} M{f.Event.Magnitude:0.#}（烈度 {f.LocalIntensity:0.#}，" +
+                           $"revision {f.Event.Revision}，另有 {Others.Count} 条次要事件）");
+            else if (previousFocus is not null)
+                _log.Trace("[灾害] 主焦点清空（事件已到达 / 过期 / 用户清除）");
+        }
+
         UpdateEmergency(now);
         MaybeNotify(now);
     }
@@ -367,7 +419,13 @@ public sealed class DisasterService : IDisposable
     List<QuakeEvaluation> EvaluateQuakes(double now)
     {
         if (!QuakeEnabled) return new List<QuakeEvaluation>();
-        if (Lat is null || Lon is null) return new List<QuakeEvaluation>();
+        if (Lat is null || Lon is null)
+        {
+            lock (_gate)
+                if (_quakes.Count > 0)
+                    _log.Trace($"[灾害计算] 坐标未设置，跳过 {_quakes.Count} 条地震事件的评估（请在设置 → 灾害预警选位置）");
+            return new List<QuakeEvaluation>();
+        }
 
         List<QuakeEvent> events;
         lock (_gate) events = _quakes.Values.ToList();
@@ -376,7 +434,14 @@ public sealed class DisasterService : IDisposable
         foreach (var ev in events)
         {
             var r = QuakeCalc.Evaluate(ev, Lat, Lon, now, Threshold);
-            if (r is { Displayable: true }) list.Add(r);
+            if (r is { Displayable: true })
+            {
+                _log.Trace($"[灾害计算] {ev.Epicenter} M{ev.Magnitude:0.#}：距离 {r.DistanceKm:0.#}km，" +
+                           $"本地烈度 {r.LocalIntensity:0.#}（阈值 {Threshold:0.#}），" +
+                           (r.Incoming ? $"横波 {Math.Max(0, r.ArriveTs - now):0} 秒后到达" : "横波已到达") +
+                           $"，等级 {r.Level}");
+                list.Add(r);
+            }
         }
 
         return list
@@ -426,17 +491,14 @@ public sealed class DisasterService : IDisposable
         if (_dismissed is { } d && d.Uid == focus.Uid && focus.Event.Revision <= d.Revision) return;
 
         var big = QuakeCalc.Rank(focus.Level) >= QuakeCalc.Rank(QuakeLevels.Red);
-        if (!big)
+
+        if (!_firstSeen.TryGetValue(focus.Uid, out var seenAt))
         {
-            // 小震：只短暂占用，之后把课程显示交还（倒计时仍在副岛/面板里）
-            if (!_firstSeen.TryGetValue(focus.Uid, out var seenAt))
-            {
-                seenAt = now;
-                _firstSeen[focus.Uid] = now;
-            }
-            if (SmallHoldSec <= 0) return;
-            if (now - seenAt > SmallHoldSec) return;
+            seenAt = now;
+            _firstSeen[focus.Uid] = now;
         }
+
+        if (!ShouldTakeOverIsland(focus, big, now, seenAt, SmallHoldSec)) return;
 
         var window = Math.Max(1, focus.CountdownSec);
         var remain = Math.Max(0, focus.ArriveTs - now);
@@ -447,6 +509,47 @@ public sealed class DisasterService : IDisposable
             Ratio: ratio,
             BarColor: Color.FromRgb(0xFF, 0x45, 0x3A),   // 地震预警固定红条
             Level: focus.Level);
+        if (_lastEmergencyText != Emergency.Text)
+        {
+            _lastEmergencyText = Emergency.Text;
+            _log.Warn($"[灾害] 红色倒计时接管主岛：{Emergency.Text}（等级 {focus.Level}）");
+        }
+    }
+
+    string? _lastEmergencyText;
+
+    /// <summary>
+    /// 这条事件该不该占着主岛（红条 + 倒计时）。
+    ///
+    /// <para>规则分三种情况，最容易搞混的是前两种 —— 之前把它们合并成"非红级就只占 5 秒"，
+    /// 结果**倒计时会在第 5 秒凭空消失**（用户报的 bug）：</para>
+    ///
+    /// <list type="bullet">
+    ///   <item><b>横波还没到</b>（incoming）：整段倒计时都占着。预警的全部价值就是这段读秒，
+    ///         哪怕只是黄色级别，也不能中途把红条收掉。</item>
+    ///   <item><b>红级及以上</b>：一直占着，直到用户点胶囊确认。</item>
+    ///   <item><b>其余（已到达的小震）</b>：占 <paramref name="smallHoldSec"/> 秒「已到达」提示后
+    ///         把主岛交还课程，事件仍在副岛 / 下拉面板里。</item>
+    /// </list>
+    ///
+    /// <para>注意第三种的计时起点取 <c>max(首次看到, 横波到达)</c>：否则远处地震从"开始预警"算起，
+    /// 等横波真到达时 5 秒早就过了，连一句"已到达"都露不出来。</para>
+    /// </summary>
+    public static bool ShouldTakeOverIsland(
+        QuakeEvaluation focus, bool big, double now, double seenAt, int smallHoldSec)
+    {
+        if (focus is null) return false;
+
+        // 1) 还在倒计时：一直显示，直到横波到达
+        if (focus.Incoming) return true;
+
+        // 2) 红级及以上：一直显示，直到用户确认
+        if (big) return true;
+
+        // 3) 其余：到达后再留一小段"已到达"
+        if (smallHoldSec <= 0) return false;
+        var holdFrom = Math.Max(seenAt, focus.ArriveTs);
+        return now - holdFrom <= smallHoldSec;
     }
 
     static string EmergencyText(QuakeEvaluation focus)
@@ -619,6 +722,7 @@ public sealed class DisasterService : IDisposable
             _quakes[ev.Uid] = ev;
         }
         RefreshFocus(now);
+        _log.Warn($"[灾害] 注入演练地震：M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，震中坐标 {ev.Lat:0.####},{ev.Lon:0.####}");
         return $"已注入演练地震 M{ev.Magnitude:0.#}（震中 演练震中），当前倒计时 " +
                $"{(Focus is null ? "未达显示条件" : Math.Max(0, (int)Math.Round(Focus.ArriveTs - now)) + " 秒")}";
     }
@@ -634,6 +738,8 @@ public sealed class DisasterService : IDisposable
         Focus = null;
         Emergency = null;
         _dismissed = null;
+        _lastEmergencyText = null;
+        _log.Trace("[灾害] 演练已清除，事件与提醒状态复位");
     }
 
     /// <summary>设置页的状态说明（多行）。</summary>
@@ -667,10 +773,15 @@ public sealed class DisasterService : IDisposable
     {
         try
         {
-            if (!File.Exists(_cachePath)) return;
+            if (!File.Exists(_cachePath))
+            {
+                _log.Trace("[灾害] 缓存文件不存在（disaster-cache.json），从零开始");
+                return;
+            }
             var dto = System.Text.Json.JsonSerializer.Deserialize<CacheDto>(File.ReadAllText(_cachePath));
             if (dto?.Quakes is null) return;
             foreach (var q in dto.Quakes) _quakes[q.Uid] = q;
+            _log.Trace($"[灾害] 缓存载入 {dto.Quakes.Count} 条地震事件（重启后先按缓存显示）");
         }
         catch (Exception ex)
         {
@@ -689,6 +800,7 @@ public sealed class DisasterService : IDisposable
         {
             var dto = new CacheDto { Quakes = _quakes.Values.TakeLast(8).ToList() };
             Core.Storage.AtomicJson.Write(_cachePath, dto);
+            _log.Trace($"[灾害] 灾害缓存已落盘（{_cachePath}，{dto.Quakes.Count} 条）");
         }
         catch (Exception ex)
         {
