@@ -1,0 +1,159 @@
+<Window x:Class="CDL2.Updater.UpdaterWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Class Daily Land 2 · 更新"
+        Width="480"
+        SizeToContent="Height"
+        MaxHeight="640"
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        ShowInTaskbar="True"
+        UseLayoutRounding="True"
+        Background="{DynamicResource _Bg}"
+        FontFamily="Segoe UI, Microsoft YaHei UI">
+
+    <Window.Resources>
+        <Style x:Key="FlatButton" TargetType="Button">
+            <Setter Property="Padding" Value="14,7" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{DynamicResource _ButtonFace}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource _ButtonHover}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="AccentButton" TargetType="Button" BasedOn="{StaticResource FlatButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd"
+                                Background="{DynamicResource _Accent}"
+                                CornerRadius="5"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="Bd" Property="Opacity" Value="0.45" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border BorderThickness="1" BorderBrush="{DynamicResource _CardBorder}" CornerRadius="8" Margin="8">
+        <Grid Margin="22,18,22,18">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- 标题条 -->
+            <Grid Grid.Row="0" Background="Transparent" MouseLeftButtonDown="OnDragArea">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="TitleText" Grid.Column="0"
+                           FontSize="16" FontWeight="SemiBold"
+                           Foreground="{DynamicResource _Text}"
+                           Text="正在更新 Class Daily Land 2" />
+                <Button x:Name="CloseX" Grid.Column="1" Width="30" Height="30"
+                        Style="{StaticResource FlatButton}" Padding="0"
+                        Content="✕" FontSize="11" ToolTip="关闭"
+                        Foreground="{DynamicResource _TextSecondary}"
+                        Click="OnCloseClick" />
+            </Grid>
+
+            <!-- 版本与进度 -->
+            <StackPanel Grid.Row="1" Margin="0,16,0,0">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="VersionText" Grid.Column="0" FontSize="13"
+                               Foreground="{DynamicResource _TextSecondary}" Text="" />
+                    <TextBlock x:Name="PercentText" Grid.Column="1" FontSize="13"
+                               FontFamily="Consolas"
+                               Foreground="{DynamicResource _Text}" Text="" />
+                </Grid>
+
+                <Border x:Name="TrackBorder" Margin="0,10,0,0" Height="6" CornerRadius="3"
+                        Background="{DynamicResource _Track}">
+                    <Border x:Name="ProgressFill" HorizontalAlignment="Left" Width="0"
+                            CornerRadius="3" Background="{DynamicResource _Accent}" />
+                </Border>
+
+                <!-- 阶段勾选 -->
+                <StackPanel x:Name="StageStrip" Orientation="Horizontal" Margin="0,12,0,0" />
+            </StackPanel>
+
+            <!-- 当前状态 -->
+            <TextBlock x:Name="StatusText" Grid.Row="2" Margin="0,14,0,0"
+                       TextWrapping="Wrap" FontSize="13"
+                       Foreground="{DynamicResource _TextSecondary}" Text="正在准备…" />
+
+            <!-- 恢复 / 提示区（失败时显示） -->
+            <TextBlock x:Name="ErrorText" Grid.Row="3" Margin="0,10,0,0"
+                       TextWrapping="Wrap" FontSize="12.5"
+                       Foreground="{DynamicResource _Error}" Visibility="Collapsed" Text="" />
+
+            <!-- 恢复操作：更新器本身就是重装工具，这里只放「重启软件」
+                 （更新进行中会隐藏 —— 那时把旧程序拉起来只会打架） -->
+            <StackPanel x:Name="RecoveryRow" Grid.Row="4" Orientation="Horizontal"
+                        Margin="0,14,0,0" Visibility="Collapsed">
+                <TextBlock Text="恢复操作" VerticalAlignment="Center"
+                           Foreground="{DynamicResource _TextSecondary}" />
+                <Button x:Name="RestartAppButton" Content="重启软件" Style="{StaticResource FlatButton}"
+                        Margin="12,0,0,0" Click="OnRestartAppClick"
+                        Foreground="{DynamicResource _Text}"
+                        ToolTip="重新启动主程序（更新成功后建议从这里启动）" />
+            </StackPanel>
+
+            <!-- 底部按钮 -->
+            <Grid Grid.Row="5" Margin="0,16,0,0">
+                <TextBlock x:Name="LogHintText" VerticalAlignment="Center" FontSize="11.5"
+                           Foreground="{DynamicResource _TextSecondary}" Text="" />
+
+                <StackPanel x:Name="ButtonStrip" Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="CancelButton" Content="取消" Style="{StaticResource FlatButton}"
+                            Foreground="{DynamicResource _Text}" Click="OnCancelClick" Visibility="Collapsed" />
+                    <Button x:Name="RetryButton" Content="重试" Style="{StaticResource AccentButton}"
+                            Margin="8,0,0,0" Click="OnRetryClick" Visibility="Collapsed" />
+                    <Button x:Name="RollbackButton" Content="回滚到上一版本" Style="{StaticResource FlatButton}"
+                            Margin="8,0,0,0" Click="OnRollbackClick" Visibility="Collapsed"
+                            ToolTip="按备份账本把程序文件恢复到更新前的状态" />
+                    <Button x:Name="LaunchButton" Content="立即启动" Style="{StaticResource AccentButton}"
+                            Margin="8,0,0,0" Click="OnLaunchClick" Visibility="Collapsed" />
+                    <Button x:Name="DoneButton" Content="完成" Style="{StaticResource FlatButton}"
+                            Margin="8,0,0,0" Click="OnDoneClick" Visibility="Collapsed" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</Window>

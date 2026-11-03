@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- 主程序的 StageUpdater 只认这个名字：Update\Updater.exe -->
+    <AssemblyName>Updater</AssemblyName>
+    <RootNamespace>CDL2.Updater</RootNamespace>
+
+    <!-- 契约源码独立放在 Contract\（与主程序 Shared\UpdateContract 同源，改动要两边同步） -->
+    <SatelliteResourceLanguages>zh-Hans</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- Contract\*.cs（与主程序 Shared\UpdateContract 同源的契约）由默认通配包含，无需显式列出 -->
+
+</Project>
