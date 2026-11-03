@@ -276,6 +276,17 @@ public sealed class AppController
             }
 
             var previous = File.ReadAllText(RunningMarkerPath);
+
+            // 被更新程序强杀属于"预期内"的结束：新更新器替换成功后会清标记，
+            // 但旧版更新器不会（或清失败），这里再兜一层——若更新结果是成功、
+            // 且完成时间不早于本次运行标记，就按正常结束处理，不弹异常退出上报。
+            if (WasClosedByUpdater(previous))
+            {
+                Log.Info("[异常退出] 上次是被更新程序关闭的（更新已完成），按正常结束处理");
+                WriteRunningMarker();
+                return;
+            }
+
             Log.Warn($"[异常退出] 上一次运行未正常结束：{previous}");
 
             // 写入新标记要先于上报：如果这次又崩，下次还能接着报
@@ -292,6 +303,40 @@ public sealed class AppController
         {
             Log?.Warn("[异常退出] 检测失败：" + ex.Message);
             try { WriteRunningMarker(); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// 上次结束是不是"更新程序干的"：更新结果成功，且完成时间不早于本次运行标记。
+    /// 是的话不该按异常退出上报（否则每次更新完都白弹一次崩溃窗）。
+    /// </summary>
+    bool WasClosedByUpdater(string markerJson)
+    {
+        try
+        {
+            var result = LastUpdate.Read();
+            if (result is null || !result.Ok) return false;
+
+            DateTime started;
+            try
+            {
+                using var doc = System.Text.Json.JsonDocument.Parse(markerJson);
+                if (!doc.RootElement.TryGetProperty("started_at", out var startedElement)) return false;
+                if (!DateTime.TryParse(startedElement.GetString(), out started)) return false;
+            }
+            catch
+            {
+                return false;
+            }
+
+            if (!DateTime.TryParse(result.FinishedAt, out var finished)) return false;
+
+            // 允许 5 秒时钟误差
+            return finished >= started.AddSeconds(-5);
+        }
+        catch
+        {
+            return false;
         }
     }
 
