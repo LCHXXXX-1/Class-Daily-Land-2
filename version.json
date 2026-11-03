@@ -1,15 +1,16 @@
 {
   "stable": {
-    "version": "1.3.4",
+    "version": "1.3.5",
     "release_date": "2026-11-03",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.3.4.zip",
-    "sha256": "22d802577010716c84e601c578331cacff361a8c556148d8b645ef343ecb6ead",
+    "download_url": "https://github.com/LCHXXXX-1/Class-Daily-Land-2/releases/download/Version/Class-Daily-Land-2-1.3.5.zip",
+    "sha256": "f77d3c834df18ba4fa8522f207b2a6689373460aeaff5949e0bef51149a08235",
     "changelog": [
-      "修复：更新中断后不会再有进程卡在后台，也不会导致之后无法再次更新",
-      "改进：下载卡住或被限速时自动换源重试，不再无限等待",
-      "改进：自动更新源改为 Gitee 优先（默认更新源 Gitee、插件源 GitHub）"
+      "修复：更新前无法自动关闭常驻主程序（灵动岛/托盘场景）导致更新失败的问题",
+      "改进：更新器关闭主程序改为多阶段——先请求正常退出，再强制结束，多轮复查",
+      "改进：关闭失败时精确报告卡住的进程与原因（含管理员权限提示）",
+      "改进：下载停滞自动换源（10~30 秒无进展即切换）"
     ],
-    "is_mandatory": false
+    "is_mandatory": true
   },
   "developer_tool": {
     "version": "1.0.1",
