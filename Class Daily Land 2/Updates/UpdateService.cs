@@ -37,7 +37,7 @@ public sealed class UpdateService
     /// <summary>
     /// 按设置里的「更新源」排出尝试顺序，去重去空。
     /// <list type="bullet">
-    ///   <item><c>auto</c>（默认）：GitHub 优先，GitHub 失败/没有就自动换 Gitee</item>
+    ///   <item><c>auto</c>：Gitee 优先（国内更稳），Gitee 失败/没有就自动换 GitHub</item>
     ///   <item><c>github</c>：只走 GitHub</item>
     ///   <item><c>gitee</c>：只走 Gitee（国内网络更稳）</item>
     /// </list>
@@ -50,7 +50,7 @@ public sealed class UpdateService
         {
             "github" => new[] { VersionInfo.VersionUrlFallback },
             "gitee" => new[] { VersionInfo.VersionUrl },
-            _ => new[] { VersionInfo.VersionUrlFallback, VersionInfo.VersionUrl },
+            _ => new[] { VersionInfo.VersionUrl, VersionInfo.VersionUrlFallback },
         };
 
         var list = new List<string>();
@@ -474,7 +474,7 @@ public sealed class UpdateService
                 UpdateEnvironment.AppendAppLog(Path.Combine(_paths.Root, "app.log"),
                     $"[update] 开始更新到 {offer.Version}（{offer.Channel}），更新器 PID {startedPid}");
 
-                return UpdateLaunchResult.Success(preparedExe);
+                return UpdateLaunchResult.Success(preparedExe, startedPid ?? 0);
             }
             catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
             {
@@ -593,7 +593,7 @@ public sealed class UpdateService
         UpdateEnvironment.AppendAppLog(Path.Combine(_paths.Root, "app.log"),
             $"[update] 开始更新到 {offer.Version}（{offer.Channel}），更新器 PID {pid}");
 
-        return UpdateLaunchResult.Success(jobPath);
+        return UpdateLaunchResult.Success(jobPath, pid ?? 0);
     }
 }
 

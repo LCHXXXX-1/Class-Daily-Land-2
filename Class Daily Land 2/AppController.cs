@@ -867,7 +867,14 @@ public sealed class AppController
     /// </summary>
     public async Task ApplyUpdateAsync(UpdateOffer offer)
     {
-        if (Updates is null || _updateLaunched) return;
+        if (Updates is null) return;
+        if (_updateLaunched)
+        {
+            // 已有更新器在跑：明确提示而不是没反应（用户中断更新后常以为坏了）
+            Log?.Warn("[更新] 已有更新任务在执行，忽略本次点击");
+            Tray?.Balloon("正在更新", "已有一个更新任务在进行中，请等它完成", 5);
+            return;
+        }
 
         var result = await Updates.ApplyAsync(offer).ConfigureAwait(true);
         if (!result.Ok)
@@ -880,6 +887,7 @@ public sealed class AppController
         _updateLaunched = true;
 
         HideForUpdater();
+        WatchUpdaterProcess(result.Pid);
 
         Log?.Info("更新器已启动，主程序已隐藏并保持后台运行（替换前由更新器关闭）");
         Tray?.Balloon("正在更新", "更新器正在下载，安装时会自动关闭程序", 5);
@@ -1018,9 +1026,41 @@ public sealed class AppController
 
         _updateLaunched = true;
         HideForUpdater();
+        WatchUpdaterProcess(result.Pid);
 
         Log?.Info("[重装] 更新器已启动，主程序隐藏并保持后台运行");
         Tray?.Balloon("正在重新安装", "更新器正在下载最新版，安装时会自动关闭程序", 5);
+    }
+
+    /// <summary>
+    /// 盯着更新器进程：它一退出就解除"更新进行中"的锁存。
+    ///
+    /// 没有这一步的话，用户中途取消/关闭更新器后，主程序永远以为"更新还在跑"，
+    /// 之后点「立即更新 / 重新安装」都会被静默忽略（用户实测踩过）。
+    /// 更新器正常完成时会自己重启主程序，那时锁存状态随重启自然消失，不受影响。
+    /// </summary>
+    private void WatchUpdaterProcess(int pid)
+    {
+        if (pid <= 0) return;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var proc = System.Diagnostics.Process.GetProcessById(pid);
+                // 最多等 30 分钟：正常更新几分钟内必然结束
+                for (var i = 0; i < 3600; i++)
+                {
+                    if (proc.HasExited) break;
+                    await Task.Delay(500).ConfigureAwait(false);
+                }
+                proc.Dispose();
+            }
+            catch { /* 进程已经没了 = 已退出 */ }
+
+            _updateLaunched = false;
+            Log?.Info("[更新] 更新器进程已结束，解除更新锁存");
+        });
     }
 
     /// <summary>

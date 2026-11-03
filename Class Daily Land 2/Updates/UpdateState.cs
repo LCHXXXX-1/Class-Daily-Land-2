@@ -74,9 +74,9 @@ public sealed record UpdateStatus(
     public bool HasAnyUpdate => App is not null || Resources is not null;
 }
 
-/// <summary>用户点「立即更新」后，启动更新器的结果。</summary>
-public sealed record UpdateLaunchResult(bool Ok, string Message, string? JobPath = null, int ExitCode = 0)
+/// <summary>用户点「立即更新」后，启动更新器的结果。Pid = 已启动的更新器进程号（0 = 未知）。</summary>
+public sealed record UpdateLaunchResult(bool Ok, string Message, string? JobPath = null, int ExitCode = 0, int Pid = 0)
 {
-    public static UpdateLaunchResult Success(string jobPath) => new(true, "", jobPath);
+    public static UpdateLaunchResult Success(string jobPath, int pid = 0) => new(true, "", jobPath, 0, pid);
     public static UpdateLaunchResult Fail(string message, int exitCode = 0) => new(false, message, null, exitCode);
 }
