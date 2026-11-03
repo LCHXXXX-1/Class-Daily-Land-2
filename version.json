@@ -1,12 +1,12 @@
 {
   "stable": {
-    "version": "1.7.7",
+    "version": "1.7.8",
     "release_date": "2026-11-04",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.7.zip",
-    "sha256": "74da290fead47b9916ad34cf567c1b13c68a1c67b3d08511552fd14f208e2217",
+    "download_url": "https://github.com/LCHXXXX-1/Class-Daily-Land-2/releases/download/Version/Class-Daily-Land-2-1.7.8.zip",
+    "sha256": "49c76e47baf9a3b5ad142b736add7d7149d43398d8619bb00bb1eb60e3c5ea75",
     "changelog": [
-      "修复：触屏长按后松手菜单就消失——改为手指离开的瞬间才弹出菜单，并按落点定位",
-      "改进：长按期间移动手指仍然视作滚动，不会误弹菜单"
+      "改进：触屏长按改为向窗口发送真正的右键消息（WM_RBUTTON），走 Windows 原生右键路径弹菜单",
+      "改进：菜单按手指落点定位（含高 DPI 换算）"
     ],
     "is_mandatory": false
   },
