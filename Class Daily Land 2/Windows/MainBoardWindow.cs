@@ -737,9 +737,9 @@ public sealed class MainBoardWindow : Window
 
         _longPressFired = true;
 
-        // 抓住鼠标，保证随后的抬起事件也走这里（要吞掉，否则会被当成点击）
-        try { Mouse.Capture(this); } catch { /* 抓不到就算了 */ }
-
+        // ★ 绝不能 Mouse.Capture(this)：鼠标一旦被本窗口抓住，整个应用的点击都会被吞掉
+        //   （灵动岛、主窗口、按钮全都点不动，踩过）。抬起事件本来就会先经 Preview 到达窗口，
+        //   不需要抓鼠标就能拦下来。
         BuildContextMenu().IsOpen = true;
     }
 
@@ -763,13 +763,47 @@ public sealed class MainBoardWindow : Window
         _dragStart = e.GetPosition(this);
         _dragOffset = _homeworkScroll.VerticalOffset;
 
-        // 长按（触屏等价于右键）→ 弹出菜单
+        // 长按（触屏等价于右键）→ 弹出菜单。
+        // 但按在按钮/输入框这类可交互控件上时不启动长按计时器：正常点击优先，别被菜单劫持。
+        if (IsOnInteractiveElement(e.OriginalSource as DependencyObject))
+        {
+            _pressActive = false;
+            _longPressFired = false;
+            _longPressTimer?.Stop();
+            return;
+        }
+
         EnsureLongPressTimer();
         _pressStart = _dragStart.Value;
         _pressActive = true;
         _longPressFired = false;
         _longPressTimer?.Stop();
         _longPressTimer?.Start();
+    }
+
+    /// <summary>按下的位置是否落在可交互控件上（按钮、输入框、列表项……）。</summary>
+    private static bool IsOnInteractiveElement(DependencyObject? source)
+    {
+        var current = source;
+        while (current is not null)
+        {
+            if (current is ButtonBase or TextBoxBase or ComboBox or ListBoxItem or MenuItem or ToggleButton)
+                return true;
+
+            DependencyObject? parent = null;
+            if (current is Visual or System.Windows.Media.Media3D.Visual3D)
+            {
+                try { parent = VisualTreeHelper.GetParent(current); }
+                catch { parent = null; }
+            }
+            else if (current is FrameworkContentElement)
+            {
+                parent = LogicalTreeHelper.GetParent(current);
+            }
+
+            current = parent;
+        }
+        return false;
     }
 
     protected override void OnPreviewMouseMove(MouseEventArgs e)
@@ -807,7 +841,6 @@ public sealed class MainBoardWindow : Window
             // 长按已经弹过菜单：吞掉这次抬起，别让它变成点击
             _longPressFired = false;
             _pressActive = false;
-            try { Mouse.Capture(null); } catch { }
             e.Handled = true;
             return;
         }
