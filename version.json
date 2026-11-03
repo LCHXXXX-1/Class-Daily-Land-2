@@ -1,15 +1,13 @@
 {
   "stable": {
-    "version": "1.7.10",
+    "version": "1.7.11",
     "release_date": "2026-11-04",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.10.zip",
-    "sha256": "5c4221ef6cc426e2c34222d23469d66cfa978741f8ea795171e2c9bfff664355",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.11.zip",
+    "sha256": "16b540697f85b793f2d282fce550e916e5234258085a06d710546fdea14a8f51",
     "changelog": [
-      "修复：触屏长按菜单在非焦点状态下无效——现在触摸按下会自动让窗口获得焦点",
-      "改进：触屏弹出菜单时向下偏移，避免手指压住菜单导致误触关闭",
-      "修复：窗口空白区域收不到触摸（根容器改为透明背景，整块底板都能长按）"
+      "调整：触屏长按判定从 0.55 秒缩短到 0.25 秒，出菜单更快"
     ],
-    "is_mandatory": true
+    "is_mandatory": false
   },
   "developer_tool": {
     "version": "1.0.1",
