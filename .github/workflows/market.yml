@@ -43,7 +43,9 @@ jobs:
           #   和「Run workflow」按钮只认默认分支上的 workflow）和 plugins（响应 上传的zip 的 push）
           #   各放一份，两处都必须 checkout 市场根，而不是当前触发的 ref。
           ref: plugins
-          fetch-depth: 1
+          # ★ 必须完整历史：浅克隆（fetch-depth: 1）下 git 判断不了祖先关系，
+          #   往 Gitee 推会被误判成非快进而拒绝（实测踩过）。市场分支很小，取全量没有代价。
+          fetch-depth: 0
           persist-credentials: true
 
       # 契约工程与工具链都只在 master；sparse 只取需要的两个目录，
@@ -156,6 +158,28 @@ jobs:
 
           # ② Gitee（主源）：偶发 502，重试三次
           url="https://${GITEE_USERNAME}:${GITEE_TOKEN}@gitee.com/lchxxxx/class-daily-land-2.git"
+
+          # 先把 Gitee 的最新取回来再推。用户在 GitHub 网页上传时，只有 GitHub 会多出提交，
+          # 两边必然分叉；不先对齐就会一直 "fetch first" 推不动。
+          if git fetch "$url" plugins:refs/remotes/gitee/plugins 2>/dev/null; then
+            if ! git merge-base --is-ancestor refs/remotes/gitee/plugins HEAD; then
+              echo "::warning::与 Gitee 分叉，先 rebase 再推"
+              if git -c user.name="market-bot" -c user.email="market-bot@users.noreply.github.com" \
+                    rebase -X theirs refs/remotes/gitee/plugins; then
+                node tools/market.mjs build --root .   # index.json 以重新生成的为准
+                git add -A
+                git commit -q -m "market: 重建索引（合并 Gitee）" || true
+                git push origin HEAD:plugins || true
+              else
+                git rebase --abort || true
+                echo "::error::与 Gitee 分叉且无法自动合并，需要人工处理"
+                exit 1
+              fi
+            fi
+          else
+            echo "::warning::取不到 Gitee 的 plugins，直接尝试推送"
+          fi
+
           for i in 1 2 3; do
             if git push "$url" HEAD:plugins; then ok=1; break; fi
             echo "Gitee 推送第 $i 次失败，5 秒后重试"; sleep 5
