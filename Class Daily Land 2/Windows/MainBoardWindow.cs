@@ -661,59 +661,91 @@ public sealed class MainBoardWindow : Window
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseRightButtonUp(e);
-
-        // 触屏长按会先记下落点，再给自己发一条真正的右键消息；
-        // 这里取出落点，保证菜单弹在手指位置（鼠标右键时为空，按鼠标位置弹）。
-        var pending = _pendingMenuScreenPoint;
-        _pendingMenuScreenPoint = null;
-
-        BuildContextMenu(pending).IsOpen = true;
+        ShowContextMenu(null);       // 鼠标右键：按光标位置弹
         e.Handled = true;
     }
 
-    // ————————————————————— 触屏长按 = 真正的右键消息 —————————————————————
+    // ————————————————————— 菜单的打开与"点外面就关" —————————————————————
 
-    const int WM_RBUTTONDOWN = 0x0204;
-    const int WM_RBUTTONUP = 0x0205;
-    const int MK_RBUTTON = 0x0002;
+    ContextMenu? _openMenu;
+    GlobalMouseHook? _menuHook;
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
-
-    /// <summary>模拟一次真正的右键（走 Windows 消息，WPF 走原生右键路径弹菜单）。</summary>
-    void RaiseSyntheticRightClick(Point windowPoint)
+    /// <summary>
+    /// 弹出菜单。screenPoint 为空时按鼠标位置弹（鼠标右键），否则按给定屏幕坐标弹（触屏长按）。
+    ///
+    /// 同时挂一个全局低级鼠标钩子：**点在菜单外面就关掉**。
+    /// 本窗是 ShowActivated=false 的桌面挂件，WPF 的 Deactivated / StaysOpen 在"点别的窗口、
+    /// 点桌面"时都靠不住，只有 WH_MOUSE_LL 能跨窗口拿到点击（下拉面板也是这么做的）。
+    /// </summary>
+    void ShowContextMenu(Point? screenPoint)
     {
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd == IntPtr.Zero)
-        {
-            BuildContextMenu(PointToScreen(windowPoint)).IsOpen = true;
-            return;
-        }
+        var menu = BuildContextMenu(screenPoint);
+        _openMenu = menu;
 
-        // WM_RBUTTON* 的 lParam 是客户区**设备像素**，窗口坐标是 DIP，要按 DPI 换算
-        var dpi = VisualTreeHelper.GetDpi(this);
-        var px = (int)Math.Round(windowPoint.X * dpi.DpiScaleX);
-        var py = (int)Math.Round(windowPoint.Y * dpi.DpiScaleY);
-        var lParam = (IntPtr)((py << 16) | (px & 0xFFFF));
-
-        _pendingMenuScreenPoint = PointToScreen(windowPoint);
-
-        try
+        menu.Opened += (_, _) => StartMenuOutsideHook();
+        menu.Closed += (_, _) =>
         {
-            SendMessage(hwnd, WM_RBUTTONDOWN, (IntPtr)MK_RBUTTON, lParam);
-            SendMessage(hwnd, WM_RBUTTONUP, IntPtr.Zero, lParam);
-        }
-        catch
+            if (ReferenceEquals(_openMenu, menu)) _openMenu = null;
+            StopMenuOutsideHook();
+        };
+
+        menu.IsOpen = true;
+    }
+
+    void StartMenuOutsideHook()
+    {
+        if (_menuHook is not null) return;
+
+        _menuHook = new GlobalMouseHook();
+        _menuHook.MouseDown += OnGlobalMouseDown;
+
+        if (!_menuHook.Start())
         {
-            _pendingMenuScreenPoint = null;
-            BuildContextMenu(PointToScreen(windowPoint)).IsOpen = true;
+            _menuHook.MouseDown -= OnGlobalMouseDown;
+            _menuHook.Dispose();
+            _menuHook = null;
         }
     }
 
-    /// <summary>触屏长按待用的菜单落点（屏幕坐标）；鼠标右键时为 null。</summary>
-    Point? _pendingMenuScreenPoint;
+    void StopMenuOutsideHook()
+    {
+        if (_menuHook is null) return;
 
-    /// <summary>右键与长按共用的菜单（触屏没有右键键，长按是等价手势）。</summary>
+        _menuHook.MouseDown -= OnGlobalMouseDown;
+        _menuHook.Dispose();
+        _menuHook = null;
+    }
+
+    void OnGlobalMouseDown(int screenX, int screenY)
+    {
+        var menu = _openMenu;
+        if (menu is null || !menu.IsOpen) return;
+        if (IsPointInsideMenu(menu, screenX, screenY)) return;
+
+        // 点在菜单外面（任何窗口 / 桌面都算）：关掉
+        menu.IsOpen = false;
+    }
+
+    static bool IsPointInsideMenu(ContextMenu menu, int screenX, int screenY)
+    {
+        try
+        {
+            var topLeft = menu.PointToScreen(new Point(0, 0));
+            var dpi = VisualTreeHelper.GetDpi(menu);
+            var width = menu.ActualWidth * dpi.DpiScaleX;
+            var height = menu.ActualHeight * dpi.DpiScaleY;
+
+            const double pad = 2;   // 边界容差：刚好点在边框上不算"外面"
+            return screenX >= topLeft.X - pad && screenX <= topLeft.X + width + pad &&
+                   screenY >= topLeft.Y - pad && screenY <= topLeft.Y + height + pad;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>右键与长按共用的菜单（screenPoint 为空 = 按鼠标位置弹）。</summary>
     private ContextMenu BuildContextMenu(Point? screenPoint = null)
     {
         var menu = new ContextMenu { PlacementTarget = this };
@@ -839,12 +871,12 @@ public sealed class MainBoardWindow : Window
 
         if (!wasHold) return;
 
-        // 长按完成：手指离开后，给自己发一条真正的右键消息（等价于系统右键）
+        // 长按完成：手指离开的这一刻才弹菜单（按住时弹会被松手事件立刻关掉）
         _holdFired = false;
         if (!e.Handled)
         {
             e.Handled = true;   // 阻止这次触摸被提升成鼠标点击
-            RaiseSyntheticRightClick(_holdStart);
+            ShowContextMenu(PointToScreen(_holdStart));
         }
     }
 
