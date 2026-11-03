@@ -661,9 +661,57 @@ public sealed class MainBoardWindow : Window
     protected override void OnMouseRightButtonUp(MouseButtonEventArgs e)
     {
         base.OnMouseRightButtonUp(e);
-        BuildContextMenu().IsOpen = true;
+
+        // 触屏长按会先记下落点，再给自己发一条真正的右键消息；
+        // 这里取出落点，保证菜单弹在手指位置（鼠标右键时为空，按鼠标位置弹）。
+        var pending = _pendingMenuScreenPoint;
+        _pendingMenuScreenPoint = null;
+
+        BuildContextMenu(pending).IsOpen = true;
         e.Handled = true;
     }
+
+    // ————————————————————— 触屏长按 = 真正的右键消息 —————————————————————
+
+    const int WM_RBUTTONDOWN = 0x0204;
+    const int WM_RBUTTONUP = 0x0205;
+    const int MK_RBUTTON = 0x0002;
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto)]
+    static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>模拟一次真正的右键（走 Windows 消息，WPF 走原生右键路径弹菜单）。</summary>
+    void RaiseSyntheticRightClick(Point windowPoint)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+        {
+            BuildContextMenu(PointToScreen(windowPoint)).IsOpen = true;
+            return;
+        }
+
+        // WM_RBUTTON* 的 lParam 是客户区**设备像素**，窗口坐标是 DIP，要按 DPI 换算
+        var dpi = VisualTreeHelper.GetDpi(this);
+        var px = (int)Math.Round(windowPoint.X * dpi.DpiScaleX);
+        var py = (int)Math.Round(windowPoint.Y * dpi.DpiScaleY);
+        var lParam = (IntPtr)((py << 16) | (px & 0xFFFF));
+
+        _pendingMenuScreenPoint = PointToScreen(windowPoint);
+
+        try
+        {
+            SendMessage(hwnd, WM_RBUTTONDOWN, (IntPtr)MK_RBUTTON, lParam);
+            SendMessage(hwnd, WM_RBUTTONUP, IntPtr.Zero, lParam);
+        }
+        catch
+        {
+            _pendingMenuScreenPoint = null;
+            BuildContextMenu(PointToScreen(windowPoint)).IsOpen = true;
+        }
+    }
+
+    /// <summary>触屏长按待用的菜单落点（屏幕坐标）；鼠标右键时为 null。</summary>
+    Point? _pendingMenuScreenPoint;
 
     /// <summary>右键与长按共用的菜单（触屏没有右键键，长按是等价手势）。</summary>
     private ContextMenu BuildContextMenu(Point? screenPoint = null)
@@ -791,17 +839,12 @@ public sealed class MainBoardWindow : Window
 
         if (!wasHold) return;
 
-        // 长按完成：在松手的这一刻弹菜单（手指已离开，菜单不会被立刻关掉）
+        // 长按完成：手指离开后，给自己发一条真正的右键消息（等价于系统右键）
         _holdFired = false;
         if (!e.Handled)
         {
             e.Handled = true;   // 阻止这次触摸被提升成鼠标点击
-            try
-            {
-                var screenPoint = PointToScreen(_holdStart);
-                BuildContextMenu(screenPoint).IsOpen = true;
-            }
-            catch { /* 定位失败就按默认位置弹 */ BuildContextMenu().IsOpen = true; }
+            RaiseSyntheticRightClick(_holdStart);
         }
     }
 
