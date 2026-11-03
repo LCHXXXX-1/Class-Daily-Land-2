@@ -827,8 +827,8 @@ public sealed class MainBoardWindow : Window
 
     // ————————————————————— 触屏长按 = 右键菜单 —————————————————————
 
-    /// <summary>按住多久算长按（毫秒）。</summary>
-    const int TouchHoldMs = 550;
+    /// <summary>按住多久算长按（毫秒）。用户要求 250ms：更快出菜单，且与滚动手势仍能区分。</summary>
+    const int TouchHoldMs = 250;
 
     /// <summary>按住期间允许的手指抖动（像素），超过即视为拖动/滚动。</summary>
     const double TouchHoldSlop = 14;
