@@ -1,14 +1,14 @@
 {
   "stable": {
-    "version": "1.7.3",
+    "version": "1.7.4",
     "release_date": "2026-11-04",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.3.zip",
-    "sha256": "dbd7d3f0e5472d996f97ba6ea7233fd32653ec9b4377162d5beca80d326526e9",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.4.zip",
+    "sha256": "f0119fec73b1ebe24dff19bb47f691afe6cff8fa3b256872ff5751f0761d8d08",
     "changelog": [
-      "新增：「班级日常」主窗口支持长按（按住 0.6 秒）唤出与右键相同的菜单，触屏也能用",
-      "改进：长按期间移动手指即取消（不误触滚动），松手不会变成点击"
+      "修复：1.7.3 的长按实现会抓住鼠标不放，导致整个应用点不动（灵动岛、按钮全部失灵），本版彻底移除",
+      "改进：长按不再劫持按钮等可交互控件的正常点击"
     ],
-    "is_mandatory": false
+    "is_mandatory": true
   },
   "developer_tool": {
     "version": "1.0.1",
