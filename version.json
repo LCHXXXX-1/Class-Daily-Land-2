@@ -1,14 +1,15 @@
 {
   "stable": {
-    "version": "1.7.12",
+    "version": "1.7.13",
     "release_date": "2026-11-04",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.12.zip",
-    "sha256": "75940bd867ff749f2aed0d25678e95af1239a4869b9b82a85c3f2b98fb120a6c",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.13.zip",
+    "sha256": "5ea495c265bda5664be3d619b3e77535d78a5a768814ba2da10ab90a39883243",
     "changelog": [
-      "修复：更新完成后启动会误弹「上次异常退出」上报——更新器替换成功后会清除运行标记",
-      "改进：主程序启动时若发现上次是被更新程序关闭的（更新已完成），不再按异常退出处理"
+      "新增：错误码扩充到 44 条，每条都带「常见原因 / 处理建议 / 技术排查要点」，错误码清单页可直接查看",
+      "新增：日志全链路埋点——启动环境横幅、各阶段耗时、设置变更 diff、菜单操作、HTTP 请求与响应、插件加载、退出汇总",
+      "改进：日志里显示真实版本号（此前是程序集版本 1.0.0）"
     ],
-    "is_mandatory": true
+    "is_mandatory": false
   },
   "developer_tool": {
     "version": "1.0.1",
