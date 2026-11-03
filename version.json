@@ -1,13 +1,12 @@
 {
   "stable": {
-    "version": "1.3.6",
+    "version": "1.3.7",
     "release_date": "2026-11-03",
-    "download_url": "https://github.com/LCHXXXX-1/Class-Daily-Land-2/releases/download/Version/Class-Daily-Land-2-1.3.6.zip",
-    "sha256": "47d0530eff313267a5d1895d6fda887ee4298e36a7be47cbdf1a7f78adf1d553",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.3.7.zip",
+    "sha256": "795d104ada0694cc5bf8c54ec4514ba9faeeed1390186533471a722c6677a183",
     "changelog": [
-      "修复：1.3.5 的更新包误带了旧版更新器（关闭逻辑修复没打进去），本版补上",
-      "修复：更新前自动关闭常驻主程序改为多阶段——先礼貌退出，再强杀，多轮复查",
-      "改进：关闭失败时精确报告卡住的进程与原因（含管理员权限提示）"
+      "修复：更新器在关闭主程序阶段可能崩溃的问题（上一版更新可靠性修复没有完整生效，此版补全）",
+      "改进：关闭主程序最多 5 轮强制结束复查；失败时精确报告卡住的进程与原因"
     ],
     "is_mandatory": true
   },
