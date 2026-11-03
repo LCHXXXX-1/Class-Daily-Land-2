@@ -7,7 +7,7 @@
     "changelog": [
       "修复：地震预警倒计时只显示 5 秒就收起 —— 现在横波未到时红条一直走到抵达"
     ],
-    "is_mandatory": true
+    "is_mandatory": false
   },
   "developer_tool": {
     "version": "1.0.0",
