@@ -152,6 +152,9 @@ public sealed class MainBoardWindow : Window
         _stack.Children.Add(_homeworkScroll);
         _stack.Children.Add(_homeworkEmpty);
         _stack.Children.Add(_pluginSections);
+        // ★ 透明背景（不是 null）让整块底板都能被触摸/鼠标命中。
+        //   背景为 null 的元素不参与命中测试 → 只有文字上长按才有事件，空白处毫无反应。
+        _root.Background = Brushes.Transparent;
         _root.Child = _stack;
         Content = _root;
 
@@ -536,7 +539,10 @@ public sealed class MainBoardWindow : Window
     {
         // 原版主窗：整块 window_bg 底板 + 纯文字，无卡片、无描边
         Background = Palette.WindowBackground;
-        if (_root.Background is not null) _root.Background = null;
+
+        // ★ 必须是 Transparent 而不是 null：null 背景的容器不参与命中测试，
+        //   整块底板只有文字上能收到触摸/鼠标事件（长按菜单曾因此只在文字处出现）。
+        _root.Background = Brushes.Transparent;
         _title.Foreground = Palette.Text;
         _dutyLabel.Foreground = Palette.Text;
         _attendanceLabel.Foreground = Palette.Text;
@@ -669,6 +675,7 @@ public sealed class MainBoardWindow : Window
 
     ContextMenu? _openMenu;
     GlobalMouseHook? _menuHook;
+    DateTime _menuOpenedAt = DateTime.MinValue;
 
     /// <summary>
     /// 弹出菜单。screenPoint 为空时按鼠标位置弹（鼠标右键），否则按给定屏幕坐标弹（触屏长按）。
@@ -681,6 +688,7 @@ public sealed class MainBoardWindow : Window
     {
         var menu = BuildContextMenu(screenPoint);
         _openMenu = menu;
+        _menuOpenedAt = DateTime.UtcNow;
 
         menu.Opened += (_, _) => StartMenuOutsideHook();
         menu.Closed += (_, _) =>
@@ -720,6 +728,11 @@ public sealed class MainBoardWindow : Window
     {
         var menu = _openMenu;
         if (menu is null || !menu.IsOpen) return;
+
+        // 宽限期：刚弹出时（还在布局、或触摸序列的尾巴事件）不要判点外面，
+        // 否则菜单会一闪就没。
+        if ((DateTime.UtcNow - _menuOpenedAt).TotalMilliseconds < 250) return;
+
         if (IsPointInsideMenu(menu, screenX, screenY)) return;
 
         // 点在菜单外面（任何窗口 / 桌面都算）：关掉
@@ -730,6 +743,9 @@ public sealed class MainBoardWindow : Window
     {
         try
         {
+            // 还没测量完（宽高为 0）时无法判断内外，一律当作里面，避免误关
+            if (menu.ActualWidth <= 1 || menu.ActualHeight <= 1) return true;
+
             var topLeft = menu.PointToScreen(new Point(0, 0));
             var dpi = VisualTreeHelper.GetDpi(menu);
             var width = menu.ActualWidth * dpi.DpiScaleX;
@@ -817,6 +833,9 @@ public sealed class MainBoardWindow : Window
     /// <summary>按住期间允许的手指抖动（像素），超过即视为拖动/滚动。</summary>
     const double TouchHoldSlop = 14;
 
+    /// <summary>触屏菜单相对手指的垂直偏移（像素）：避开指尖覆盖区域。</summary>
+    const double TouchMenuOffsetY = 56;
+
     DispatcherTimer? _holdTimer;
     Point _holdStart;
     bool _holdActive;
@@ -840,6 +859,14 @@ public sealed class MainBoardWindow : Window
     protected override void OnPreviewTouchDown(TouchEventArgs e)
     {
         base.OnPreviewTouchDown(e);
+
+        // ★ 关键：本窗是 ShowActivated=false 的挂件，非焦点状态下触摸事件到不了长按逻辑
+        //   （用户实测：必须先点一下让窗口拿到焦点，长按才有效）。这里触摸按下就主动激活。
+        if (!IsActive)
+        {
+            try { Activate(); } catch { /* 激活失败不影响后续 */ }
+        }
+
         EnsureHoldTimer();
         _holdStart = e.GetTouchPoint(this).Position;
         _holdActive = true;
@@ -876,7 +903,14 @@ public sealed class MainBoardWindow : Window
         if (!e.Handled)
         {
             e.Handled = true;   // 阻止这次触摸被提升成鼠标点击
-            ShowContextMenu(PointToScreen(_holdStart));
+
+            // 等这一串触摸事件（含被提升的鼠标事件）都处理完再弹，
+            // 否则菜单刚出现就被紧跟的抬起事件当成点到外面关掉（用户看到的闪现）。
+            // 菜单从手指下方一点开始弹：手指压着菜单会被判成点了菜单项，
+            // 轻则误触关掉，重则点错条目。
+            var point = PointToScreen(_holdStart);
+            var below = new Point(point.X, point.Y + TouchMenuOffsetY);
+            Dispatcher.BeginInvoke(new Action(() => ShowContextMenu(below)), DispatcherPriority.Input);
         }
     }
 

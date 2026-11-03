@@ -1,53 +1,53 @@
-namespace ClassDailyLand2.Core;
+﻿namespace ClassDailyLand2.Core;
 
 /// <summary>
-/// 全局版本号与部署配置的唯一真源：发版只改这一处。
-/// 主程序、安装器、插件 IDE 都直接读这里的常量，
-/// 不再依赖程序集属性或 MSBuild 的 &lt;Version&gt;。
+/// 鍏ㄥ眬鐗堟湰鍙蜂笌閮ㄧ讲閰嶇疆鐨勫敮涓€鐪熸簮锛氬彂鐗堝彧鏀硅繖涓€澶勩€?
+/// 涓荤▼搴忋€佸畨瑁呭櫒銆佹彃浠?IDE 閮界洿鎺ヨ杩欓噷鐨勫父閲忥紝
+/// 涓嶅啀渚濊禆绋嬪簭闆嗗睘鎬ф垨 MSBuild 鐨?&lt;Version&gt;銆?
 /// </summary>
 public static class VersionInfo
 {
-    public const string Version = "1.7.9";
+    public const string Version = "1.7.10";
 
-    /// <summary>主更新源（version.json）。</summary>
+    /// <summary>涓绘洿鏂版簮锛坴ersion.json锛夈€?/summary>
     public const string VersionUrl =
         "https://gitee.com/lchxxxx/class-daily-land-2/raw/update/version.json";
 
-    /// <summary>备用更新源（主源失败时使用）。</summary>
+    /// <summary>澶囩敤鏇存柊婧愶紙涓绘簮澶辫触鏃朵娇鐢級銆?/summary>
     public const string VersionUrlFallback =
         "https://raw.githubusercontent.com/LCHXXXX-1/Class-Daily-Land-2/update/version.json";
 
-    // ——————————————— 插件市场 ———————————————
+    // 鈥斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€?鎻掍欢甯傚満 鈥斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€斺€?
     //
-    // 索引与安装包都放在 plugins 分支上，不依赖任何服务器：
-    //   · 主源 Gitee raw（国内快），备源 GitHub raw（Gitee 挂了才用）
-    //   · 索引里的 path 是相对路径，主备源共用同一条记录 —— 换域名不用改索引
+    // 绱㈠紩涓庡畨瑁呭寘閮芥斁鍦?plugins 鍒嗘敮涓婏紝涓嶄緷璧栦换浣曟湇鍔″櫒锛?
+    //   路 涓绘簮 Gitee raw锛堝浗鍐呭揩锛夛紝澶囨簮 GitHub raw锛圙itee 鎸備簡鎵嶇敤锛?
+    //   路 绱㈠紩閲岀殑 path 鏄浉瀵硅矾寰勶紝涓诲婧愬叡鐢ㄥ悓涓€鏉¤褰?鈥斺€?鎹㈠煙鍚嶄笉鐢ㄦ敼绱㈠紩
     //
-    // ★ Gitee 的 /raw/ 现在会 302 到 raw.giteeusercontent.com 的签名地址，
-    //   HttpClient 必须 AllowAutoRedirect（MarketClient 里已开）。
+    // 鈽?Gitee 鐨?/raw/ 鐜板湪浼?302 鍒?raw.giteeusercontent.com 鐨勭鍚嶅湴鍧€锛?
+    //   HttpClient 蹇呴』 AllowAutoRedirect锛圡arketClient 閲屽凡寮€锛夈€?
 
-    /// <summary>插件市场索引（主源）。</summary>
+    /// <summary>鎻掍欢甯傚満绱㈠紩锛堜富婧愶級銆?/summary>
     public const string MarketIndexUrl =
         "https://gitee.com/lchxxxx/class-daily-land-2/raw/plugins/index.json";
 
-    /// <summary>插件市场索引（备用源）。</summary>
+    /// <summary>鎻掍欢甯傚満绱㈠紩锛堝鐢ㄦ簮锛夈€?/summary>
     public const string MarketIndexUrlFallback =
         "https://raw.githubusercontent.com/LCHXXXX-1/Class-Daily-Land-2/plugins/index.json";
 
-    /// <summary>安装包相对路径的拼接根（与主源对应）。</summary>
+    /// <summary>瀹夎鍖呯浉瀵硅矾寰勭殑鎷兼帴鏍癸紙涓庝富婧愬搴旓級銆?/summary>
     public const string MarketRawRoot =
         "https://gitee.com/lchxxxx/class-daily-land-2/raw/plugins/";
 
-    /// <summary>安装包相对路径的拼接根（与备用源对应）。</summary>
+    /// <summary>瀹夎鍖呯浉瀵硅矾寰勭殑鎷兼帴鏍癸紙涓庡鐢ㄦ簮瀵瑰簲锛夈€?/summary>
     public const string MarketRawRootFallback =
         "https://raw.githubusercontent.com/LCHXXXX-1/Class-Daily-Land-2/plugins/";
 
-    /// <summary>主程序 exe 文件名。</summary>
+    /// <summary>涓荤▼搴?exe 鏂囦欢鍚嶃€?/summary>
     public const string ExeName = "Class Daily Land 2.exe";
 
-    /// <summary>更新器所在子目录（程序目录下）。</summary>
+    /// <summary>鏇存柊鍣ㄦ墍鍦ㄥ瓙鐩綍锛堢▼搴忕洰褰曚笅锛夈€?/summary>
     public const string UpdaterDir = "Update";
 
-    /// <summary>资源包子目录（程序目录下）。</summary>
+    /// <summary>璧勬簮鍖呭瓙鐩綍锛堢▼搴忕洰褰曚笅锛夈€?/summary>
     public const string AssetsDir = "assets";
 }
