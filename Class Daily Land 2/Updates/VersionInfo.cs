@@ -7,7 +7,7 @@ namespace ClassDailyLand2.Core;
 /// </summary>
 public static class VersionInfo
 {
-    public const string Version = "1.7.5";
+    public const string Version = "1.7.6";
 
     /// <summary>主更新源（version.json）。</summary>
     public const string VersionUrl =

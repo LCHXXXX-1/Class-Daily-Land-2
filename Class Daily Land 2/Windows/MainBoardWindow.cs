@@ -717,6 +717,64 @@ public sealed class MainBoardWindow : Window
         return menu;
     }
 
+    // ————————————————————— 触屏长按 = 右键菜单 —————————————————————
+
+    /// <summary>按住多久算长按（毫秒）。</summary>
+    const int TouchHoldMs = 550;
+
+    /// <summary>按住期间允许的手指抖动（像素），超过即视为拖动/滚动。</summary>
+    const double TouchHoldSlop = 14;
+
+    DispatcherTimer? _holdTimer;
+    Point _holdStart;
+    bool _holdActive;
+    bool _holdFired;
+
+    void EnsureHoldTimer()
+    {
+        if (_holdTimer is not null) return;
+        _holdTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(TouchHoldMs) };
+        _holdTimer.Tick += (_, _) =>
+        {
+            _holdTimer?.Stop();
+            if (!_holdActive) return;
+
+            _holdFired = true;
+            BuildContextMenu().IsOpen = true;
+        };
+    }
+
+    protected override void OnPreviewTouchDown(TouchEventArgs e)
+    {
+        base.OnPreviewTouchDown(e);
+        EnsureHoldTimer();
+        _holdStart = e.GetTouchPoint(this).Position;
+        _holdActive = true;
+        _holdFired = false;
+        _holdTimer?.Stop();
+        _holdTimer?.Start();
+    }
+
+    protected override void OnPreviewTouchMove(TouchEventArgs e)
+    {
+        base.OnPreviewTouchMove(e);
+        if (!_holdActive) return;
+
+        var p = e.GetTouchPoint(this).Position;
+        if (Math.Abs(p.X - _holdStart.X) > TouchHoldSlop || Math.Abs(p.Y - _holdStart.Y) > TouchHoldSlop)
+        {
+            _holdActive = false;
+            _holdTimer?.Stop();
+        }
+    }
+
+    protected override void OnPreviewTouchUp(TouchEventArgs e)
+    {
+        base.OnPreviewTouchUp(e);
+        _holdActive = false;
+        _holdTimer?.Stop();
+    }
+
     // ————————————————————— 交互：F1 退出 / 触摸拖动滚动 —————————————————————
     Point? _dragStart;
     double _dragOffset;
@@ -752,6 +810,13 @@ public sealed class MainBoardWindow : Window
     {
         base.OnPreviewMouseLeftButtonUp(e);
         _dragStart = null;
+
+        // 长按已经弹过菜单：吞掉触屏提升出来的这次点击，别顺手当成单击
+        if (_holdFired)
+        {
+            _holdFired = false;
+            e.Handled = true;
+        }
     }
 
     /// <summary>手动滚动后让自动滚动让位 4 秒（原版 MANUAL_SCROLL_HOLD_MS）。</summary>
