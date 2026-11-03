@@ -40,7 +40,7 @@ public sealed class AppSettings
 
         // —— 更新（关于页）——
         new("update_channel", ValueKind.Str, "stable"),               // stable / beta
-        new("update_source", ValueKind.Str, "github"),                 // github / gitee / auto（GitHub 优先→Gitee）；默认 github
+        new("update_source", ValueKind.Str, "gitee"),                  // gitee / github / auto（GitHub 优先→Gitee）；默认 gitee（国内更新走 Gitee 更稳）
 
         // —— 插件市场（插件页）——
         new("market_source", ValueKind.Str, "github"),                 // github / gitee / auto（GitHub 优先→Gitee）；默认 github
