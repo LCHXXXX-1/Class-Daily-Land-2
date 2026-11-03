@@ -666,9 +666,21 @@ public sealed class MainBoardWindow : Window
     }
 
     /// <summary>右键与长按共用的菜单（触屏没有右键键，长按是等价手势）。</summary>
-    private ContextMenu BuildContextMenu()
+    private ContextMenu BuildContextMenu(Point? screenPoint = null)
     {
-        var menu = new ContextMenu { PlacementTarget = this, Placement = PlacementMode.MousePoint };
+        var menu = new ContextMenu { PlacementTarget = this };
+
+        if (screenPoint is { } pt)
+        {
+            // 触屏没有鼠标位置：按手指落点定位（AbsolutePoint 用的是屏幕设备坐标）
+            menu.Placement = PlacementMode.AbsolutePoint;
+            menu.HorizontalOffset = pt.X;
+            menu.VerticalOffset = pt.Y;
+        }
+        else
+        {
+            menu.Placement = PlacementMode.MousePoint;
+        }
 
         void Item(string text, Action action)
         {
@@ -739,8 +751,9 @@ public sealed class MainBoardWindow : Window
             _holdTimer?.Stop();
             if (!_holdActive) return;
 
+            // 只打标记：此刻手指还按着，这时弹菜单会在松手的瞬间被当成点到外面关掉。
+            // 真正弹菜单放到 TouchUp 里（见 OnPreviewTouchUp）。
             _holdFired = true;
-            BuildContextMenu().IsOpen = true;
         };
     }
 
@@ -771,8 +784,25 @@ public sealed class MainBoardWindow : Window
     protected override void OnPreviewTouchUp(TouchEventArgs e)
     {
         base.OnPreviewTouchUp(e);
+
+        var wasHold = _holdFired;
         _holdActive = false;
         _holdTimer?.Stop();
+
+        if (!wasHold) return;
+
+        // 长按完成：在松手的这一刻弹菜单（手指已离开，菜单不会被立刻关掉）
+        _holdFired = false;
+        if (!e.Handled)
+        {
+            e.Handled = true;   // 阻止这次触摸被提升成鼠标点击
+            try
+            {
+                var screenPoint = PointToScreen(_holdStart);
+                BuildContextMenu(screenPoint).IsOpen = true;
+            }
+            catch { /* 定位失败就按默认位置弹 */ BuildContextMenu().IsOpen = true; }
+        }
     }
 
     // ————————————————————— 交互：F1 退出 / 触摸拖动滚动 —————————————————————
