@@ -1,13 +1,12 @@
 {
   "stable": {
-    "version": "1.7.14",
+    "version": "1.7.15",
     "release_date": "2026-11-04",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.14.zip",
-    "sha256": "2a67b68c8ab509cfe2a13b117d6e3b9b45a14f956ad3303273ee4b08fe70f212",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.15.zip",
+    "sha256": "476b95b30e54a8f1be67524344c3f0796122a0a72a192ea64238ae7e3126616e",
     "changelog": [
-      "内置插件 IDE：主程序包内直接带 DeveloperTool（无需单独下载）",
-      "插件 IDE：登录改为系统浏览器授权（浏览器里已登录 GitHub 时点一下即回），不再依赖 WebView2",
-      "插件 IDE：界面优化——工具栏分组、项目树信息头与刷新、输出行数、底部状态栏"
+      "插件 IDE：登录回调页重做——浏览器里会显示「登录成功」卡片（打勾动画），并自动尝试关闭标签页",
+      "插件 IDE：若浏览器阻止自动关闭，页面会提示按 Ctrl+W 或点按钮关闭；失败时也会说明原因"
     ],
     "is_mandatory": false
   },
