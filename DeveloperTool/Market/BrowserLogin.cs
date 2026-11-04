@@ -83,17 +83,17 @@ internal static class BrowserLogin
 
                 if (!query.TryGetValue("code", out var code) || code.Length == 0)
                 {
-                    await RespondAsync(client, 200, "OK", ResultPage("授权未完成", "回调里没有 code。", false), ct).ConfigureAwait(false);
+                    await RespondAsync(client, 200, "OK", ResultPage("授权未完成", "回调里没有拿到 code，授权没有完成，请回到 IDE 重新登录。", false), ct).ConfigureAwait(false);
                     throw new MarketApiException(0, "回调里没有 code，授权没有完成。");
                 }
 
                 if (!query.TryGetValue("state", out var state) || !string.Equals(state, expectedState, StringComparison.Ordinal))
                 {
-                    await RespondAsync(client, 200, "OK", ResultPage("校验失败", "state 不匹配，可能不是本次授权。", false), ct).ConfigureAwait(false);
+                    await RespondAsync(client, 200, "OK", ResultPage("校验失败", "state 不匹配，可能不是本次授权，请回到 IDE 重新登录。", false), ct).ConfigureAwait(false);
                     throw new MarketApiException(0, "回调 state 校验失败（可能不是本次授权），请重新登录。");
                 }
 
-                await RespondAsync(client, 200, "OK", ResultPage("登录成功", "授权已完成，可以关闭这个页面回到 IDE。", true), ct).ConfigureAwait(false);
+                await RespondAsync(client, 200, "OK", ResultPage("登录成功", "授权已完成，可以直接关闭这个页面回到 IDE。", true), ct).ConfigureAwait(false);
                 return code;
             }
         }
@@ -187,33 +187,162 @@ internal static class BrowserLogin
         }
     }
 
-    /// <summary>回调页：深色卡片 + 一句结论，用户看到的就是这个页面。</summary>
+        /// <summary>
+    /// 回调页：用户在浏览器里看到的结论页。
+    /// 成功时给出「可以直接关闭」的明确提示，并尝试自动关闭标签页（浏览器通常会拦，
+    /// 那就把提示改成手动关闭方式）；失败时说明原因并提示回到 IDE 重试。
+    /// </summary>
     static string ResultPage(string title, string message, bool ok)
     {
-        var accent = ok ? "#3DDC84" : "#FF7A7A";
-        var icon = ok ? "✓" : "!";
-        return $@"<!doctype html>
-<html lang=""zh-CN""><head><meta charset=""utf-8"">
-<title>Class Daily Land 2 · {title}</title>
+        var accent = ok ? "#2ED573" : "#FF6B6B";
+        var accentSoft = ok ? "rgba(46,213,115,.14)" : "rgba(255,107,107,.14)";
+
+        // 成功：描边勾；失败：感叹号
+        var badge = ok
+            ? "<svg viewBox=\"0 0 48 48\" aria-hidden=\"true\"><path d=\"M13 25.5l7.5 7.5L35 16\"/></svg>"
+            : "<span class=\"mark\">!</span>";
+
+        var autoClose = ok
+            ? "      // 浏览器一般不允许脚本关闭\"用户手动打开\"的标签页：先试一次，\n" +
+              "      // 关不掉就把提示换成手动关闭方式，免得用户以为页面卡住了。\n" +
+              "      setTimeout(function () {\n" +
+              "        closeTab();\n" +
+              "        setTimeout(function () {\n" +
+              "          if (!document.hidden) {\n" +
+              "            hint.textContent = '浏览器阻止了自动关闭：按 Ctrl+W，或点击上面的按钮即可。';\n" +
+              "          }\n" +
+              "        }, 600);\n" +
+              "      }, 2200);"
+            : "      // 失败时不自动关闭：用户可能要看清原因。";
+
+        var hint = ok ? "正在尝试自动关闭此页面…" : "可以关闭此页面，回到 IDE 重新登录。";
+
+        var html = """
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Class Daily Land 2 · {{TITLE}}</title>
 <style>
-  :root {{ color-scheme: light dark; }}
-  body {{ margin:0; min-height:100vh; display:grid; place-items:center;
-         font-family: 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
-         background:#0f1115; color:#e8eaed; }}
-  .card {{ width:min(420px, 88vw); padding:34px 32px; border-radius:18px;
-           background:#171a21; border:1px solid #262b36; text-align:center;
-           box-shadow:0 24px 60px rgba(0,0,0,.45); }}
-  .badge {{ width:56px; height:56px; margin:0 auto 18px; border-radius:16px;
-            display:grid; place-items:center; font-size:26px; font-weight:700;
-            color:#0f1115; background:{accent}; }}
-  h1 {{ font-size:19px; margin:0 0 10px; font-weight:600; }}
-  p {{ margin:0; font-size:13.5px; line-height:1.7; color:#9aa3b2; }}
-</style></head>
-<body><div class=""card"">
-  <div class=""badge"">{icon}</div>
-  <h1>{title}</h1>
-  <p>{message}</p>
-</div></body></html>";
+  :root {
+    color-scheme: light dark;
+    --accent: {{ACCENT}};
+    --accent-soft: {{ACCENT_SOFT}};
+    --bg: #0c0e12;
+    --bg-glow: #161b22;
+    --card: #171a21;
+    --border: #262b36;
+    --text: #e9ecf1;
+    --muted: #98a1b0;
+    --btn: #1f232c;
+    --btn-hover: #282d38;
+    --shadow: 0 26px 70px rgba(0,0,0,.45);
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f4f5f8;
+      --bg-glow: #ffffff;
+      --card: #ffffff;
+      --border: #e3e6eb;
+      --text: #14171c;
+      --muted: #5f6875;
+      --btn: #f1f3f6;
+      --btn-hover: #e7eaef;
+      --shadow: 0 22px 55px rgba(20,23,28,.12);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 24px;
+    display: grid; place-items: center;
+    color: var(--text);
+    font-family: 'Segoe UI', 'Microsoft YaHei UI', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    background:
+      radial-gradient(120% 85% at 50% -10%, var(--accent-soft), transparent 60%),
+      radial-gradient(90% 70% at 50% 110%, var(--bg-glow), transparent 65%),
+      var(--bg);
+  }
+  .card {
+    width: min(440px, 100%); padding: 40px 34px 26px; border-radius: 22px;
+    background: var(--card); border: 1px solid var(--border);
+    box-shadow: var(--shadow); text-align: center;
+    animation: rise .36s cubic-bezier(.2,.8,.3,1) both;
+  }
+  @keyframes rise {
+    from { opacity: 0; transform: translateY(12px) scale(.985); }
+    to   { opacity: 1; transform: none; }
+  }
+  .badge {
+    width: 66px; height: 66px; margin: 0 auto 22px; border-radius: 21px;
+    display: grid; place-items: center;
+    background: var(--accent-soft);
+    border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  }
+  .badge svg {
+    width: 36px; height: 36px; fill: none;
+    stroke: var(--accent); stroke-width: 4;
+    stroke-linecap: round; stroke-linejoin: round;
+    stroke-dasharray: 46; stroke-dashoffset: 46;
+    animation: draw .5s .18s cubic-bezier(.4,.6,.25,1) forwards;
+  }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .badge .mark { font-size: 31px; font-weight: 800; color: var(--accent); line-height: 1; }
+  h1 { margin: 0 0 10px; font-size: 20px; font-weight: 650; letter-spacing: .2px; }
+  p { margin: 0; font-size: 13.5px; line-height: 1.75; color: var(--muted); }
+  .actions { margin-top: 26px; display: flex; gap: 10px; justify-content: center; }
+  button {
+    font: inherit; font-size: 13px; padding: 9px 22px; border-radius: 10px;
+    color: var(--text); background: var(--btn);
+    border: 1px solid var(--border); cursor: pointer;
+    transition: background .16s ease, transform .12s ease;
+  }
+  button:hover { background: var(--btn-hover); }
+  button:active { transform: translateY(1px); }
+  .hint { margin-top: 14px; min-height: 17px; font-size: 11.5px; color: var(--muted); opacity: .85; }
+  .brand {
+    margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border);
+    font-size: 10.5px; letter-spacing: 1.1px; text-transform: uppercase;
+    color: var(--muted); opacity: .5;
+  }
+</style>
+</head>
+<body>
+  <main class="card">
+    <div class="badge">{{BADGE}}</div>
+    <h1>{{TITLE}}</h1>
+    <p>{{MESSAGE}}</p>
+    <div class="actions"><button id="closeBtn" type="button">关闭此页面</button></div>
+    <div class="hint" id="hint">{{HINT}}</div>
+    <div class="brand">Class Daily Land 2 · 插件市场</div>
+  </main>
+  <script>
+  (function () {
+    var hint = document.getElementById('hint');
+
+    function closeTab() {
+      try { window.open('', '_self'); } catch (e) {}
+      try { window.close(); } catch (e) {}
+    }
+
+    document.getElementById('closeBtn').addEventListener('click', closeTab);
+
+{{AUTO_CLOSE}}
+  })();
+  </script>
+</body>
+</html>
+""";
+
+        return html
+            .Replace("{{ACCENT}}", accent)
+            .Replace("{{ACCENT_SOFT}}", accentSoft)
+            .Replace("{{BADGE}}", badge)
+            .Replace("{{TITLE}}", System.Net.WebUtility.HtmlEncode(title))
+            .Replace("{{MESSAGE}}", System.Net.WebUtility.HtmlEncode(message))
+            .Replace("{{HINT}}", System.Net.WebUtility.HtmlEncode(hint))
+            .Replace("{{AUTO_CLOSE}}", autoClose);
     }
 }
 
