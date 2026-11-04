@@ -26,7 +26,7 @@ public sealed class MarketAuthService
 
     // ★ client_id 不是机密，但必须与服务器 .env 里的一致；接入时填进来（见验证项）
     const string GiteeClientId = "cd440b157924415716ec4ba5bc484e7deff0e09bea0a866e8bd5fe62b696bead";
-    const string GitHubClientId = "Ov23liSjjLOdKBucqgKe";
+    const string GitHubClientId = "Ov23liSjjLOdKBucqgKe";   // 与服务端 .env 的 GITHUB_CLIENT_ID 一致（实测可换到 Token）
 
     /// <summary>
     /// 授权文件落点：<see cref="WritableData.Dir"/>（优先 %AppData%，不可写时退 exe 同级），
@@ -64,7 +64,7 @@ public sealed class MarketAuthService
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(LoginDeadline);
 
-        var code = RequestCode(provider, clientId, log, deadline.Token);
+        var code = await RequestCodeAsync(provider, clientId, log, deadline.Token).ConfigureAwait(true);
 
         log("收到授权码，向服务器换取 Token…");
 
@@ -94,7 +94,7 @@ public sealed class MarketAuthService
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(LoginDeadline);
 
-        var code = RequestCode(provider, clientId, log, deadline.Token);
+        var code = await RequestCodeAsync(provider, clientId, log, deadline.Token).ConfigureAwait(true);
 
         var result = await Api.BindAsync(provider, code, deadline.Token).ConfigureAwait(false);
         if (result.User is not null) User = result.User;
@@ -103,19 +103,34 @@ public sealed class MarketAuthService
     }
 
     /// <summary>
-    /// 弹内嵌 WebView2 授权窗，从回调里取 code（登录 / 绑定共用）。
-    /// 超时或关窗抛 <see cref="OperationCanceledException"/>，授权失败抛 <see cref="MarketApiException"/>。
+    /// 取授权码（登录 / 绑定共用）。
+    ///
+    /// <para><b>首选系统浏览器</b>：起 127.0.0.1:18080 本地回调 + 打开默认浏览器。好处是
+    /// 不依赖 WebView2 运行时、沿用用户浏览器里已有的 Gitee/GitHub 登录态（多数人早就登录了，
+    /// 点一下就能授权），也避免了内嵌浏览器与系统浏览器 Cookie 隔离导致的重复输入密码。</para>
+    ///
+    /// <para>端口被占用或浏览器调不起来时，退回内嵌 WebView2 窗口，保证老机器也能登录。</para>
     /// </summary>
-    static string RequestCode(string provider, string clientId, Action<string> log, CancellationToken deadline)
+    static async Task<string> RequestCodeAsync(string provider, string clientId, Action<string> log, CancellationToken deadline)
     {
         // state 防 CSRF：回调 URL 里带回来的必须是刚发出去的那个随机串
         var state = Convert.ToHexString(RandomNumberGenerator.GetBytes(16));
+        var authorizeUrl = BuildAuthorizeUrl(provider, clientId, state);
 
-        // 内嵌 WebView2 走授权页：不占端口、不开外部浏览器，管理员权限下也不会和 Edge 抢权限
-        var window = new OAuthWindow(BuildAuthorizeUrl(provider, clientId, state), RedirectUri, state, deadline);
+        try
+        {
+            return await BrowserLogin.RequestCodeAsync(authorizeUrl, state, log, deadline).ConfigureAwait(true);
+        }
+        catch (BrowserLoginUnavailableException ex)
+        {
+            log("浏览器登录不可用（" + ex.Message + "），改用内嵌登录窗口…");
+        }
+
+        // —— 兜底：内嵌 WebView2（回调用同一地址，端口上已经没有监听，导航会被取消） ——
+        var window = new OAuthWindow(authorizeUrl, BrowserLogin.RedirectUri, state, deadline);
         if (System.Windows.Application.Current is { MainWindow: { IsLoaded: true } owner }) window.Owner = owner;
 
-        log("已打开登录窗口等待授权（3 分钟内有效）…");
+        log("已打开内嵌登录窗口等待授权（3 分钟内有效）…");
         window.ShowDialog();
 
         var code = window.Code;

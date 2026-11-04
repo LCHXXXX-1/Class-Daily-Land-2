@@ -32,7 +32,13 @@
          市场页签默认隐藏：登录才显示「我的插件」，管理员才显示「管理员审核」
          ================================================================== -->
     <!-- 刷新由各面板自己的 Loaded 触发（页签内容进入可视树即加载），此处不再挂 SelectionChanged -->
-    <TabControl x:Name="MainTabs">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+    <TabControl x:Name="MainTabs" Grid.Row="0">
 
         <!-- ===== 主页：原欢迎页（最近项目 / 新建打开 / 右上角登录态） ===== -->
         <TabItem x:Name="HomeTab" Header="主页">
@@ -161,51 +167,75 @@
         <TabItem x:Name="EditorTab" Header="编辑器">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="36" />
+                    <RowDefinition Height="46" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
 
                 <!-- ===== 工具栏 ===== -->
                 <Border Grid.Row="0" Style="{StaticResource ChromeBar}">
-                    <Grid Margin="8,0">
+                    <Grid Margin="12,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
 
+                        <!-- 工具栏按用途分组：项目 / 构建 / 市场 / 帮助，组间用细线分隔 -->
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Content="新建项目" Style="{StaticResource ToolButton}" Click="OnNewProject" />
-                            <Button Content="&#x1F4C2; 打开项目" MinWidth="104" Style="{StaticResource ToolButton}"
-                                    Click="OnOpenProject" ToolTip="选择包含 plugin.json 的插件目录" />
-                            <Button Content="保存" Style="{StaticResource ToolButton}" Click="OnSave" />
-                            <Button Content="编译并打包" Style="{StaticResource ToolButton}" Click="OnBuildPack" />
+                            <TextBlock Text="项目" FontSize="11" Margin="2,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource DimTextBrush}" />
+                            <Button Content="新建" MinWidth="0" Padding="10,0"
+                                    Style="{StaticResource ToolButton}" Click="OnNewProject"
+                                    ToolTip="新建插件项目（生成 plugin.json 与入口文件）" />
+                            <Button Content="打开" MinWidth="0" Padding="10,0"
+                                    Style="{StaticResource ToolButton}" Click="OnOpenProject"
+                                    ToolTip="选择包含 plugin.json 的插件目录" />
+                            <Button Content="保存" MinWidth="0" Padding="10,0"
+                                    Style="{StaticResource ToolButton}" Click="OnSave"
+                                    ToolTip="保存当前文件（Ctrl+S）" />
 
-                            <Border Width="1" Height="20" Margin="2,0,8,0"
+                            <Border Width="1" Height="18" Margin="6,0,10,0"
                                     Background="{DynamicResource BorderBrush}" />
 
-                            <Button Content="编译并测试" Style="{StaticResource PrimaryButton}" Click="OnBuildTest" />
+                            <TextBlock Text="构建" FontSize="11" Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource DimTextBrush}" />
+                            <Button Content="打包" MinWidth="0" Padding="10,0"
+                                    Style="{StaticResource ToolButton}" Click="OnBuildPack"
+                                    ToolTip="编译并打包成可发布的 zip" />
+                            <Button Content="编译并测试" MinWidth="0" Padding="12,0"
+                                    Style="{StaticResource PrimaryButton}" Click="OnBuildTest"
+                                    ToolTip="编译、打包并进入测试（一键验证插件能跑）" />
 
-                            <Border Width="1" Height="20" Margin="2,0,8,0"
+                            <Border Width="1" Height="18" Margin="10,0,10,0"
                                     Background="{DynamicResource BorderBrush}" />
 
-                            <Button x:Name="MarketLoginButton" Content="登录插件市场" MinWidth="104"
+                            <TextBlock Text="市场" FontSize="11" Margin="0,0,8,0"
+                                       VerticalAlignment="Center"
+                                       Foreground="{DynamicResource DimTextBrush}" />
+                            <Button x:Name="MarketLoginButton" Content="登录插件市场" MinWidth="0" Padding="10,0"
                                     Style="{StaticResource ToolButton}" Click="OnMarketLogin"
-                                    ToolTip="用 GitHub / Gitee 账号登录插件市场；已登录时点一下退出登录" />
-                            <Button Content="发布到市场" MinWidth="88"
+                                    ToolTip="用 GitHub / Gitee 账号登录插件市场（浏览器授权）；已登录时点一下退出登录" />
+                            <Button Content="发布" MinWidth="0" Padding="10,0"
                                     Style="{StaticResource ToolButton}" Click="OnPublishToMarket"
                                     ToolTip="编译打包当前项目并上传到插件市场（需先登录）" />
-                            <Button x:Name="MyPluginsButton" Content="我的插件" MinWidth="88"
+                            <Button x:Name="MyPluginsButton" Content="我的插件" MinWidth="0" Padding="10,0"
                                     Style="{StaticResource ToolButton}" Click="OnMyPlugins"
                                     ToolTip="查看已上传插件的审核状态与驳回原因（快捷弹窗）" />
-                            <Button x:Name="AdminReviewButton" Content="审核" MinWidth="76"
+                            <Button x:Name="AdminReviewButton" Content="审核" MinWidth="0" Padding="10,0"
                                     Visibility="Collapsed"
                                     Style="{StaticResource ToolButton}" Click="OnAdminReview"
                                     ToolTip="管理员：审核待发布的插件（快捷弹窗）" />
 
-                            <Button Content="&#x2699; 设置" MinWidth="76" Style="{StaticResource ToolButton}"
-                                    Click="OnOpenSettings" ToolTip="IDE 设置（主题切换）" />
-                            <Button Content="&#x2139; 关于" MinWidth="76" Style="{StaticResource ToolButton}"
+                            <Border Width="1" Height="18" Margin="10,0,10,0"
+                                    Background="{DynamicResource BorderBrush}" />
+
+                            <Button Content="&#x2699; 设置" MinWidth="0" Padding="10,0"
+                                    Style="{StaticResource ToolButton}"
+                                    Click="OnOpenSettings" ToolTip="IDE 设置（主题切换 / 账号绑定）" />
+                            <Button Content="&#x2139; 关于" MinWidth="0" Padding="10,0"
+                                    Style="{StaticResource ToolButton}"
                                     Click="OnOpenAbout" ToolTip="版本与仓库信息" />
                         </StackPanel>
 
@@ -234,8 +264,27 @@
 
                     <Border Grid.Column="0" Background="{DynamicResource TreeBackgroundBrush}">
                         <DockPanel>
-                            <Border DockPanel.Dock="Top" Height="24" Style="{StaticResource ChromeBar}">
-                                <TextBlock Text="项目" Margin="8,0" Style="{StaticResource SectionHeader}" />
+                            <Border DockPanel.Dock="Top" Height="30" Style="{StaticResource ChromeBar}">
+                                <Grid Margin="10,0">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="项目" Style="{StaticResource SectionHeader}" />
+                                        <TextBlock x:Name="TreeProjectText" Text="" FontSize="11.5"
+                                                   Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   TextTrimming="CharacterEllipsis" MaxWidth="150"
+                                                   Foreground="{DynamicResource DimTextBrush}" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"
+                                                VerticalAlignment="Center">
+                                        <TextBlock x:Name="TreeCountText" Text="" FontSize="11"
+                                                   VerticalAlignment="Center" Margin="0,0,8,0"
+                                                   Foreground="{DynamicResource DimTextBrush}" />
+                                        <Button Content="&#x21BB;" Width="22" MinWidth="22" Height="20"
+                                                Padding="0" FontSize="12"
+                                                Style="{StaticResource ToolButton}"
+                                                Click="OnRefreshTree" ToolTip="刷新项目树" />
+                                    </StackPanel>
+                                </Grid>
                             </Border>
                             <TreeView x:Name="Tree" BorderThickness="0"
                                       Background="{DynamicResource TreeBackgroundBrush}"
@@ -274,11 +323,16 @@
                                       ResizeDirection="Rows" />
 
                         <DockPanel Grid.Row="2">
-                            <Border DockPanel.Dock="Top" Height="24"
+                            <Border DockPanel.Dock="Top" Height="30"
                                     BorderThickness="0,1,0,1" Style="{StaticResource ChromeBar}">
-                                <Grid Margin="8,0">
-                                    <TextBlock Text="输出" Style="{StaticResource SectionHeader}" />
-                                    <Button Content="清空" Width="56" MinWidth="56" Height="20" Padding="0"
+                                <Grid Margin="10,0">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock Text="输出" Style="{StaticResource SectionHeader}" />
+                                        <TextBlock x:Name="OutputCountText" Text="" FontSize="11"
+                                                   Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   Foreground="{DynamicResource DimTextBrush}" />
+                                    </StackPanel>
+                                    <Button Content="清空" Width="48" MinWidth="48" Height="20" Padding="0"
                                             HorizontalAlignment="Right" VerticalAlignment="Center"
                                             Style="{StaticResource ToolButton}" Click="OnClearOutput" />
                                 </Grid>
@@ -301,4 +355,37 @@
             <market:AdminReviewPanel x:Name="AdminReviewHost" />
         </TabItem>
     </TabControl>
+
+        <!-- ===== 底部状态栏：项目 / 当前文件 / 市场登录态 / 版本 ===== -->
+        <Border Grid.Row="1" Height="26"
+                Background="{DynamicResource ChromeBackgroundBrush}"
+                BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0">
+            <Grid Margin="12,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusBarProject" Text="未打开项目" FontSize="11.5"
+                               Foreground="{DynamicResource TextBrush}" />
+                    <TextBlock x:Name="StatusBarFile" Text="" FontSize="11.5" Margin="10,0,0,0"
+                               Foreground="{DynamicResource DimTextBrush}" />
+                </StackPanel>
+
+                <TextBlock Grid.Column="1" x:Name="StatusBarHint" Text="" FontSize="11.5"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                           Foreground="{DynamicResource DimTextBrush}" />
+
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusBarLogin" Text="未登录插件市场" FontSize="11.5"
+                               Foreground="{DynamicResource DimTextBrush}" />
+                    <Border Width="1" Height="12" Margin="10,0" Background="{DynamicResource BorderBrush}" />
+                    <TextBlock x:Name="StatusBarVersion" Text="" FontSize="11.5"
+                               Foreground="{DynamicResource DimTextBrush}" />
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
 </Window>

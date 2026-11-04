@@ -50,6 +50,8 @@ public partial class MainWindow : Window
         _autoSaveTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
         _autoSaveTimer.Tick += (_, _) => { _autoSaveTimer.Stop(); AutoSave(); };
         Editor.Document.UndoStack.SizeLimit = 50;
+        StatusBarVersion.Text = "v" + VersionInfo.Version;
+        BuildLoginProviderMenu();
 
         _marketUpload = new MarketUploadService(_marketAuth);
         // 市场面板与快捷弹窗共用同一份控件：先绑好凭证（页签切换时才发请求）
@@ -175,6 +177,9 @@ public partial class MainWindow : Window
     {
         var loggedIn = _marketAuth.IsLoggedIn;
         MarketLoginButton.Content = loggedIn ? "已登录：" + _marketAuth.User!.Username : "登录插件市场";
+        StatusBarLogin.Text = loggedIn
+            ? $"插件市场：{_marketAuth.User!.Username}"
+            : "插件市场：未登录";
 
         // 欢迎页右上角：未登录 = 按钮，已登录 = 首字母圆形头像 + 用户名（后端没有头像字段）
         WelcomeLoginButton.Visibility = loggedIn ? Visibility.Collapsed : Visibility.Visible;
@@ -199,6 +204,53 @@ public partial class MainWindow : Window
         WelcomeAvatarText.Text = name.Length > 0 ? name[..1].ToUpperInvariant() : "?";
     }
 
+    /// <summary>上次用的登录平台（github / gitee）。没有记录返回 null = 首次登录，要弹选择框。</summary>
+    static string? ReadProviderHint()
+    {
+        try
+        {
+            var file = Path.Combine(WritableData.Dir, "ide_login_provider.txt");
+            if (!File.Exists(file)) return null;
+            var text = File.ReadAllText(file).Trim().ToLowerInvariant();
+            return text is "github" or "gitee" ? text : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    static void SaveProviderHint(string provider)
+    {
+        try
+        {
+            Directory.CreateDirectory(WritableData.Dir);
+            File.WriteAllText(Path.Combine(WritableData.Dir, "ide_login_provider.txt"), provider);
+        }
+        catch
+        {
+            // 记住偏好失败不影响登录
+        }
+    }
+
+    /// <summary>右键登录按钮：强制用某个平台登录（同时改掉记住的偏好）。</summary>
+    void BuildLoginProviderMenu()
+    {
+        var menu = new ContextMenu();
+
+        void AddItem(string text, string provider)
+        {
+            var item = new MenuItem { Header = text };
+            item.Click += (_, _) => SaveProviderHint(provider);
+            item.Click += (_, _) => OnMarketLogin(MarketLoginButton, new RoutedEventArgs());
+            menu.Items.Add(item);
+        }
+
+        AddItem("用 GitHub 账号登录", "github");
+        AddItem("用 Gitee 账号登录", "gitee");
+        MarketLoginButton.ContextMenu = menu;
+    }
+
     async Task RestoreMarketLoginAsync()
     {
         await _marketAuth.RefreshStoredAsync().ConfigureAwait(false);
@@ -221,9 +273,11 @@ public partial class MainWindow : Window
             return;
         }
 
-        var picker = new LoginPlatformWindow { Owner = this };
-        if (picker.ShowDialog() != true || picker.Provider is null) { Log("已取消登录。"); return; }
-        var provider = picker.Provider;
+        // 点登录 = 直接用浏览器打开 GitHub 授权页（浏览器里已登录 GitHub 的话，点一下「Authorize」就回来）。
+        // 换平台：右键登录按钮 → 选 Gitee / GitHub。
+        var provider = ReadProviderHint() ?? "github";
+        Log($"打开浏览器登录（{provider}）…");
+        SaveProviderHint(provider);
 
         try
         {
@@ -232,6 +286,7 @@ public partial class MainWindow : Window
             SyncMarketUi();
             // 登录成功 → 自动切到「我的插件」页签（切页触发 SelectionChanged → 加载数据）
             MainTabs.SelectedItem = MyPluginsTab;
+            SaveProviderHint(provider);
             Log($"登录成功：{_marketAuth.User?.Username}（{_marketAuth.Provider}）");
         }
         catch (OperationCanceledException)
@@ -707,7 +762,20 @@ public partial class MainWindow : Window
         }
     }
 
-    void OnClearOutput(object sender, RoutedEventArgs e) => OutputBox.Clear();
+    void OnClearOutput(object sender, RoutedEventArgs e)
+    {
+        OutputBox.Clear();
+        _outputLines = 0;
+        OutputCountText.Text = "";
+    }
+
+    /// <summary>手动刷新项目树（新建文件后不用重开项目）。</summary>
+    void OnRefreshTree(object sender, RoutedEventArgs e)
+    {
+        if (!EnsureProject()) return;
+        BuildTree();
+        Log("项目树已刷新");
+    }
 
     // ─────────────────────────── 编辑器 ───────────────────────────
 
@@ -914,11 +982,22 @@ public partial class MainWindow : Window
         return false;
     }
 
+    int _treeFileCount;
+
     void BuildTree()
     {
         Tree.Items.Clear();
+        _treeFileCount = 0;
+
         var project = _project;
-        if (project is null) return;
+        if (project is null)
+        {
+            TreeProjectText.Text = "";
+            TreeCountText.Text = "";
+            return;
+        }
+
+        TreeProjectText.Text = project.DisplayName;
 
         var root = new TreeViewItem
         {
@@ -927,6 +1006,8 @@ public partial class MainWindow : Window
         };
         AddDirectory(root, project.ProjectDir);
         Tree.Items.Add(root);
+
+        TreeCountText.Text = _treeFileCount + " 个文件";
     }
 
     /// <summary>把项目目录整个铺进树：子文件夹递归展开，生成物目录（build/bin/obj）不进树。</summary>
@@ -960,6 +1041,7 @@ public partial class MainWindow : Window
             var node = new TreeViewItem { Header = Path.GetFileName(file), Tag = file };
             node.ContextMenu = BuildFileMenu(node);
             parent.Items.Add(node);
+            _treeFileCount++;
         }
     }
 
@@ -1024,13 +1106,20 @@ public partial class MainWindow : Window
         if (project is null)
         {
             StatusText.Text = "未打开项目";
+            StatusBarProject.Text = "未打开项目";
+            StatusBarFile.Text = "";
             return;
         }
 
         var state = suffix ?? (_dirty ? "未保存" : "已保存");
         var file = _openPath is null ? "" : " · " + Path.GetFileName(_openPath);
         StatusText.Text = $"{project.DisplayName} · id={project.Id} · {state}{file}";
+
+        StatusBarProject.Text = $"{project.DisplayName} · {project.Id}";
+        StatusBarFile.Text = _openPath is null ? "" : Path.GetFileName(_openPath) + "　" + state;
     }
+
+    int _outputLines;
 
     void Log(string message)
     {
@@ -1038,6 +1127,9 @@ public partial class MainWindow : Window
         {
             OutputBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
             OutputBox.ScrollToEnd();
+
+            _outputLines = OutputBox.LineCount;
+            OutputCountText.Text = _outputLines > 0 ? _outputLines + " 行" : "";
         }
 
         if (Dispatcher.CheckAccess()) Append();

@@ -962,13 +962,14 @@ public partial class AboutPage : UserControl
 
         vm.Ctx.Updates.StatusChanged += OnStatusChanged;
 
-        // 开发者选项：开关状态回填 + 只有打开时才露出「测试报错」
+        // 开发者选项：开关状态回填 + 只有打开时才露出调试入口与插件开发工具
         _applyingDev = true;
         DeveloperToggle.IsChecked = vm.DeveloperMode;
         _applyingDev = false;
         var devVisible = vm.DeveloperMode ? Visibility.Visible : Visibility.Collapsed;
         TestErrorRow.Visibility = devVisible;
         ErrorCodeRow.Visibility = devVisible;
+        PluginDeveloperToolRow.Visibility = devVisible;
 
         DeveloperToggle.Checked += (_, _) => ApplyDeveloperMode(true);
         DeveloperToggle.Unchecked += (_, _) => ApplyDeveloperMode(false);
@@ -997,6 +998,7 @@ public partial class AboutPage : UserControl
         var visibility = on ? Visibility.Visible : Visibility.Collapsed;
         TestErrorRow.Visibility = visibility;
         ErrorCodeRow.Visibility = visibility;
+        PluginDeveloperToolRow.Visibility = visibility;
     }
 
     /// <summary>错误码清单：非模态打开，方便对照着报错窗看。</summary>
@@ -1012,6 +1014,19 @@ public partial class AboutPage : UserControl
     /// 报信进程立即弹「关键进程异常退出」，下次启动再补报「上次异常退出」—— 两层兜底一次验证。
     /// </summary>
     void OnTestErrorClick(object sender, RoutedEventArgs e) => _vm?.Ctx.DevTestTerminateMain();
+
+    void OnOpenPluginDeveloperToolClick(object sender, RoutedEventArgs e)
+    {
+        if (_vm is null) return;
+
+        if (_vm.Ctx.OpenPluginDeveloperTool(out var message))
+        {
+            DialogLauncher.Toast(this, InfoBarSeverity.Success, "插件开发工具已打开", message);
+            return;
+        }
+
+        DialogLauncher.Toast(this, InfoBarSeverity.Warning, "无法打开插件开发工具", message);
+    }
 
     /// <summary>
     /// 「立即更新」：直接拉起更新器，不过确认框（用户明确要求的交互：

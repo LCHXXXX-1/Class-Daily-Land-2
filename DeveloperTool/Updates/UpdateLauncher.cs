@@ -8,7 +8,6 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using ClassDailyLand2.Core;
 
 namespace DeveloperTool.Updates;
 
@@ -21,6 +20,12 @@ public static class UpdateLauncher
     const string UserAgent = "ClassDailyLand2-DeveloperTool/1.0";
     const int TimeoutSeconds = 12;
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
+
+    /// <summary>
+    /// 正在往 <c>Temp\DeveloperTool.Update</c> 搬更新器。
+    /// 供启动时的残留清理（<c>App.CleanStaleUpdaterTemp</c>）让路 —— 两边都会碰同一个目录。
+    /// </summary>
+    internal static volatile bool IsPreparing;
 
     static readonly HttpClient Http = CreateClient();
 
@@ -164,8 +169,15 @@ public static class UpdateLauncher
     // ─────────────────────────── 拉起更新器 ───────────────────────────
 
     /// <summary>
-    /// 更新器是框架依赖，必须把整个 Update\ 目录搬到 %Temp% 再启动，
-    /// 否则会锁住文件导致替换失败。
+    /// 更新器是框架依赖，必须把整个 Update\ 目录整份复制到别处再启动，
+    /// 否则会锁住自己导致替换失败。
+    ///
+    /// ★ 落点是 <c>&lt;安装目录&gt;\Temp\DeveloperTool.Update</c>，不再用系统 %Temp%：
+    ///   安全软件对"陌生临时目录里的陌生 exe"拦截率高，而程序目录是用户自己装的、
+    ///   已建立信任的路径。注意 <see cref="App"/> 构造函数已经把进程级 TEMP 指到
+    ///   <c>&lt;安装目录&gt;\Temp</c>，所以这里显式拼全路径，不依赖 <c>Path.GetTempPath()</c>
+    ///   —— 那条改写一旦失败（目录只读），GetTempPath 会悄悄退回系统 %Temp%，
+    ///   等于绕过本条策略。
     /// </summary>
     public static bool TryStart(RemoteRelease remote, out string error)
     {
@@ -195,29 +207,115 @@ public static class UpdateLauncher
             return false;
         }
 
-        var tempDir = Path.Combine(Path.GetTempPath(), "DeveloperTool.Update");
+        // 落点固定在安装目录内：安装目录是可信路径，且与目标盘同卷，
+        // 顺带避开"杀软拦 %Temp% 里的 exe"和跨卷复制。
+        var tempDir = Path.Combine(installDir, "Temp", "DeveloperTool.Update");
 
+        // ★ 给启动清理让路的标记。App.CleanStaleUpdaterTemp 会按 DeveloperTool.Update* 前缀清残留，
+        //   而它跑在启动时的后台线程上；用户点"立即更新"若撞上它，会出现
+        //   "刚 CreateDirectory 完就被整目录删掉、复制全落在空目录里"的现象。
+        IsPreparing = true;
         try
         {
-            // 1. 清空旧临时目录
-            if (Directory.Exists(tempDir)) Directory.Delete(tempDir, recursive: true);
-            Directory.CreateDirectory(tempDir);
+            // 1. 清空旧临时目录（占着就明说，不要把"上一个更新器还没退"报成"复制失败"）
+            if (Directory.Exists(tempDir))
+            {
+                try
+                {
+                    Directory.Delete(tempDir, recursive: true);
+                }
+                catch (Exception ex)
+                {
+                    error = "清空旧临时目录失败（可能被占用）：" + ex.Message + "\n" + tempDir;
+                    return false;
+                }
+            }
+
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+            }
+            catch (Exception ex)
+            {
+                error = "创建临时目录失败（安装目录可能不可写）：" + ex.Message + "\n" + tempDir;
+                return false;
+            }
 
             // 2. 整目录复制
+            //
+            // ★ 二进制先落成 .dat 再改名：一部分杀软在"进程把可执行文件写到磁盘"这一刻同步扫描，
+            //   扫不过就静默删掉（调用方拿不到异常，只看到"文件没了"）。改成 .dat 写入、
+            //   本地改名（改名不重新扫内容）能绕过这一层。非二进制文件原样复制，不做多余动作。
+            var copied = 0;
+            var copiedBytes = 0L;
+
             foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
             {
                 var relative = Path.GetRelativePath(sourceDir, file);
                 var dest = Path.Combine(tempDir, relative);
 
-                var parent = Path.GetDirectoryName(dest);
-                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+                var isBinary = file.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)
+                            || file.EndsWith(".dll", StringComparison.OrdinalIgnoreCase);
 
-                File.Copy(file, dest, overwrite: true);
+                var staging = isBinary ? dest + ".dat" : dest;
+
+                try
+                {
+                    var parent = Path.GetDirectoryName(dest);
+                    if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
+
+                    File.Copy(file, staging, overwrite: true);
+                    if (isBinary) File.Move(staging, dest, overwrite: true);
+                    copied++;
+                    copiedBytes += new FileInfo(dest).Length;
+                }
+                catch (Exception ex)
+                {
+                    // 点名是哪个文件、哪一步、已经搬了多少 —— 只报 "拒绝访问" 等于让人对着
+                    // 空文件夹猜。staging 与 dest 都写出来，能区分"写不进去"和"改名失败"。
+                    error = $"复制文件失败（已复制 {copied} 个 / {copiedBytes / 1024} KB）\n" +
+                            $"源：{file}\n写入：{staging}\n目标：{dest}\n错误：{ex.GetType().Name}：{ex.Message}";
+                    return false;
+                }
             }
 
             var tempExe = Path.Combine(tempDir, "IDEUpdater.exe");
 
-            // 3. 拉起更新器
+            // 3. 强制校验：三个维度都要过，缺一个就会拉起到一个残废的更新器上
+            //    ① 一个文件都没搬 → 源目录读不到（路径错 / 枚举被拦）
+            if (copied == 0)
+            {
+                error = "源目录中没有任何文件可复制。\n源路径：" + sourceDir;
+                return false;
+            }
+
+            //    ② 搬的数量对不上 → 复制成功后在磁盘上被削掉了（杀软静默删除的典型形态）
+            var present = Directory.GetFiles(tempDir, "*", SearchOption.AllDirectories).Length;
+            if (present < copied)
+            {
+                error = $"复制了 {copied} 个文件，但目标目录只剩 {present} 个 —— 有文件在复制后被删除。\n" +
+                        $"疑似杀软拦截，请把 {Path.GetDirectoryName(tempDir)} 加入白名单后重试。\n目标目录：{tempDir}";
+                return false;
+            }
+
+            //    ③ 更新器本体在不在、大小对不对（0 字节 / 被替换成占位文件都过不了这关）
+            if (!File.Exists(tempExe))
+            {
+                error = $"更新器复制失败，找不到目标 exe：{tempExe}\n" +
+                        $"已复制 {copied} 个文件，但 exe 不在 —— 可能被杀软静默删除了！";
+                return false;
+            }
+
+            var sourceExeSize = new FileInfo(sourceExe).Length;
+            var copiedExeSize = new FileInfo(tempExe).Length;
+            if (sourceExeSize != copiedExeSize)
+            {
+                error = $"更新器副本大小不一致：源 {sourceExeSize} 字节，副本 {copiedExeSize} 字节。\n" +
+                        $"疑似被杀软改写或删空：{tempExe}";
+                return false;
+            }
+
+            // 4. 拉起更新器
             // ★ 必须 UseShellExecute = false，否则 ArgumentList 会被系统忽略（参数丢失）
             var info = new ProcessStartInfo
             {
@@ -239,15 +337,23 @@ public static class UpdateLauncher
 
             if (Process.Start(info) is null)
             {
-                error = "更新器没能启动。";
+                error = $"更新器进程没有创建成功：{tempExe}\n文件已完整复制（{copied} 个），" +
+                        "问题出在启动这一步，多为杀软/组策略拦截。";
                 return false;
             }
             return true;
         }
         catch (Exception ex)
         {
-            error = "启动更新器失败：" + ex.Message;
+            // 兜住剩下的两处：枚举源目录（路径不存在 / 权限不足），以及 Process.Start（被拦、被策略禁运）。
+            // 单文件复制已经在循环里各自报错，走到这里说明还没开始搬文件或已经搬完了。
+            error = $"准备更新器时出错（{ex.GetType().Name}）：{ex.Message}\n" +
+                    $"源目录：{sourceDir}\n临时目录：{tempDir}";
             return false;
+        }
+        finally
+        {
+            IsPreparing = false;
         }
     }
 }

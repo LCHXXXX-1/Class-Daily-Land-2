@@ -14,7 +14,7 @@
 
     <StackPanel Margin="20">
         <TextBlock Text="登录插件市场" FontSize="16" FontWeight="SemiBold" />
-        <TextBlock Text="选择用哪个账号登录。授权页在 IDE 内打开，不会拉起外部浏览器。"
+        <TextBlock Text="选择用哪个账号登录。授权页会用你的默认浏览器打开，登录完成后自动回到 IDE。"
                    Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
                    Foreground="{DynamicResource DimTextBrush}" />
 

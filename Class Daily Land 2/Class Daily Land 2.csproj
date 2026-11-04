@@ -109,6 +109,22 @@
 		<Copy SourceFiles="@(_UpdaterFiles)" DestinationFiles="@(_UpdaterFiles->'$(OutputPath)Update\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
 	</Target>
 
+	<!--
+	  插件开发工具是按需启动的独立 WPF 进程。构建图只负责先生成它；随后把完整输出目录
+	  （含 Roslyn、WebView2、Update 子目录与 runtimeconfig）复制到主程序旁的 DeveloperTool\。
+	-->
+	<Target Name="CopyPluginDeveloperTool" AfterTargets="Build">
+		<PropertyGroup>
+			<_PluginDeveloperToolOutDir>..\DeveloperTool\bin\$(Configuration)\net10.0-windows10.0.19041.0\win-x64</_PluginDeveloperToolOutDir>
+		</PropertyGroup>
+
+		<Error Condition="!Exists('$(_PluginDeveloperToolOutDir)\DeveloperTool.exe')" Text="插件开发工具没有编译出 DeveloperTool.exe：$(_PluginDeveloperToolOutDir)" />
+		<ItemGroup>
+			<_PluginDeveloperToolFiles Include="$(_PluginDeveloperToolOutDir)\**\*.*" Exclude="$(_PluginDeveloperToolOutDir)\**\*.pdb;$(_PluginDeveloperToolOutDir)\**\*.xml" />
+		</ItemGroup>
+		<Copy SourceFiles="@(_PluginDeveloperToolFiles)" DestinationFiles="@(_PluginDeveloperToolFiles->'$(OutputPath)DeveloperTool\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+	</Target>
+
 	<ItemGroup>
 		<!--
 		  更新契约（job.json / version.json 的 DTO、SemVer、路径校验、哈希、替换计划）。
@@ -125,6 +141,8 @@
 	<ItemGroup>
 	  <!-- 插件契约：插件作者只引用这一个程序集，宿主与插件共享同一份副本 -->
 	  <ProjectReference Include="..\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj" />
+	  <!-- 只参与构建，不把开发工具程序集加载进主程序进程。 -->
+	  <ProjectReference Include="..\DeveloperTool\DeveloperTool.csproj" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 
 	<ItemGroup>

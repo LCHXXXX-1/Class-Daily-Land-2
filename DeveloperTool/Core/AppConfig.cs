@@ -1,7 +1,6 @@
 using System.IO;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using ClassDailyLand2.Core;
 
 namespace DeveloperTool.Core;
 
@@ -36,7 +35,7 @@ public sealed record AppConfig(
     /// <summary>配置文件的落点（输出目录根，csproj 里 PreserveNewest 复制过来）。</summary>
     public static string FilePath => Path.Combine(AppContext.BaseDirectory, FileName);
 
-    /// <summary>版本号唯一真源是主程序的 <c>Updates\VersionInfo.cs</c>，这里直接读常量。</summary>
+    /// <summary>版本号唯一真源是 IDE 自己的 <c>VersionInfo.cs</c>，这里直接读常量。</summary>
     public static string AssemblyVersion => VersionInfo.Version;
 
     public static AppConfig Load()

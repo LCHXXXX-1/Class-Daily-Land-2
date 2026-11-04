@@ -828,6 +828,41 @@ public sealed class AppController
         })?.Dispose();
     }
 
+    /// <summary>
+    /// 打开随主程序部署的插件开发工具。开发工具与主程序分进程，避免 Roslyn / WebView2 等开发依赖
+    /// 增加主程序常驻进程的体积与启动负担。
+    /// </summary>
+    public bool OpenPluginDeveloperTool(out string message)
+    {
+        var toolDirectory = Path.Combine(AppContext.BaseDirectory, "DeveloperTool");
+        var executable = Path.Combine(toolDirectory, "DeveloperTool.exe");
+        if (!File.Exists(executable))
+        {
+            message = "未找到 DeveloperTool\\DeveloperTool.exe。请重新安装或修复 Class Daily Land。";
+            Log.Warn("[插件开发工具] 启动失败：" + message);
+            return false;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = executable,
+                WorkingDirectory = toolDirectory,
+                UseShellExecute = true,
+            })?.Dispose();
+            message = "你现在可以新建、编译并测试插件。";
+            Log.Info("[插件开发工具] 已启动：" + executable);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            message = ex.Message;
+            Log.Warn("[插件开发工具] 启动失败：" + ex.Message);
+            return false;
+        }
+    }
+
     /// <summary>在设置中心里打开一个二级浮层（菜单项与设置页共用这条路径）。</summary>
     void OpenDialog(Func<ViewModels.SettingsViewModel, FrameworkElement> create)
     {
