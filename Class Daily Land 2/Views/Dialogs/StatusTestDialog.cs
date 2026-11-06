@@ -26,6 +26,7 @@ public sealed class StatusTestDialog : DialogPanel
     readonly NumberBox _advance;
     readonly NumberBox _countdown;
     readonly ComboBox _speed;
+    readonly NumberBox _classMinutes;
 
     readonly Border _capsule = new();
     readonly TextBlock _capsuleText = new();
@@ -62,11 +63,13 @@ public sealed class StatusTestDialog : DialogPanel
         _advance = Num(vm.ScheduleAdvanceMinutes, 0, 60, " 分钟");
         _offset = Num(vm.ScheduleTimeOffsetSeconds, -1800, 1800, " 秒");
         _countdown = Num(vm.IslandCountdownSec, 5, 600, " 秒");
+        _classMinutes = Num(45, 5, 120, " 分钟");   // 演示里一节课上多久（模拟课堂生效）
         _speed = Select(SpeedLabels, 5);      // 默认 60×：一节 45 分钟的课约 46 秒看完
         _speed.SelectionChanged += (_, _) => OnSpeedChanged();
 
         Add(Row(Label("时间点"), _time, Label("提前提醒"), _advance));
         Add(Row(Label("时间偏移"), _offset, Label("倒计时"), _countdown));
+        Add(Row(Label("上课时长"), _classMinutes));
 
         // 回显胶囊：与真实灵动岛同步，方便对照（岛本身才是主角）
         _capsule.Height = 40;
@@ -99,8 +102,6 @@ public sealed class StatusTestDialog : DialogPanel
         };
 
         AddButton("关闭", Close);
-        AddButton("保存为当前参数", SaveParams);
-        AddButton("试算此刻", Compute, primary: true);
     }
 
     static NumberBox Num(int value, int min, int max, string suffix) => new()
@@ -111,15 +112,6 @@ public sealed class StatusTestDialog : DialogPanel
         Suffix = suffix,
         Width = 120,
     };
-
-    // ————————————————————— 试算（单点） —————————————————————
-
-    void Compute()
-    {
-        if (!TryParseTime(out var baseTime)) return;
-        var status = Ctx.Schedule.Engine.Compute(baseTime, _advance.Value, _offset.Value);
-        Render(baseTime, status, single: true);
-    }
 
     bool TryParseTime(out DateTime time)
     {
@@ -193,7 +185,7 @@ public sealed class StatusTestDialog : DialogPanel
         {
             // 今天没课 / 已经放学：走"模拟课堂"，岛上照样能看到完整三阶段
             start = baseTime;
-            total = Math.Max(5, _countdown.Value) + 45 * 60 + 4;
+            total = Math.Max(5, _countdown.Value) + Math.Max(60, _classMinutes.Value * 60) + 4;
             _provider = FakeClassStatus;
             _simulated = true;
         }
@@ -236,7 +228,7 @@ public sealed class StatusTestDialog : DialogPanel
     /// </summary>
     ScheduleStatus FakeClassStatus(DateTime t)
     {
-        const int classSec = 45 * 60;
+        var classSec = Math.Max(60, _classMinutes.Value * 60);
         var countdown = Math.Max(5, _countdown.Value);
         var elapsed = (t - _simStart).TotalSeconds;
 
@@ -314,11 +306,5 @@ public sealed class StatusTestDialog : DialogPanel
             $"倍速：{_speedValue:0.#}×";
     }
 
-    void SaveParams()
-    {
-        Vm.ScheduleAdvanceMinutes = _advance.Value;
-        Vm.ScheduleTimeOffsetSeconds = _offset.Value;
-        Vm.IslandCountdownSec = _countdown.Value;
-        Tell(this, "已写入 settings.json，灵动岛按新参数运行。", "状态测试");
-    }
+
 }

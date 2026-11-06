@@ -380,6 +380,7 @@ public sealed class AppController
         Main.EditHomeworkRequested += OpenHomeworkEditor;
         Main.TempAdjustRequested += OpenTempAdjust;
         Main.HolidayRequested += OpenHolidayEditor;
+        Main.TimetableRequested += () => ShowSettings("timetable");
         Main.WeekendRequested += OpenWeekendEditor;
         Main.RollCallRequested += OpenRollCall;
         Main.SettingsRequested += ShowSettings;
@@ -911,6 +912,11 @@ public sealed class AppController
     public void ShowSettings(string? pageKey)
     {
         var window = EnsureSettings();
+        if (string.Equals(pageKey, "timetable", StringComparison.OrdinalIgnoreCase))
+        {
+            window.OpenTimetableEditor();   // 课表编辑现在是「课表与提醒」里的二级页
+            return;
+        }
         if (!string.IsNullOrWhiteSpace(pageKey)) window.NavigateTo(pageKey!);
     }
 

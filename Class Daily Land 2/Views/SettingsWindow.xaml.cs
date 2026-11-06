@@ -67,7 +67,6 @@ public partial class SettingsWindow : Window
             new("interaction", "交互", "\uE7C9", () => new InteractionPage()),
             new(AppSettings.PageAppearance, "个性化", "\uE790", () => new AppearancePage()),
             new(AppSettings.PageSchedule, "课表与提醒", "\uE787", () => new SchedulePage()),
-            new("timetable", "课表编辑", "\uE70F", () => new TimetableEditorPage()),
             new(AppSettings.PageHomework, "作业", "\uE8A5", () => new HomeworkPage()),
             new(AppSettings.PagePlugins, "插件", "\uE74C", () => new PluginsPage()),
             new("logs", "日志", "\uE81E", () => new LogPage()),
@@ -494,6 +493,14 @@ public partial class SettingsWindow : Window
     /// 打开二级页：整页从右侧推进来（forward），当前页整段左移让位。
     /// 与 QML 版一致 —— 不是盖一张卡片，而是页内推进 + 面包屑。
     /// </summary>
+    /// <summary>打开「课表与提醒 › 课表编辑」二级页（右键菜单与页面入口都走这里）。</summary>
+    public void OpenTimetableEditor()
+    {
+        Select(AppSettings.PageSchedule);
+        var page = new TimetableEditorPage { DataContext = Vm };
+        ShowOverlay(page);
+    }
+
     public void ShowOverlay(FrameworkElement panel)
     {
         // 面板当成"页"来用：铺满内容列，去掉卡片那套固定宽高与居中
@@ -510,6 +517,7 @@ public partial class SettingsWindow : Window
         {
             Views.Dialogs.DialogPanel dp => $"设置 › {dp.ParentPageTitle} › {dp.Title}",
             Views.Dialogs.HomeworkEditor he => $"设置 › {he.ParentPageTitle} › 编辑作业",
+            Views.Pages.TimetableEditorPage => "设置 › 课表与提醒 › 课表编辑",
             _ => "设置 › 二级页",
         };
 

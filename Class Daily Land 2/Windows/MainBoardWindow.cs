@@ -79,6 +79,7 @@ public sealed class MainBoardWindow : Window
     public event Action? EditHomeworkRequested;
     public event Action? TempAdjustRequested;
     public event Action? HolidayRequested;
+    public event Action? TimetableRequested;   // 右键「编辑课表」：打开课表编辑页
     public event Action? WeekendRequested;
     public event Action? RollCallRequested;
     public event Action? SettingsRequested;
@@ -902,7 +903,7 @@ public sealed class MainBoardWindow : Window
         Item("临时调课", () => TempAdjustRequested?.Invoke());
         menu.Items.Add(new Separator());
         Item("假期与调休", () => HolidayRequested?.Invoke());
-        Item("周末作息", () => WeekendRequested?.Invoke());
+        Item("编辑课表…", () => TimetableRequested?.Invoke());
         menu.Items.Add(new Separator());
         // 插件菜单项：排在「设置」前面，各自夹一层 try（插件回调不能拖垮菜单）
         IReadOnlyList<BoardActionSpec> pluginActions = Array.Empty<BoardActionSpec>();

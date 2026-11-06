@@ -56,7 +56,7 @@ public partial class SchedulePage : UserControl
     public SchedulePage()
     {
         InitializeComponent();
-        WeekendLink.Click += (_, _) => Show(vm => new WeekendDialog(vm));
+        TimetableLink.Click += (_, _) => (Window.GetWindow(this) as SettingsWindow)?.OpenTimetableEditor();
         HolidaysLink.Click += (_, _) => Show(vm => new HolidaysDialog(vm));
         DutyLink.Click += (_, _) => Show(vm => new DutyDialog(vm));
         TempAdjustLink.Click += (_, _) => Show(vm => new TempAdjustDialog(vm));
