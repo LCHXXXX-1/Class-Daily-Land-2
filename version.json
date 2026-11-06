@@ -1,13 +1,14 @@
 {
   "stable": {
-    "version": "1.7.17",
+    "version": "1.7.18",
     "release_date": "2026-11-06",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.17.zip",
-    "sha256": "ccb528220403ff3c30eccd234fd3ea4bcfe96fe250700f7c7dbf0b6433985c75",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.18.zip",
+    "sha256": "32969452a3d7acd462bf96efe960487294c814d1af085788843ce18c3cf1b52d",
     "changelog": [
-      "修复：灵动岛进度不再一秒一跳——平滑推进改由逐帧回调驱动（实测 18fps → 50fps），且不再被隐藏状态停掉",
-      "改进：灵动岛文案切换动画放慢到 300ms 并改用先快后慢曲线，数字变化更像滚动",
-      "改进：「班级日常」窗口材质换成亚克力实时模糊（云母只是壁纸采样，几乎看不出糊），并把遮罩调薄让模糊透出来"
+      "修复：灵动岛进度条不再「闪一下跳一下」——数据每秒来一次时不再硬设宽度，改为逐帧平滑跟随",
+      "新增：状态测试支持按倍速完整演示「倒计时 → 上课 → 下课」，可暂停/重播，倍速 1×~120×",
+      "修复：正常关机/重启后再次启动不再误报「上次异常退出」（关机时清标记 + 开机 5 分钟内豁免）",
+      "修复：「班级日常」恢复直角（贴屏幕边缘不留缝），非 Windows 11 自动整体回退成纯色"
     ],
     "is_mandatory": false
   },
