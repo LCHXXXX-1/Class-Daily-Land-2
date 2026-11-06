@@ -14,7 +14,7 @@ namespace ClassDailyLand2.App.Views.Pages;
 ///
 /// · 上方是周一到周五的课表；
 /// · 顶部开关「自定义周六 / 周日作息」打开后，下方出现周末课表（周六、周日共用一套，
-///   上午沿用平日课表中早于分界点的节次，下午用这里配置的自定义节次）。
+///   整天节次都在这张表里排，不再有上午 / 下午分界点）。
 ///
 /// 编辑的是**本地副本**：改格子只动内存，"保存"时才写回 schedule.json；"取消"丢弃重读。
 /// </summary>
@@ -140,19 +140,63 @@ public partial class TimetableEditorPage : UserControl
         _loadingWeekend = true;
 
         var weekend = schedule.File.Weekend;
-        SplitBox.Text = string.IsNullOrWhiteSpace(weekend.MorningSplit) ? "12:00" : weekend.MorningSplit;
-
         _weekendRows.Clear();
-        for (var i = 0; i < weekend.AfternoonPeriods.Count; i++)
+
+        // 周末表是**一整天**的完整节次（不再分上午 / 下午）：
+        //   · morning_split == "00:00" → 已经是完整表，按存的顺序原样显示；
+        //   · 否则是老配置（上午沿用平日课表 + 下午自定义），把两段合并成一张完整表，
+        //     用户在这一张表上改，保存后就固化成完整表。
+        var main = schedule.Active;
+        var selfContained = weekend.MorningSplitMinutes == 0;
+
+        if (selfContained && weekend.AfternoonPeriods.Count > 0)
         {
-            var period = weekend.AfternoonPeriods[i];
-            _weekendRows.Add(new WeekendRow
+            for (var i = 0; i < weekend.AfternoonPeriods.Count; i++)
             {
-                Name = period.Name ?? $"午{i + 1}",
-                Start = period.Start,
-                End = period.End,
-                Course = i < weekend.Courses.Count ? weekend.Courses[i] ?? "" : "",
-            });
+                var period = weekend.AfternoonPeriods[i];
+                _weekendRows.Add(new WeekendRow
+                {
+                    Name = period.Name ?? $"第{i + 1}节",
+                    Start = period.Start,
+                    End = period.End,
+                    Course = i < weekend.Courses.Count ? weekend.Courses[i] ?? "" : "",
+                });
+            }
+        }
+        else
+        {
+            // 老配置：先把平日课表整天的节次搬进来（周末列优先，空则回落周一列）
+            for (var i = 0; i < main.Periods.Count; i++)
+            {
+                var period = main.Periods[i];
+                if (!period.IsValid) continue;
+
+                var course = main.CourseAt(i, 5);
+                if (string.IsNullOrWhiteSpace(course)) course = main.CourseAt(i, 0);
+
+                _weekendRows.Add(new WeekendRow
+                {
+                    Name = string.IsNullOrWhiteSpace(period.Name) ? $"第{_weekendRows.Count + 1}节" : period.Name,
+                    Start = period.Start,
+                    End = period.End,
+                    Course = course ?? "",
+                });
+            }
+
+            // 再把之前单独配过的午后节次接在后面
+            for (var i = 0; i < weekend.AfternoonPeriods.Count; i++)
+            {
+                var period = weekend.AfternoonPeriods[i];
+                if (!period.IsValid) continue;
+
+                _weekendRows.Add(new WeekendRow
+                {
+                    Name = string.IsNullOrWhiteSpace(period.Name) ? $"第{_weekendRows.Count + 1}节" : period.Name,
+                    Start = period.Start,
+                    End = period.End,
+                    Course = i < weekend.Courses.Count ? weekend.Courses[i] ?? "" : "",
+                });
+            }
         }
 
         var on = Vm?.Ctx.Settings.Bool("weekend_custom_schedule") ?? false;
@@ -176,7 +220,7 @@ public partial class TimetableEditorPage : UserControl
 
         StatusText.Text = on
             ? "已展开周末课表（周六、周日共用）· 记得点「保存」。"
-            : "已收起周末课表 · 周末将沿用平日课表的上午节次。";
+            : "已收起周末课表 · 此时保存不会改动周末设置。";
     }
 
     // ————————————————————— 节次操作 —————————————————————
@@ -223,8 +267,8 @@ public partial class TimetableEditorPage : UserControl
 
         var row = new WeekendRow
         {
-            Name = $"午{_weekendRows.Count + 1}",
-            Start = _weekendRows.Count > 0 ? _weekendRows[^1].End : "13:30",
+            Name = $"第{_weekendRows.Count + 1}节",
+            Start = _weekendRows.Count > 0 ? _weekendRows[^1].End : "08:00",
         };
 
         var (h, m) = AddMinutes(row.Start.Split(':')[0], row.Start.Split(':')[1], 45);
@@ -339,9 +383,13 @@ public partial class TimetableEditorPage : UserControl
         if (WeekendToggle.IsChecked == true)
         {
             var weekend = schedule.File.Weekend;
-            weekend.MorningSplit = NormalizeTime(SplitBox.Text, "12:00");
+
+            // 周末表就是整天的全部节次，不存在上午 / 下午分界：
+            // morning_split = "00:00" 表示"不从平日课表继承任何节次"，
+            // 引擎按 start < morning_split 取上午，取到空集后整天都由下面这张表决定。
+            weekend.MorningSplit = "00:00";
             weekend.AfternoonPeriods = _weekendRows
-                .Select(r => new Period(r.Name.Trim(), NormalizeTime(r.Start, "13:30"), NormalizeTime(r.End, "14:15")))
+                .Select(r => new Period(r.Name.Trim(), NormalizeTime(r.Start, "08:00"), NormalizeTime(r.End, "08:45")))
                 .ToList();
             weekend.Courses = _weekendRows.Select(r => r.Course.Trim()).ToList();
             schedule.SetWeekend(weekend);

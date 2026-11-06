@@ -38,7 +38,7 @@
                     <TextBlock Text="自定义周六 / 周日作息"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                    <TextBlock Text="打开后在下方显示周末课表；关闭则沿用平日课表的上午节次，周末不上下午课"
+                    <TextBlock Text="打开后在下方显示周末课表（整天节次）；关闭则不修改周末设置"
                                Margin="0,2,0,0"
                                FontSize="12"
                                TextWrapping="Wrap"
@@ -183,31 +183,20 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
-                    <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0">
                     <TextBlock Text="周末课表"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                    <TextBlock Text="周六、周日共用下面这套；上午自动沿用平日课表中早于分界点的节次"
+                    <TextBlock Text="周六、周日共用下面这套；整天节次都在这里排（不分上午下午）"
                                Margin="0,2,0,0"
                                FontSize="12"
                                TextWrapping="Wrap"
                                Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
-                <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,10,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="上午分界点" VerticalAlignment="Center"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                    <TextBox x:Name="SplitBox" Width="70" Margin="8,0,0,0"
-                             Text="12:00" Height="28" VerticalContentAlignment="Center" />
-                    <TextBlock Text="（早于这个时间的节次算上午）" VerticalAlignment="Center" Margin="8,0,0,0"
-                               FontSize="12"
-                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                </StackPanel>
-
-                <Border Grid.Row="2" Margin="0,10,0,0" MaxHeight="220"
+                <Border Grid.Row="1" Margin="0,10,0,0" MaxHeight="220"
                         CornerRadius="6" BorderThickness="1"
                         BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
                     <DataGrid x:Name="WeekendGrid"
@@ -265,7 +254,7 @@
                     </DataGrid>
                 </Border>
 
-                <StackPanel Grid.Row="3" Orientation="Horizontal" Margin="0,8,0,0">
+                <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="0,8,0,0">
                     <Button Content="+ 加一节" Height="28" MinWidth="84"
                             Style="{StaticResource SubtleButton}"
                             Click="AddWeekend_Click" />

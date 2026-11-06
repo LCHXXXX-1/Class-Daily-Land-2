@@ -198,6 +198,46 @@ public class ScheduleEngineTests
         Assert.Equal("none", s.Status);
     }
 
+    /// <summary>
+    /// 「课表编辑」保存周末表时写 morning_split = "00:00"，表示整天都由周末表决定、
+    /// 不再从平日课表继承任何节次（周末表没有上午 / 下午分界点）。
+    /// </summary>
+    [Fact]
+    public void Weekend_SelfContainedTable_DoesNotInheritWeekdayPeriods()
+    {
+        var sf = Basic();
+        sf.Weekend = new WeekendConfig
+        {
+            MorningSplit = "00:00",
+            AfternoonPeriods =
+            {
+                new Period("周1", "10:00", "10:40"),
+                new Period("周2", "11:00", "11:40"),
+            },
+            Courses = { "自习", "社团活动" },
+        };
+        var eng = Engine(sf);
+
+        // 平日 08:00 / 09:00 的节次不该被搬过来
+        var periods = eng.PeriodsFor(Saturday(8, 20));
+        Assert.Equal(2, periods.Count);
+        Assert.Equal("10:00", periods[0].Start);
+
+        // 08:20 时下一节是周末表的 10:00（平日 08:00 那节已不存在）
+        var before = eng.Compute(Saturday(8, 20));
+        Assert.Equal("upcoming", before.Status);
+        Assert.Equal("周1", before.Period);
+
+        var first = eng.Compute(Saturday(10, 10));
+        Assert.Equal("ongoing", first.Status);
+        Assert.Equal("自习", first.Course);
+
+        // 周六、周日共用同一张表
+        var second = eng.Compute(Sunday(11, 10));
+        Assert.Equal("ongoing", second.Status);
+        Assert.Equal("社团活动", second.Course);
+    }
+
     // ——— 时间偏移 ———
 
     [Fact]
