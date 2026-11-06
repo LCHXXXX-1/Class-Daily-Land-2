@@ -76,7 +76,7 @@
     </Style>
 
     <Style x:Key="RowHint" TargetType="TextBlock">
-        <!-- 左对齐：TextBlock 默认 Stretch + MaxWidth 会让宽行里的说明文字被"居中"（视觉上是莫名缩进） -->
+        <!-- 左对齐：TextBlock 默认 Stretch + MaxWidth 会让宽行里的说明文字被"居中"（看起来像莫名缩进） -->
         <Setter Property="HorizontalAlignment" Value="Left" />
         <Setter Property="FontSize" Value="{DynamicResource FontSizeCaption}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -100,7 +100,7 @@
         <Setter Property="FontFamily" Value="{DynamicResource FontFamilyText}" />
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource GlassControlBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
         <!-- WinUI 3 海拔描边：上浅下深的渐变，底边那道深色是按钮「厚度」的来源 -->
         <Setter Property="BorderBrush" Value="{DynamicResource ControlElevationBorderBrush}" />
         <Setter Property="BorderThickness" Value="1" />
@@ -121,7 +121,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource GlassControlHoverBrush}" />
+                            <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorSecondaryBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ControlFillColorTertiaryBrush}" />
@@ -258,8 +258,8 @@
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource GlassControlBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource GlassStrokeBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
@@ -309,8 +309,8 @@
         <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="CaretBrush" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-        <Setter Property="Background" Value="{DynamicResource GlassControlBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource GlassStrokeBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrongStrokeColorDefaultBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="10,8" />
         <Setter Property="AcceptsReturn" Value="True" />
@@ -403,37 +403,23 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type fl:FluentToggle}">
-                    <!-- 液态玻璃开关：半透明玻璃轨道 + 白色玻璃珠旋钮（带投影，才有"浮着"的体积感） -->
                     <Grid Background="Transparent">
                         <Border x:Name="Track" CornerRadius="10"
-                                Background="{DynamicResource GlassToggleTrackBrush}"
-                                BorderBrush="{DynamicResource GlassStrokeBrush}"
-                                BorderThickness="1">
-                            <!-- 顶部反光：玻璃轨道的那道亮边 -->
-                            <Border CornerRadius="9" Margin="1" IsHitTestVisible="False" Opacity="0.6"
-                                    VerticalAlignment="Top" Height="7"
-                                    Background="{DynamicResource GlassSheenBrush}" />
-                        </Border>
-                        <Border x:Name="Knob" Width="12" Height="12" CornerRadius="6"
-                                HorizontalAlignment="Left" Margin="4,0,0,0"
-                                Background="{DynamicResource GlassKnobBrush}"
-                                BorderBrush="{DynamicResource GlassStrokeBrush}"
-                                BorderThickness="1">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#000000" Opacity="0.30" BlurRadius="4"
-                                                  ShadowDepth="1" Direction="270" />
-                            </Border.Effect>
-                        </Border>
+                                Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                BorderBrush="{DynamicResource ControlStrongStrokeColorDefaultBrush}"
+                                BorderThickness="1" />
+                        <Ellipse x:Name="Knob" Width="12" Height="12"
+                                 HorizontalAlignment="Left" Margin="4,0,0,0"
+                                 Fill="{DynamicResource ControlStrongFillColorDefaultBrush}" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
                             <Setter TargetName="Track" Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
-                            <Setter TargetName="Track" Property="Effect" Value="{DynamicResource AccentGlowEffect}" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="Transparent" />
                             <Setter TargetName="Knob" Property="Width" Value="14" />
                             <Setter TargetName="Knob" Property="Height" Value="14" />
                             <Setter TargetName="Knob" Property="Margin" Value="22,0,0,0" />
-                            <Setter TargetName="Knob" Property="CornerRadius" Value="7" />
+                            <Setter TargetName="Knob" Property="Fill" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
                         </Trigger>
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
@@ -442,8 +428,7 @@
                             </MultiTrigger.Conditions>
                             <Setter TargetName="Knob" Property="Width" Value="14" />
                             <Setter TargetName="Knob" Property="Height" Value="14" />
-                            <Setter TargetName="Knob" Property="CornerRadius" Value="7" />
-                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource AccentFillColorTertiaryBrush}" />
+                            <Setter TargetName="Track" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
                         </MultiTrigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.4" />
@@ -611,8 +596,8 @@
                             Height="{TemplateBinding Height}"
                             MinWidth="{TemplateBinding MinWidth}"
                             CornerRadius="{DynamicResource ControlCornerRadius}"
-                            Background="{DynamicResource GlassControlBrush}"
-                            BorderBrush="{DynamicResource GlassStrokeBrush}"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}"
+                            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
                             BorderThickness="1">
                         <Grid>
                             <Grid.ColumnDefinitions>
@@ -831,8 +816,8 @@
         <Setter Property="Margin" Value="1,0" />
         <Style.Triggers>
             <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                <Setter Property="Background" Value="{DynamicResource GlassSurfaceBrush}" />
-                <Setter Property="BorderBrush" Value="{DynamicResource GlassStrokeBrush}" />
+                <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Tag" Value="selected" />
             </DataTrigger>
@@ -847,9 +832,8 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type fl:SelectorBar}">
-                    <Border Background="{DynamicResource GlassTabBrush}"
-                            BorderBrush="{DynamicResource GlassStrokeBrush}" BorderThickness="1"
-                            CornerRadius="10" Padding="3">
+                    <Border Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                            CornerRadius="7" Padding="3">
                         <ItemsPresenter />
                     </Border>
                 </ControlTemplate>
@@ -875,8 +859,8 @@
 
     <!-- ===== 列表 / 滚动条 -->
     <Style TargetType="ListBox">
-        <Setter Property="Background" Value="{DynamicResource GlassControlBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource GlassStrokeBrush}" />
+        <Setter Property="Background" Value="{DynamicResource ControlFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ControlStrokeColorDefaultBrush}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="Padding" Value="2" />
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />

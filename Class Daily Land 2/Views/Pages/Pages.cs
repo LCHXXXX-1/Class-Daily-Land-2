@@ -43,6 +43,8 @@ public partial class AppearancePage : UserControl
             BuildThemeSwatches();
             BuildBackgroundSwatches();
             SyncBackgroundRows(vm);
+            BuildHomeworkSwatches();
+            SyncHomeworkRows(vm);
 
             vm.PropertyChanged += OnAppearanceChanged;
             Unloaded += (_, _) => vm.PropertyChanged -= OnAppearanceChanged;
@@ -66,9 +68,16 @@ public partial class AppearancePage : UserControl
             case nameof(SettingsViewModel.SettingsBackgroundImage):
                 SyncBackgroundRows(vm);
                 break;
+            case nameof(SettingsViewModel.HomeworkBackground):
+                SyncHomeworkRows(vm);
+                break;
+            case nameof(SettingsViewModel.HomeworkBackgroundImage):
+                SyncHomeworkRows(vm);
+                break;
             case nameof(SettingsViewModel.ThemeMode):
                 // 深浅一变，纯色预设跟着换一套（浅色主题里给深色底会读不清字）
                 BuildBackgroundSwatches();
+                BuildHomeworkSwatches();
                 break;
         }
     }
@@ -100,15 +109,87 @@ public partial class AppearancePage : UserControl
 
     void BuildBackgroundSwatches()
     {
-        BgColorStrip.Children.Clear();
+        var dark = ThemeService.IsDark;
+        BuildColorStrip(BgColorStrip, dark ? DarkBackgrounds : LightBackgrounds,
+            Vm?.SettingsBackgroundColor ?? "", hex =>
+            {
+                if (Vm is not { } vm) return;
+                vm.SettingsBackgroundColor = hex;
+                vm.SettingsBackground = "solid";     // 点颜色即切纯色模式，少一步
+            });
+    }
+
+    // ————————————— 作业区域 —————————————
+
+    /// <summary>作业区色板：浅色/深色各一组，深底会自动把文字换浅。</summary>
+    static readonly (string Hex, string Name)[] HomeworkBackgrounds =
+    {
+        ("#FFFFFF", "白"), ("#F4F5F8", "浅灰"), ("#EDF3FF", "淡蓝"), ("#EDF7EE", "淡绿"),
+        ("#FFF6E9", "暖黄"), ("#2B2B31", "深灰"), ("#1F2430", "深蓝"), ("#241F2E", "深紫"),
+    };
+
+    void SyncHomeworkRows(SettingsViewModel vm)
+    {
+        var mode = vm.HomeworkBackground;
+        HomeworkColorRow.Visibility = mode == "color" ? Visibility.Visible : Visibility.Collapsed;
+        HomeworkImageRow.Visibility = mode == "image" ? Visibility.Visible : Visibility.Collapsed;
+
+        var path = vm.HomeworkBackgroundImage;
+        HomeworkImageText.Text = string.IsNullOrWhiteSpace(path) ? "未选择图片" : System.IO.Path.GetFileName(path);
+    }
+
+    void BuildHomeworkSwatches()
+    {
+        BuildColorStrip(HomeworkColorStrip, HomeworkBackgrounds,
+            Vm?.HomeworkBackgroundColor ?? "", hex =>
+            {
+                if (Vm is not { } vm) return;
+                vm.HomeworkBackgroundColor = hex;
+                vm.HomeworkBackground = "color";
+            });
+    }
+
+    void OnPickHomeworkImage(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择作业区背景图片",
+            Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.gif|所有文件|*.*",
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+
+        if (Vm is { } vm)
+        {
+            vm.HomeworkBackgroundImage = dialog.FileName;
+            vm.HomeworkBackground = "image";
+            SyncHomeworkRows(vm);
+        }
+    }
+
+    void OnClearHomeworkImage(object sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        vm.HomeworkBackgroundImage = "";
+        SyncHomeworkRows(vm);
+    }
+
+    // ————————————— 通用色块条 —————————————
+
+    /// <summary>
+    /// 一排圆形色块：选中项带强调色环与对勾。两个页面（窗口背景 / 作业区）共用，
+    /// 只是传入的预设和"点下去写哪个设置"不同。
+    /// </summary>
+    void BuildColorStrip(WrapPanel target, (string Hex, string Name)[] presets, string current, Action<string> picked)
+    {
+        target.Children.Clear();
 
         var dark = ThemeService.IsDark;
-        var current = (Vm?.SettingsBackgroundColor ?? "").Trim().ToUpperInvariant();
-        var presets = dark ? DarkBackgrounds : LightBackgrounds;
+        var now = (current ?? "").Trim().ToUpperInvariant();
 
         foreach (var (hex, name) in presets)
         {
-            var selected = string.Equals(hex, current, StringComparison.OrdinalIgnoreCase);
+            var selected = string.Equals(hex, now, StringComparison.OrdinalIgnoreCase);
 
             var dot = new Border
             {
@@ -117,7 +198,7 @@ public partial class AppearancePage : UserControl
                 CornerRadius = new CornerRadius(13),
                 Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
                 BorderThickness = new Thickness(1),
-                BorderBrush = (Brush)Application.Current.FindResource("GlassStrokeBrush"),
+                BorderBrush = (Brush)Application.Current.FindResource("ControlStrokeColorDefaultBrush"),
             };
 
             var check = new TextBlock
@@ -169,15 +250,12 @@ public partial class AppearancePage : UserControl
             };
             button.Click += (_, _) =>
             {
-                if (Vm is { } vm)
-                {
-                    vm.SettingsBackgroundColor = hex;
-                    vm.SettingsBackground = "solid";   // 点颜色即切到纯色模式，少一步操作
-                }
+                picked(hex);
                 BuildBackgroundSwatches();
+                BuildHomeworkSwatches();
             };
 
-            BgColorStrip.Children.Add(button);
+            target.Children.Add(button);
         }
     }
 

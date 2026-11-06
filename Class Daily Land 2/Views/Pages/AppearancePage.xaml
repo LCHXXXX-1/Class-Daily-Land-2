@@ -5,7 +5,7 @@
              xmlns:sys="clr-namespace:System;assembly=mscorlib">
     <StackPanel>
         <TextBlock Style="{StaticResource PageTitle}" Text="个性化" />
-        <TextBlock Style="{StaticResource PageLead}" Text="配色主题、液态玻璃与窗口材质" />
+        <TextBlock Style="{StaticResource PageLead}" Text="配色主题、窗口背景与作业区配色" />
 
         <!-- 主题色（色块在代码里生成：玻璃色球 + 选中环） -->
         <fl:SettingGroup Title="主题色" Icon="{StaticResource Icon.Palette}" TileColor="#FFF7630C">
@@ -42,7 +42,7 @@
                         </fl:SelectorBar>
                     </fl:SettingRow>
 
-                    <fl:SettingRow x:Name="BgColorRow" Title="背景颜色" Hint="纯色模式生效，玻璃会在这层上透出来">
+                    <fl:SettingRow x:Name="BgColorRow" Title="背景颜色" Hint="纯色模式生效，内容区会压一层薄雾保证可读">
                         <WrapPanel x:Name="BgColorStrip" HorizontalAlignment="Right" MaxWidth="300" />
                     </fl:SettingRow>
 
@@ -60,6 +60,40 @@
                             <Button Content="清除" Height="28" MinWidth="56" Margin="6,0,0,0"
                                     Style="{StaticResource SubtleButton}"
                                     Click="OnClearBackgroundImage" />
+                        </StackPanel>
+                    </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <!-- 作业区域：右侧作业列表单独配色 -->
+        <fl:SettingGroup Title="作业区域" Icon="{StaticResource Icon.Home}" TileColor="#FF038387">
+                    <fl:SettingRow Title="作业区背景" Hint="右侧作业列表单独配色；跟随主题时与主窗同色">
+                        <fl:SelectorBar SelectedValue="{Binding HomeworkBackground, Mode=TwoWay}">
+                            <fl:SelectorItem Value="inherit" Label="跟随主题" />
+                            <fl:SelectorItem Value="color" Label="颜色" />
+                            <fl:SelectorItem Value="image" Label="图片" />
+                        </fl:SelectorBar>
+                    </fl:SettingRow>
+
+                    <fl:SettingRow x:Name="HomeworkColorRow" Title="作业区颜色"
+                                   Hint="颜色模式生效；深色底会自动把文字换成浅色">
+                        <WrapPanel x:Name="HomeworkColorStrip" HorizontalAlignment="Right" MaxWidth="340" />
+                    </fl:SettingRow>
+
+                    <fl:SettingRow x:Name="HomeworkImageRow" Title="作业区图片"
+                                   Hint="图片模式生效，按比例铺满这块区域，并压一层薄雾">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock x:Name="HomeworkImageText"
+                                       MaxWidth="180"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis"
+                                       FontSize="{DynamicResource FontSizeCaption}"
+                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Button Content="选择…" Height="28" MinWidth="64" Margin="10,0,0,0"
+                                    Style="{StaticResource SubtleButton}"
+                                    Click="OnPickHomeworkImage" />
+                            <Button Content="清除" Height="28" MinWidth="56" Margin="6,0,0,0"
+                                    Style="{StaticResource SubtleButton}"
+                                    Click="OnClearHomeworkImage" />
                         </StackPanel>
                     </fl:SettingRow>
         </fl:SettingGroup>
