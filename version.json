@@ -1,12 +1,13 @@
 {
   "stable": {
-    "version": "1.7.15",
-    "release_date": "2026-11-04",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.15.zip",
-    "sha256": "476b95b30e54a8f1be67524344c3f0796122a0a72a192ea64238ae7e3126616e",
+    "version": "1.7.16",
+    "release_date": "2026-11-06",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.16.zip",
+    "sha256": "79c35b31f36cfa9edeb21fab93f773bb6b0bb9f3e5bd1a0e917fd9142e5268b6",
     "changelog": [
-      "插件 IDE：登录回调页重做——浏览器里会显示「登录成功」卡片（打勾动画），并自动尝试关闭标签页",
-      "插件 IDE：若浏览器阻止自动关闭，页面会提示按 Ctrl+W 或点按钮关闭；失败时也会说明原因"
+      "改进：灵动岛倒计时/进度圆环改为逐帧插值，不再每秒跳一格（约 30fps 平滑推进）",
+      "新增：「班级日常」主窗口支持云母（Windows 11 Mica）/ 亚克力（Windows 10）背景材质，跟随「窗口材质」开关",
+      "插件 IDE：登录回调页加入圆形倒计时进度环，关闭前柔和淡出"
     ],
     "is_mandatory": false
   },
