@@ -31,9 +31,9 @@ public sealed class AppSettings
         new("main_width_ratio", ValueKind.Int, 22, 10, 80),          // 窗口宽度 %
         new("main_opacity", ValueKind.Int, 100, 30, 100),            // 透明度 %
         new("main_font_size", ValueKind.Int, 16, 10, 34),            // 字号
-        new("homework_bg_mode", ValueKind.Str, "inherit"),            // 作业区背景：inherit（跟随主题）/ color / image
-        new("homework_bg_color", ValueKind.Str, "#FFFFFF"),           // 作业区纯色背景
-        new("homework_bg_image", ValueKind.Str, ""),                  // 作业区背景图片（绝对路径）
+        new("board_bg_mode", ValueKind.Str, "inherit"),               // 班级日常窗口背景：inherit（跟随主题）/ color / image
+        new("board_bg_color", ValueKind.Str, "#FFFFFF"),              // 纯色背景
+        new("board_bg_image", ValueKind.Str, ""),                     // 背景图片（绝对路径）
         new("homework_auto_scroll", ValueKind.Bool, true),
         new("homework_scroll_interval_ms", ValueKind.Int, 1200, 100, 20000), // 滚动间隔
         new("homework_scroll_step", ValueKind.Int, 24, 1, 400),      // 滚动步长(px)
@@ -131,7 +131,7 @@ public sealed class AppSettings
         [PageAppearance] = new[]
         {
             "theme", "color_theme", "settings_background", "settings_bg_color", "settings_bg_image",
-            "homework_bg_mode", "homework_bg_color", "homework_bg_image",
+            "board_bg_mode", "board_bg_color", "board_bg_image",
             "fade_animation", "animation_duration_ms",
             "anim_fade_panel", "anim_fade_text", "settings_mica", "touch_optimize",
         },

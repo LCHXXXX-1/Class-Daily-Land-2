@@ -33,8 +33,8 @@
         </fl:SettingGroup>
 
         <!-- 窗口背景：云母取色 / 纯色 / 自定义图片 -->
-        <fl:SettingGroup Title="窗口背景" Icon="{StaticResource Icon.Shield}" TileColor="#FF107C10">
-                    <fl:SettingRow Title="背景来源" Hint="云母会跟随系统壁纸取色；纯色与图片可以自己定">
+        <fl:SettingGroup Title="设置窗口背景" Icon="{StaticResource Icon.Shield}" TileColor="#FF107C10">
+                    <fl:SettingRow Title="背景来源" Hint="设置中心自己的背景；云母会跟随系统壁纸取色">
                         <fl:SelectorBar SelectedValue="{Binding SettingsBackground, Mode=TwoWay}">
                             <fl:SelectorItem Value="mica" Label="云母" />
                             <fl:SelectorItem Value="solid" Label="纯色" />
@@ -64,25 +64,25 @@
                     </fl:SettingRow>
         </fl:SettingGroup>
 
-        <!-- 作业区域：右侧作业列表单独配色 -->
-        <fl:SettingGroup Title="作业区域" Icon="{StaticResource Icon.Home}" TileColor="#FF038387">
-                    <fl:SettingRow Title="作业区背景" Hint="右侧作业列表单独配色；跟随主题时与主窗同色">
-                        <fl:SelectorBar SelectedValue="{Binding HomeworkBackground, Mode=TwoWay}">
+        <!-- 班级日常窗口：整窗底色/背景图 -->
+        <fl:SettingGroup Title="班级日常窗口" Icon="{StaticResource Icon.Home}" TileColor="#FF038387">
+                    <fl:SettingRow Title="窗口背景" Hint="整块「班级日常」窗口的底色；跟随主题时用主题色">
+                        <fl:SelectorBar SelectedValue="{Binding BoardBackground, Mode=TwoWay}">
                             <fl:SelectorItem Value="inherit" Label="跟随主题" />
                             <fl:SelectorItem Value="color" Label="颜色" />
                             <fl:SelectorItem Value="image" Label="图片" />
                         </fl:SelectorBar>
                     </fl:SettingRow>
 
-                    <fl:SettingRow x:Name="HomeworkColorRow" Title="作业区颜色"
+                    <fl:SettingRow x:Name="BoardColorRow" Title="窗口颜色"
                                    Hint="颜色模式生效；深色底会自动把文字换成浅色">
-                        <WrapPanel x:Name="HomeworkColorStrip" HorizontalAlignment="Right" MaxWidth="340" />
+                        <WrapPanel x:Name="BoardColorStrip" HorizontalAlignment="Right" MaxWidth="340" />
                     </fl:SettingRow>
 
-                    <fl:SettingRow x:Name="HomeworkImageRow" Title="作业区图片"
-                                   Hint="图片模式生效，按比例铺满这块区域，并压一层薄雾">
+                    <fl:SettingRow x:Name="BoardImageRow" Title="窗口图片"
+                                   Hint="图片模式生效，按比例铺满整窗，并压一层薄雾保证文字可读">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock x:Name="HomeworkImageText"
+                            <TextBlock x:Name="BoardImageText"
                                        MaxWidth="180"
                                        VerticalAlignment="Center"
                                        TextTrimming="CharacterEllipsis"
@@ -90,10 +90,10 @@
                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                             <Button Content="选择…" Height="28" MinWidth="64" Margin="10,0,0,0"
                                     Style="{StaticResource SubtleButton}"
-                                    Click="OnPickHomeworkImage" />
+                                    Click="OnPickBoardImage" />
                             <Button Content="清除" Height="28" MinWidth="56" Margin="6,0,0,0"
                                     Style="{StaticResource SubtleButton}"
-                                    Click="OnClearHomeworkImage" />
+                                    Click="OnClearBoardImage" />
                         </StackPanel>
                     </fl:SettingRow>
         </fl:SettingGroup>

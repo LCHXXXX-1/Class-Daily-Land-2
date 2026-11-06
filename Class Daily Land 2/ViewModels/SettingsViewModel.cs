@@ -275,25 +275,25 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => Write("settings_background", value);
     }
 
-    /// <summary>作业区背景：inherit（跟随主题）/ color / image。</summary>
-    public string HomeworkBackground
+    /// <summary>「班级日常」整窗背景：inherit（跟随主题）/ color / image。</summary>
+    public string BoardBackground
     {
-        get => S.Str("homework_bg_mode");
-        set => Write("homework_bg_mode", value);
+        get => S.Str("board_bg_mode");
+        set => Write("board_bg_mode", value);
     }
 
-    /// <summary>作业区纯色背景（#RRGGBB）。</summary>
-    public string HomeworkBackgroundColor
+    /// <summary>整窗纯色背景（#RRGGBB）。</summary>
+    public string BoardBackgroundColor
     {
-        get => S.Str("homework_bg_color");
-        set => Write("homework_bg_color", value);
+        get => S.Str("board_bg_color");
+        set => Write("board_bg_color", value);
     }
 
-    /// <summary>作业区背景图片（绝对路径）。</summary>
-    public string HomeworkBackgroundImage
+    /// <summary>整窗背景图片（绝对路径）。</summary>
+    public string BoardBackgroundImage
     {
-        get => S.Str("homework_bg_image");
-        set => Write("homework_bg_image", value);
+        get => S.Str("board_bg_image");
+        set => Write("board_bg_image", value);
     }
 
     /// <summary>纯色背景的颜色（#RRGGBB）。</summary>

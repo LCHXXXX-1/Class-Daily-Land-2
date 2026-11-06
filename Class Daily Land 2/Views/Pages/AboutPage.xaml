@@ -158,6 +158,15 @@
         </fl:Card>
 
         <!-- 开发者选项：默认关，打开后才出现「测试报错」 -->
+        <!-- 支持项目：一键去 GitHub 点 Star -->
+        <fl:SettingGroup Title="支持项目" Icon="{StaticResource Icon.Book}">
+            <fl:SettingRow Title="给项目点个 Star"
+                           Hint="如果这个工具帮到你，去 GitHub 点一颗 Star 就是最大的鼓励">
+                <Button Content="去点 Star" Style="{StaticResource AccentButton}"
+                        Click="OnOpenStarClick" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+
         <fl:SettingGroup Title="开发者选项" Icon="{StaticResource Icon.Tune}">
             <fl:SettingRow Title="开启开发者选项" Hint="正常使用不需要打开，只影响调试入口">
                 <fl:FluentToggle x:Name="DeveloperToggle" Label="开发者选项" />

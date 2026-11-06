@@ -11,6 +11,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.IO;
 using System.Windows.Media.Imaging;
 using System.Windows.Media.Animation;
 using System.Windows.Shell;
@@ -41,9 +42,6 @@ public sealed class MainBoardWindow : Window
     readonly StackPanel _homeworkPanel = new() { Orientation = Orientation.Vertical };
     readonly ScrollViewer _homeworkScroll = new();
 
-    // 作业区独立底板：可以有自己的底色/背景图（设置里 homework_bg_*）
-    readonly Border _homeworkCard = new();
-    readonly Border _homeworkScrim = new();
     readonly DispatcherTimer _scrollTimer = new();
 
     double _fontSize = 16;
@@ -165,14 +163,8 @@ public sealed class MainBoardWindow : Window
         _stack.Children.Add(Gap(Spacing));
         _stack.Children.Add(_attendanceLabel);
         _stack.Children.Add(Gap(Spacing));
-        // 作业区单独一层底板：背景色/图片只影响这块区域，不动标题与值日行
-        _homeworkScrim.Background = Brushes.Transparent;
-        _homeworkScrim.IsHitTestVisible = false;
-        _homeworkCard.Child = new Grid
-        {
-            Children = { _homeworkScrim, _homeworkScroll, _homeworkEmpty },
-        };
-        _stack.Children.Add(_homeworkCard);
+        _stack.Children.Add(_homeworkScroll);
+        _stack.Children.Add(_homeworkEmpty);
         _stack.Children.Add(_pluginSections);
         // ★ 透明背景（不是 null）让整块底板都能被触摸/鼠标命中。
         //   背景为 null 的元素不参与命中测试 → 只有文字上长按才有事件，空白处毫无反应。
@@ -264,7 +256,7 @@ public sealed class MainBoardWindow : Window
                 Text = string.IsNullOrEmpty(g.Date) ? g.Subject : $"{g.Subject} ({g.Date})",
                 FontSize = _fontSize,          // 新行一律按"当前"字号建，别沿用可能还在动画中的旧值
                 FontWeight = FontWeights.Bold,
-                Foreground = HomeworkText,
+                Foreground = BoardText,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 2),
             };
@@ -279,7 +271,7 @@ public sealed class MainBoardWindow : Window
                 {
                     Text = $"  {i + 1}. {g.Contents[i]}",
                     FontSize = _fontSize,
-                    Foreground = HomeworkText,
+                    Foreground = BoardText,
                     TextWrapping = TextWrapping.Wrap,
                     LineHeight = _fontSize * 1.35,
                 };
@@ -405,57 +397,45 @@ public sealed class MainBoardWindow : Window
     // ————————————————————— 外观与尺寸 —————————————————————
 
     /// <summary>
-    /// 作业区底板：跟随主题 / 纯色 / 图片三种。
-    /// 纯色是深色时自动把文字换成浅色，图片则压一层主题色薄雾保证可读。
+    /// 自定义整窗背景：纯色 / 图片；返回 null 表示跟随主题（走材质那套）。
+    /// scrim 是压在图片上的薄雾，保证文字在花哨壁纸上也读得清。
     /// </summary>
-    void ApplyHomeworkBackdrop()
+    Brush? BuildBoardBackground(out Brush scrim)
     {
-        _homeworkText = null;
+        scrim = Brushes.Transparent;
 
-        Brush? background = null;
-        Brush scrim = Brushes.Transparent;
-        var padding = new Thickness(0);
-        var corner = new CornerRadius(0);
-
-        if (string.Equals(_homeworkBgMode, "color", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(_boardBgMode, "color", StringComparison.OrdinalIgnoreCase))
         {
-            var color = ParseColor(_homeworkBgColor, Colors.White);
-            background = Frozen(color);
-            padding = new Thickness(12, 10, 12, 10);
-            corner = new CornerRadius(10);
-
-            // 深底配浅字：亮度按 sRGB 加权近似
-            var luma = (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255.0;
-            if (luma < 0.55) _homeworkText = Frozen(Color.FromRgb(0xF2, 0xF2, 0xF4));
-        }
-        else if (string.Equals(_homeworkBgMode, "image", StringComparison.OrdinalIgnoreCase)
-                 && !string.IsNullOrWhiteSpace(_homeworkBgImage)
-                 && System.IO.File.Exists(_homeworkBgImage))
-        {
-            background = LoadImageBrush(_homeworkBgImage);
-            padding = new Thickness(12, 10, 12, 10);
-            corner = new CornerRadius(10);
-
-            if (background is not null)
-            {
-                // 图片当底时压一层主题色薄雾：深浅壁纸都不至于让字看不清
-                var tint = Palette.WindowBackground is SolidColorBrush scb ? scb.Color : Colors.Black;
-                var alpha = (byte)(ThemeService.IsDark ? 0x8C : 0x66);
-                scrim = Frozen(Color.FromArgb(alpha, tint.R, tint.G, tint.B));
-            }
+            var color = ParseColor(_boardBgColor, Colors.White);
+            return Frozen(color);
         }
 
-        _homeworkCard.Background = background ?? Brushes.Transparent;
-        _homeworkCard.Padding = padding;
-        _homeworkCard.CornerRadius = corner;
-        _homeworkScrim.Background = scrim;
+        if (string.Equals(_boardBgMode, "image", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(_boardBgImage)
+            && File.Exists(_boardBgImage))
+        {
+            var brush = LoadImageBrush(_boardBgImage);
+            if (brush is null) return null;
 
-        // 有底时才向两侧外扩，让底板贴到窗口边缘；没有底就还原（否则文字会脱离标题左边界）
-        _homeworkCard.Margin = background is null
-            ? new Thickness(0)
-            : new Thickness(-PadX + 6, 0, -PadX + 6, 0);
+            var tint = Palette.WindowBackground is SolidColorBrush scb ? scb.Color : Colors.Black;
+            var alpha = (byte)(ThemeService.IsDark ? 0x8C : 0x66);
+            scrim = Frozen(Color.FromArgb(alpha, tint.R, tint.G, tint.B));
+            return brush;
+        }
 
-        Logger.Current?.Info($"[作业区背景] 模式={_homeworkBgMode} 有底={background is not null}");
+        return null;
+    }
+
+    /// <summary>自定义纯色底偏暗时，文字整体换成浅色（标题 / 值日 / 考勤 / 作业一起换）。</summary>
+    void ResolveBoardText()
+    {
+        _boardText = null;
+        if (!HasCustomBackground) return;
+        if (!string.Equals(_boardBgMode, "color", StringComparison.OrdinalIgnoreCase)) return;
+
+        var color = ParseColor(_boardBgColor, Colors.White);
+        var luma = (0.2126 * color.R + 0.7152 * color.G + 0.0722 * color.B) / 255.0;
+        if (luma < 0.55) _boardText = Frozen(Color.FromRgb(0xF2, 0xF2, 0xF4));
     }
 
     static Color ParseColor(string? hex, Color fallback)
@@ -499,9 +479,9 @@ public sealed class MainBoardWindow : Window
         _widthRatio = Math.Clamp(s.Int("main_width_ratio"), 10, 80) / 100.0;
         _opacity = Math.Clamp(s.Int("main_opacity"), 30, 100) / 100.0;
         _material = s.Bool("settings_mica");
-        _homeworkBgMode = s.Str("homework_bg_mode");
-        _homeworkBgColor = s.Str("homework_bg_color");
-        _homeworkBgImage = s.Str("homework_bg_image");
+        _boardBgMode = s.Str("board_bg_mode");
+        _boardBgColor = s.Str("board_bg_color");
+        _boardBgImage = s.Str("board_bg_image");
         Opacity = _opacity;
         _autoScroll = s.Bool("homework_auto_scroll");
         _scrollStep = s.Int("homework_scroll_step");
@@ -648,13 +628,16 @@ public sealed class MainBoardWindow : Window
 
     // ————————————————————— 云母 / 亚克力背板 —————————————————————
     bool _rendered;                 // 首帧渲染后是否已补挂过一次材质
-    string _homeworkBgMode = "inherit";   // 作业区背景：inherit / color / image
-    string _homeworkBgColor = "#FFFFFF";
-    string _homeworkBgImage = "";
-    Brush? _homeworkText;                  // 作业区文字色（自定义深底时改浅色；null = 跟随主题）
+    string _boardBgMode = "inherit";      // 整窗背景：inherit / color / image
+    string _boardBgColor = "#FFFFFF";
+    string _boardBgImage = "";
+    Brush? _boardText;                     // 文字色（自定义深底时改浅色；null = 跟随主题）
 
-    /// <summary>作业区文字色：默认跟随主题，自定义深色底时用浅色。</summary>
-    Brush HomeworkText => _homeworkText ?? Palette.Text;
+    /// <summary>整窗文字色：默认跟随主题，自定义深色底时用浅色。</summary>
+    Brush BoardText => _boardText ?? Palette.Text;
+
+    bool HasCustomBackground =>
+        !string.Equals(_boardBgMode, "inherit", StringComparison.OrdinalIgnoreCase);
 
     bool _material;                 // 设置里的「窗口材质」开关
     bool _materialHooked;           // 句柄未就绪时只挂一次 SourceInitialized
@@ -668,6 +651,18 @@ public sealed class MainBoardWindow : Window
             if (_materialHooked) return;
             _materialHooked = true;
             SourceInitialized += (_, _) => ApplyMaterial();
+            return;
+        }
+
+        // 自定义了整窗背景：系统材质让位，否则亚克力/云母会画在自己的底上面
+        if (HasCustomBackground)
+        {
+            Interop.ClearBackdrop(this);
+            _backdrop = WindowBackdrop.None;
+            if (Interop.IsWindows11) Interop.ApplyRoundedCorners(this);
+            else Interop.UseSquareCorners(this);
+            ApplyBackdropPaint();
+            Logger.Current?.Info($"[材质] 自定义背景（{_boardBgMode}），已关闭系统材质");
             return;
         }
 
@@ -693,6 +688,16 @@ public sealed class MainBoardWindow : Window
 
     void ApplyBackdropPaint()
     {
+        // 自定义整窗背景优先：整块窗口铺自己的底色/图片，图片上再压一层薄雾
+        if (BuildBoardBackground(out var boardScrim) is { } boardBackground)
+        {
+            Opacity = _opacity;
+            Background = boardBackground;
+            _root.Background = boardScrim;      // 纯色时透明，图片时是主题色薄雾
+            ApplyWindowFrame(material: false);
+            return;
+        }
+
         var material = _backdrop != WindowBackdrop.None;
 
         if (material)
@@ -712,7 +717,12 @@ public sealed class MainBoardWindow : Window
             _root.Background = Brushes.Transparent;
         }
 
-        // 玻璃帧：云母需要把边框扩到整个客户区；否则保持 0，免得 Win10 被 DWM 画出白边
+        ApplyWindowFrame(material);
+    }
+
+    /// <summary>玻璃帧 + 圆角：重设 chrome 会让 DWM 重算非客户区，圆角必须放在它之后设。</summary>
+    void ApplyWindowFrame(bool material)
+    {
         WindowChrome.SetWindowChrome(this, new WindowChrome
         {
             CaptionHeight = 0,
@@ -723,8 +733,6 @@ public sealed class MainBoardWindow : Window
             UseAeroCaptionButtons = false,
         });
 
-        // ★ 必须放在 SetWindowChrome 之后：重设 chrome 会让 DWM 重新计算非客户区，
-        //   之前设好的圆角会被顶掉（表现就是"愣一下才出现 / 要重开才圆"）。
         if (Interop.IsWindows11) Interop.ApplyRoundedCorners(this);
         else Interop.UseSquareCorners(this);
     }
@@ -748,13 +756,13 @@ public sealed class MainBoardWindow : Window
         // ★ 必须是 Transparent 而不是 null：null 背景的容器不参与命中测试，
         //   整块底板只有文字上能收到触摸/鼠标事件（长按菜单曾因此只在文字处出现）。
         _root.Background = Brushes.Transparent;
-        ApplyHomeworkBackdrop();   // 深浅切换后薄雾浓度/文字反色要重算
-        _title.Foreground = Palette.Text;
-        _dutyLabel.Foreground = Palette.Text;
-        _attendanceLabel.Foreground = Palette.Text;
-        _homeworkEmpty.Foreground = HomeworkText;
+        ResolveBoardText();        // 自定义深色底时整窗文字换浅色
+        _title.Foreground = BoardText;
+        _dutyLabel.Foreground = BoardText;
+        _attendanceLabel.Foreground = BoardText;
+        _homeworkEmpty.Foreground = BoardText;
         foreach (var tb in _homeworkPanel.Children.OfType<TextBlock>())
-            tb.Foreground = HomeworkText;
+            tb.Foreground = BoardText;
         // 插件区块/徽标是按当时的色板造出来的，换主题后必须重建一次
         _badgeKey = "\u0000";
         _sectionKey = "\u0000";

@@ -43,8 +43,8 @@ public partial class AppearancePage : UserControl
             BuildThemeSwatches();
             BuildBackgroundSwatches();
             SyncBackgroundRows(vm);
-            BuildHomeworkSwatches();
-            SyncHomeworkRows(vm);
+            BuildBoardSwatches();
+            SyncBoardRows(vm);
 
             vm.PropertyChanged += OnAppearanceChanged;
             Unloaded += (_, _) => vm.PropertyChanged -= OnAppearanceChanged;
@@ -68,16 +68,16 @@ public partial class AppearancePage : UserControl
             case nameof(SettingsViewModel.SettingsBackgroundImage):
                 SyncBackgroundRows(vm);
                 break;
-            case nameof(SettingsViewModel.HomeworkBackground):
-                SyncHomeworkRows(vm);
+            case nameof(SettingsViewModel.BoardBackground):
+                SyncBoardRows(vm);
                 break;
-            case nameof(SettingsViewModel.HomeworkBackgroundImage):
-                SyncHomeworkRows(vm);
+            case nameof(SettingsViewModel.BoardBackgroundImage):
+                SyncBoardRows(vm);
                 break;
             case nameof(SettingsViewModel.ThemeMode):
                 // 深浅一变，纯色预设跟着换一套（浅色主题里给深色底会读不清字）
                 BuildBackgroundSwatches();
-                BuildHomeworkSwatches();
+                BuildBoardSwatches();
                 break;
         }
     }
@@ -122,38 +122,38 @@ public partial class AppearancePage : UserControl
     // ————————————— 作业区域 —————————————
 
     /// <summary>作业区色板：浅色/深色各一组，深底会自动把文字换浅。</summary>
-    static readonly (string Hex, string Name)[] HomeworkBackgrounds =
+    static readonly (string Hex, string Name)[] BoardBackgrounds =
     {
         ("#FFFFFF", "白"), ("#F4F5F8", "浅灰"), ("#EDF3FF", "淡蓝"), ("#EDF7EE", "淡绿"),
         ("#FFF6E9", "暖黄"), ("#2B2B31", "深灰"), ("#1F2430", "深蓝"), ("#241F2E", "深紫"),
     };
 
-    void SyncHomeworkRows(SettingsViewModel vm)
+    void SyncBoardRows(SettingsViewModel vm)
     {
-        var mode = vm.HomeworkBackground;
-        HomeworkColorRow.Visibility = mode == "color" ? Visibility.Visible : Visibility.Collapsed;
-        HomeworkImageRow.Visibility = mode == "image" ? Visibility.Visible : Visibility.Collapsed;
+        var mode = vm.BoardBackground;
+        BoardColorRow.Visibility = mode == "color" ? Visibility.Visible : Visibility.Collapsed;
+        BoardImageRow.Visibility = mode == "image" ? Visibility.Visible : Visibility.Collapsed;
 
-        var path = vm.HomeworkBackgroundImage;
-        HomeworkImageText.Text = string.IsNullOrWhiteSpace(path) ? "未选择图片" : System.IO.Path.GetFileName(path);
+        var path = vm.BoardBackgroundImage;
+        BoardImageText.Text = string.IsNullOrWhiteSpace(path) ? "未选择图片" : System.IO.Path.GetFileName(path);
     }
 
-    void BuildHomeworkSwatches()
+    void BuildBoardSwatches()
     {
-        BuildColorStrip(HomeworkColorStrip, HomeworkBackgrounds,
-            Vm?.HomeworkBackgroundColor ?? "", hex =>
+        BuildColorStrip(BoardColorStrip, BoardBackgrounds,
+            Vm?.BoardBackgroundColor ?? "", hex =>
             {
                 if (Vm is not { } vm) return;
-                vm.HomeworkBackgroundColor = hex;
-                vm.HomeworkBackground = "color";
+                vm.BoardBackgroundColor = hex;
+                vm.BoardBackground = "color";
             });
     }
 
-    void OnPickHomeworkImage(object sender, RoutedEventArgs e)
+    void OnPickBoardImage(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog
         {
-            Title = "选择作业区背景图片",
+            Title = "选择「班级日常」窗口背景图片",
             Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.gif|所有文件|*.*",
             CheckFileExists = true,
         };
@@ -161,17 +161,17 @@ public partial class AppearancePage : UserControl
 
         if (Vm is { } vm)
         {
-            vm.HomeworkBackgroundImage = dialog.FileName;
-            vm.HomeworkBackground = "image";
-            SyncHomeworkRows(vm);
+            vm.BoardBackgroundImage = dialog.FileName;
+            vm.BoardBackground = "image";
+            SyncBoardRows(vm);
         }
     }
 
-    void OnClearHomeworkImage(object sender, RoutedEventArgs e)
+    void OnClearBoardImage(object sender, RoutedEventArgs e)
     {
         if (Vm is not { } vm) return;
-        vm.HomeworkBackgroundImage = "";
-        SyncHomeworkRows(vm);
+        vm.BoardBackgroundImage = "";
+        SyncBoardRows(vm);
     }
 
     // ————————————— 通用色块条 —————————————
@@ -252,7 +252,7 @@ public partial class AppearancePage : UserControl
             {
                 picked(hex);
                 BuildBackgroundSwatches();
-                BuildHomeworkSwatches();
+                BuildBoardSwatches();
             };
 
             target.Children.Add(button);
@@ -1384,6 +1384,17 @@ public partial class AboutPage : UserControl
     }
 
     void OnCheckUpdateClick(object sender, RoutedEventArgs e) => _vm?.Ctx.CheckForUpdate();
+
+    /// <summary>打开 GitHub 仓库，方便用户点 Star（打不开也不影响任何功能）。</summary>
+    void OnOpenStarClick(object sender, RoutedEventArgs e)
+    {
+        const string url = "https://github.com/LCHXXXX-1/Class-Daily-Land-2";
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch { /* 打不开链接不影响功能 */ }
+    }
 
     /// <summary>开发者选项开关：写进设置，并立刻控制「测试报错」按钮的显隐。</summary>
     void ApplyDeveloperMode(bool on)
