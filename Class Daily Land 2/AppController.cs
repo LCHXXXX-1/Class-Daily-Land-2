@@ -267,6 +267,7 @@ public sealed class AppController
         // 提前提醒 / 时间偏移：settings.json 为准（设置中心改的是它），同步进 schedule.json
         SyncRemindersIntoSchedule();
         ThemeService.Apply(Settings.Str("theme"));
+        ThemeService.ApplyColorTheme(Settings.Str("color_theme"));
 
         // 插件宿主：先建出来（注册表要能被窗口取数），窗口与托盘都接好后再真正加载，
         // 这样插件的 Initialize 里调 ShowMainWindow / OpenSettings 时窗口已经存在。
@@ -743,6 +744,9 @@ public sealed class AppController
             {
                 case "theme":
                     ThemeService.Apply(Settings.Str("theme"));
+                    break;
+                case "color_theme":
+                    ThemeService.ApplyColorTheme(Settings.Str("color_theme"));
                     break;
                 case "schedule_advance_minutes":
                 case "schedule_time_offset_seconds":

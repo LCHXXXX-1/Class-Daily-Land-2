@@ -4,12 +4,14 @@ using ClassDailyLand2.App.Integrations.Disaster;
 using ClassDailyLand2.App.Market;
 using ClassDailyLand2.App.Plugins;
 using ClassDailyLand2.App.Updates;
+using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.ViewModels;
 using ClassDailyLand2.App.Views.Dialogs;
 using ClassDailyLand2.Core.Market;
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -37,8 +39,323 @@ public partial class AppearancePage : UserControl
             var supported = vm.SupportsBackdrop;
             MicaRow.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
             MicaUnsupportedRow.Visibility = supported ? Visibility.Collapsed : Visibility.Visible;
+
+            BuildThemeSwatches();
+            BuildBackgroundSwatches();
+            SyncBackgroundRows(vm);
+
+            vm.PropertyChanged += OnAppearanceChanged;
+            Unloaded += (_, _) => vm.PropertyChanged -= OnAppearanceChanged;
         };
     }
+
+    SettingsViewModel? Vm => DataContext as SettingsViewModel;
+
+    void OnAppearanceChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+
+        switch (e.PropertyName)
+        {
+            case nameof(SettingsViewModel.SettingsBackground):
+                SyncBackgroundRows(vm);
+                break;
+            case nameof(SettingsViewModel.SettingsBackgroundColor):
+                BuildBackgroundSwatches();
+                break;
+            case nameof(SettingsViewModel.SettingsBackgroundImage):
+                SyncBackgroundRows(vm);
+                break;
+            case nameof(SettingsViewModel.ThemeMode):
+                // 深浅一变，纯色预设跟着换一套（浅色主题里给深色底会读不清字）
+                BuildBackgroundSwatches();
+                break;
+        }
+    }
+
+    // ————————————— 窗口背景 —————————————
+
+    /// <summary>纯色预设：按当前深浅给两套，避免"浅色主题配深底"看不清。</summary>
+    static readonly (string Hex, string Name)[] LightBackgrounds =
+    {
+        ("#F3F3F3", "纸白"), ("#E9EEF6", "雾蓝"), ("#EAF3EC", "浅苔"),
+        ("#F7F0E4", "暖砂"), ("#F2EAF5", "薄紫"), ("#E8F2F4", "淡青"),
+    };
+
+    static readonly (string Hex, string Name)[] DarkBackgrounds =
+    {
+        ("#1A1A1C", "石墨"), ("#191C22", "深海"), ("#181F1B", "墨绿"),
+        ("#221D18", "深棕"), ("#1F1A24", "夜紫"), ("#101418", "纯黑"),
+    };
+
+    void SyncBackgroundRows(SettingsViewModel vm)
+    {
+        var mode = vm.SettingsBackground;
+        BgColorRow.Visibility = mode == "solid" ? Visibility.Visible : Visibility.Collapsed;
+        BgImageRow.Visibility = mode == "image" ? Visibility.Visible : Visibility.Collapsed;
+
+        var path = vm.SettingsBackgroundImage;
+        BgImageText.Text = string.IsNullOrWhiteSpace(path) ? "未选择图片" : System.IO.Path.GetFileName(path);
+    }
+
+    void BuildBackgroundSwatches()
+    {
+        BgColorStrip.Children.Clear();
+
+        var dark = ThemeService.IsDark;
+        var current = (Vm?.SettingsBackgroundColor ?? "").Trim().ToUpperInvariant();
+        var presets = dark ? DarkBackgrounds : LightBackgrounds;
+
+        foreach (var (hex, name) in presets)
+        {
+            var selected = string.Equals(hex, current, StringComparison.OrdinalIgnoreCase);
+
+            var dot = new Border
+            {
+                Width = 26,
+                Height = 26,
+                CornerRadius = new CornerRadius(13),
+                Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)),
+                BorderThickness = new Thickness(1),
+                BorderBrush = (Brush)Application.Current.FindResource("GlassStrokeBrush"),
+            };
+
+            var check = new TextBlock
+            {
+                Text = "✓",
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Visibility = selected ? Visibility.Visible : Visibility.Collapsed,
+                Foreground = dark ? Brushes.White : Brushes.Black,
+            };
+
+            var ring = new Border
+            {
+                Width = 34,
+                Height = 34,
+                CornerRadius = new CornerRadius(17),
+                BorderThickness = new Thickness(2),
+                BorderBrush = (Brush)Application.Current.FindResource("AccentFillColorDefaultBrush"),
+                Visibility = selected ? Visibility.Visible : Visibility.Collapsed,
+            };
+
+            var inner = new Grid { Width = 26, Height = 26 };
+            inner.Children.Add(dot);
+            inner.Children.Add(check);
+
+            var halo = new Grid { Width = 34, Height = 34, Margin = new Thickness(0, 0, 6, 0) };
+            halo.Children.Add(ring);
+            halo.Children.Add(new Border
+            {
+                Width = 26,
+                Height = 26,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = inner,
+            });
+
+            var button = new Button
+            {
+                Style = (Style)Application.Current.FindResource("SubtleButton"),
+                Width = 34,
+                Height = 34,
+                Padding = new Thickness(0),
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                Content = halo,
+                ToolTip = name,
+            };
+            button.Click += (_, _) =>
+            {
+                if (Vm is { } vm)
+                {
+                    vm.SettingsBackgroundColor = hex;
+                    vm.SettingsBackground = "solid";   // 点颜色即切到纯色模式，少一步操作
+                }
+                BuildBackgroundSwatches();
+            };
+
+            BgColorStrip.Children.Add(button);
+        }
+    }
+
+    void OnPickBackgroundImage(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "选择背景图片",
+            Filter = "图片|*.png;*.jpg;*.jpeg;*.bmp;*.webp;*.gif|所有文件|*.*",
+            CheckFileExists = true,
+        };
+        if (dialog.ShowDialog(Window.GetWindow(this)) != true) return;
+
+        if (Vm is { } vm)
+        {
+            vm.SettingsBackgroundImage = dialog.FileName;
+            vm.SettingsBackground = "image";
+            SyncBackgroundRows(vm);
+        }
+    }
+
+    void OnClearBackgroundImage(object sender, RoutedEventArgs e)
+    {
+        if (Vm is not { } vm) return;
+        vm.SettingsBackgroundImage = "";
+        SyncBackgroundRows(vm);
+    }
+
+    /// <summary>
+    /// 主题色色块。用代码建视觉元素而不是 XAML 模板 + ItemsControl：
+    /// 每颗色球要叠"径向渐变球体 + 左上镜面高光 + 选中环 + 对勾"四层，
+    /// 写成模板要三套 DataTemplate 加转换器，还是这里直白。
+    /// </summary>
+    void BuildThemeSwatches()
+    {
+        ThemeStrip.Children.Clear();
+
+        var current = ColorThemes.Get(Vm?.ColorTheme).Key;
+        foreach (var theme in ColorThemes.All)
+            ThemeStrip.Children.Add(CreateSwatch(theme, theme.Key == current));
+
+        var hit = ColorThemes.Get(current);
+        ThemeHint.Text = $"当前：{hit.Name} · {hit.Hint}";
+    }
+
+    FrameworkElement CreateSwatch(ColorTheme theme, bool selected)
+    {
+        var orb = new Border
+        {
+            Width = 34,
+            Height = 34,
+            CornerRadius = new CornerRadius(17),
+            Background = BuildOrb(theme.Seed),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x9E, 0xFF, 0xFF, 0xFF)),
+            Effect = new System.Windows.Media.Effects.DropShadowEffect
+            {
+                Color = theme.Seed,
+                Opacity = 0.38,
+                BlurRadius = 12,
+                ShadowDepth = 2,
+                Direction = 270,
+            },
+        };
+
+        // 左上镜面高光：让色球像玻璃珠，而不是一块纯色圆
+        var specular = new System.Windows.Shapes.Ellipse
+        {
+            Width = 14,
+            Height = 9,
+            Margin = new Thickness(5, 4, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Top,
+            Fill = new LinearGradientBrush(
+                Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF),
+                Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF),
+                90),
+            IsHitTestVisible = false,
+        };
+
+        var check = new TextBlock
+        {
+            Text = "✓",
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.White,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Visibility = selected ? Visibility.Visible : Visibility.Collapsed,
+            IsHitTestVisible = false,
+        };
+
+        var inner = new Grid { Width = 34, Height = 34 };
+        inner.Children.Add(orb);
+        inner.Children.Add(specular);
+        inner.Children.Add(check);
+
+        var ring = new Border
+        {
+            Width = 44,
+            Height = 44,
+            CornerRadius = new CornerRadius(22),
+            BorderThickness = new Thickness(2),
+            BorderBrush = new SolidColorBrush(theme.Seed),
+            Visibility = selected ? Visibility.Visible : Visibility.Collapsed,
+            IsHitTestVisible = false,
+        };
+
+        var halo = new Grid { Width = 44, Height = 44 };
+        halo.Children.Add(ring);
+        halo.Children.Add(new Border
+        {
+            Width = 34,
+            Height = 34,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = inner,
+        });
+
+        var button = new Button
+        {
+            Style = (Style)Application.Current.FindResource("SubtleButton"),
+            Width = 44,
+            Height = 44,
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Content = halo,
+            ToolTip = $"{theme.Name} · {theme.Hint}",
+        };
+        button.Click += (_, _) =>
+        {
+            if (Vm is { } vm) vm.ColorTheme = theme.Key;
+            BuildThemeSwatches();
+        };
+
+        var label = new TextBlock
+        {
+            Text = theme.Name,
+            FontSize = 11.5,
+            Margin = new Thickness(0, 5, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = (Brush)Application.Current.FindResource(
+                selected ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"),
+        };
+
+        var item = new StackPanel
+        {
+            Margin = new Thickness(0, 0, 10, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        item.Children.Add(button);
+        item.Children.Add(label);
+        return item;
+    }
+
+    /// <summary>玻璃色球：左上提亮、主体种子色、右下压暗。</summary>
+    static Brush BuildOrb(Color seed)
+    {
+        var brush = new RadialGradientBrush
+        {
+            GradientOrigin = new Point(0.30, 0.24),
+            Center = new Point(0.34, 0.28),
+            RadiusX = 0.95,
+            RadiusY = 0.95,
+        };
+        brush.GradientStops.Add(new GradientStop(ColorThemes.Lighten(seed, 0.42), 0));
+        brush.GradientStops.Add(new GradientStop(seed, 0.52));
+        brush.GradientStops.Add(new GradientStop(Darken(seed, 0.28), 1));
+        brush.Freeze();
+        return brush;
+    }
+
+    static Color Darken(Color c, double t) => Color.FromRgb(
+        (byte)(c.R * (1 - t)),
+        (byte)(c.G * (1 - t)),
+        (byte)(c.B * (1 - t)));
 }
 
 public partial class InteractionPage : UserControl

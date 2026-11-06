@@ -107,4 +107,55 @@
     <DropShadowEffect x:Key="FlyoutShadowEffect" Color="#000000" Opacity="0.14" BlurRadius="24" ShadowDepth="8" Direction="270" />
     <DropShadowEffect x:Key="AccentGlowEffect" Color="#005FB8" Opacity="0.3" BlurRadius="8" ShadowDepth="2" Direction="270" />
 
+    <!-- ===== 液态玻璃（Liquid Glass） ===== -->
+    <!-- 玻璃面：左上亮、右下淡的斜向渐变，叠在亚克力背板上就是"有厚度的透明" -->
+    <LinearGradientBrush x:Key="GlassSurfaceBrush" StartPoint="0,0" EndPoint="0.45,1">
+        <GradientStop Color="#D9FFFFFF" Offset="0" />
+        <GradientStop Color="#A6FFFFFF" Offset="0.45" />
+        <GradientStop Color="#73FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <!-- 悬停/选中：整体提亮一档 -->
+    <LinearGradientBrush x:Key="GlassSurfaceHoverBrush" StartPoint="0,0" EndPoint="0.45,1">
+        <GradientStop Color="#F2FFFFFF" Offset="0" />
+        <GradientStop Color="#CCFFFFFF" Offset="0.45" />
+        <GradientStop Color="#99FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <!-- 玻璃描边：上白下黑影，玻璃的"边缘折射"靠它 -->
+    <LinearGradientBrush x:Key="GlassStrokeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F2FFFFFF" Offset="0" />
+        <GradientStop Color="#66FFFFFF" Offset="0.45" />
+        <GradientStop Color="#1F000000" Offset="1" />
+    </LinearGradientBrush>
+    <!-- 顶部镜面反光（自下淡出） -->
+    <LinearGradientBrush x:Key="GlassSheenBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#9EFFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <!-- 侧栏：比卡片再淡一点，读作"一整块玻璃" -->
+    <SolidColorBrush x:Key="GlassNavBrush" Color="#73FFFFFF" />
+    <!-- 控件玻璃：按钮 / 输入框 / 数字框统一用这层，比纯白多一层纵向渐变 -->
+    <LinearGradientBrush x:Key="GlassControlBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#E6FFFFFF" Offset="0" />
+        <GradientStop Color="#B8FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassControlHoverBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F2FFFFFF" Offset="0" />
+        <GradientStop Color="#CCFFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <!-- 开关轨道（未选中）：更淡的玻璃，选中后换成强调色 -->
+    <SolidColorBrush x:Key="GlassToggleTrackBrush" Color="#66FFFFFF" />
+    <!-- 开关旋钮：白色玻璃珠 -->
+    <SolidColorBrush x:Key="GlassKnobBrush" Color="#FFFFFFFF" />
+    <!-- 标题栏玻璃 -->
+    <SolidColorBrush x:Key="GlassTitleBarBrush" Color="#4DFFFFFF" />
+
+    <!-- 内容区薄雾：标题/说明直接压在背板上会看不清，垫极薄一层 -->
+    <SolidColorBrush x:Key="GlassVeilBrush" Color="#2EFFFFFF" />
+    <!-- 列表/链接行悬停 -->
+    <SolidColorBrush x:Key="GlassHoverBrush" Color="#4DFFFFFF" />
+    <!-- 分段控件的底槽 -->
+    <SolidColorBrush x:Key="GlassTabBrush" Color="#59FFFFFF" />
+
+    <DropShadowEffect x:Key="GlassShadowEffect" Color="#0E1B3A" Opacity="0.10" BlurRadius="24" ShadowDepth="6" Direction="270" />
+
 </ResourceDictionary>

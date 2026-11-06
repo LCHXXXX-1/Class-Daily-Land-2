@@ -100,4 +100,45 @@
     <DropShadowEffect x:Key="FlyoutShadowEffect" Color="#000000" Opacity="0.5" BlurRadius="24" ShadowDepth="8" Direction="270" />
     <DropShadowEffect x:Key="AccentGlowEffect" Color="#60CDFF" Opacity="0.36" BlurRadius="8" ShadowDepth="2" Direction="270" />
 
+    <!-- ===== 液态玻璃（Liquid Glass） ===== -->
+    <!-- 深色玻璃是"薄薄一层亮片压在暗底上"：用低透明度的冷灰拉开层次 -->
+    <LinearGradientBrush x:Key="GlassSurfaceBrush" StartPoint="0,0" EndPoint="0.45,1">
+        <GradientStop Color="#8A2E2E37" Offset="0" />
+        <GradientStop Color="#6625252C" Offset="0.45" />
+        <GradientStop Color="#4D1B1B21" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassSurfaceHoverBrush" StartPoint="0,0" EndPoint="0.45,1">
+        <GradientStop Color="#9E3A3A45" Offset="0" />
+        <GradientStop Color="#7A2E2E36" Offset="0.45" />
+        <GradientStop Color="#5C23232A" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassStrokeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#4DFFFFFF" Offset="0" />
+        <GradientStop Color="#1FFFFFFF" Offset="0.45" />
+        <GradientStop Color="#33000000" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassSheenBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#36FFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassControlBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#3DFFFFFF" Offset="0" />
+        <GradientStop Color="#26FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="GlassControlHoverBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#3DFFFFFF" Offset="0" />
+        <GradientStop Color="#26FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="GlassToggleTrackBrush" Color="#3DFFFFFF" />
+    <SolidColorBrush x:Key="GlassKnobBrush" Color="#FFEDEDF2" />
+    <SolidColorBrush x:Key="GlassTitleBarBrush" Color="#33101014" />
+
+    <SolidColorBrush x:Key="GlassNavBrush" Color="#661C1C22" />
+    <!-- 内容区薄雾：压住壁纸的杂色，保证标题可读 -->
+    <SolidColorBrush x:Key="GlassVeilBrush" Color="#3D101014" />
+    <SolidColorBrush x:Key="GlassHoverBrush" Color="#1FFFFFFF" />
+    <SolidColorBrush x:Key="GlassTabBrush" Color="#4D101014" />
+
+    <DropShadowEffect x:Key="GlassShadowEffect" Color="#000000" Opacity="0.38" BlurRadius="26" ShadowDepth="8" Direction="270" />
+
 </ResourceDictionary>

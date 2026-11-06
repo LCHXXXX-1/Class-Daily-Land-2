@@ -257,6 +257,38 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
+    /// <summary>配色主题：blue / violet / teal / green / amber / rose / graphite。</summary>
+    public string ColorTheme
+    {
+        get => S.Str("color_theme");
+        set
+        {
+            Write("color_theme", value);
+            ThemeService.ApplyColorTheme(value);
+        }
+    }
+
+    /// <summary>设置窗背景：mica（云母取色）/ solid（纯色）/ image（图片）。</summary>
+    public string SettingsBackground
+    {
+        get => S.Str("settings_background");
+        set => Write("settings_background", value);
+    }
+
+    /// <summary>纯色背景的颜色（#RRGGBB）。</summary>
+    public string SettingsBackgroundColor
+    {
+        get => S.Str("settings_bg_color");
+        set => Write("settings_bg_color", value);
+    }
+
+    /// <summary>自定义背景图片的绝对路径。</summary>
+    public string SettingsBackgroundImage
+    {
+        get => S.Str("settings_bg_image");
+        set => Write("settings_bg_image", value);
+    }
+
     public bool FadeAnimation
     {
         get => S.Bool("fade_animation");
@@ -569,5 +601,6 @@ public sealed partial class SettingsViewModel : ObservableObject
         S.ResetAll();
         OnPropertyChanged(AllProperties);
         ThemeService.Apply(S.Str("theme"));
+        ThemeService.ApplyColorTheme(S.Str("color_theme"));
     }
 }

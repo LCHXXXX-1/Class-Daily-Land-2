@@ -58,6 +58,10 @@ public sealed class AppSettings
         new("anim_fade_panel", ValueKind.Bool, true),                 // 面板展开渐显
         new("anim_fade_text", ValueKind.Bool, true),                  // 文字变化渐显
         new("settings_mica", ValueKind.Bool, true),                   // 设置窗云母材质（Win11，默认开）
+        new("color_theme", ValueKind.Str, "blue"),                    // 配色主题：blue/violet/teal/green/amber/rose/graphite
+        new("settings_background", ValueKind.Str, "mica"),             // 设置窗背景：mica（云母取色）/ solid / image
+        new("settings_bg_color", ValueKind.Str, "#F3F3F3"),           // 纯色背景颜色
+        new("settings_bg_image", ValueKind.Str, ""),                  // 自定义背景图片（绝对路径）
 
         // —— 灵动岛 ——
         new("show_island", ValueKind.Bool, true),
@@ -123,7 +127,8 @@ public sealed class AppSettings
         },
         [PageAppearance] = new[]
         {
-            "theme", "fade_animation", "animation_duration_ms",
+            "theme", "color_theme", "settings_background", "settings_bg_color", "settings_bg_image",
+            "fade_animation", "animation_duration_ms",
             "anim_fade_panel", "anim_fade_text", "settings_mica", "touch_optimize",
         },
         [PageIsland] = new[]

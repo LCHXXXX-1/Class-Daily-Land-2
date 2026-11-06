@@ -100,7 +100,7 @@
         </Grid.RowDefinitions>
 
         <!-- 标题栏（云母生效时透明，让背景透上来） -->
-        <Grid x:Name="TitleBar" Grid.Row="0" Background="Transparent">
+        <Grid x:Name="TitleBar" Grid.Row="0" Background="{DynamicResource GlassTitleBarBrush}">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
@@ -119,6 +119,10 @@
                            FontSize="{DynamicResource FontSizeCaption}"
                            Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
             </StackPanel>
+
+            <!-- 标题栏底边发丝线：玻璃条和内容区之间的分界 -->
+            <Border Grid.ColumnSpan="2" Height="1" VerticalAlignment="Bottom"
+                    Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center"
                         shell:WindowChrome.IsHitTestVisibleInChrome="True">
@@ -143,9 +147,14 @@
 
             <Border x:Name="NavPane" Grid.Column="0" Width="{DynamicResource NavPaneWidth}"
                     ClipToBounds="True"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+                    Background="{DynamicResource GlassNavBrush}">
 
                 <Grid>
+                    <!-- 顶部镜面反光（在最底层，不盖文字） -->
+                    <Border VerticalAlignment="Top" Height="{DynamicResource GlassSheenHeight}"
+                            IsHitTestVisible="False" Opacity="0.5"
+                            Background="{DynamicResource GlassSheenBrush}" />
+
                     <DockPanel>
                         <StackPanel x:Name="AboutPanel" DockPanel.Dock="Bottom"
                                     Margin="8,0,8,10">
@@ -184,6 +193,10 @@
                         </ScrollViewer>
                     </DockPanel>
 
+                    <!-- 右侧发丝线：把侧栏这块玻璃和内容区分开 -->
+                    <Border Width="1" HorizontalAlignment="Right"
+                            Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+
                     <!-- 单条滑动强调条：3×16 药丸，跟着高亮项走 -->
                     <Canvas x:Name="MarkerCanvas" IsHitTestVisible="False">
                         <Border x:Name="NavMarker" Width="3" Height="16" CornerRadius="1.5"
@@ -204,7 +217,7 @@
               透明度恒为 1（不做任何淡化）。
             -->
             <Border x:Name="ContentPane" Grid.Column="1" ClipToBounds="True"
-                    Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}">
+                    Background="{DynamicResource GlassVeilBrush}">
                 <Grid x:Name="PageStack" ClipToBounds="True">
 
                     <ScrollViewer x:Name="ScrollPrev" Visibility="Collapsed"

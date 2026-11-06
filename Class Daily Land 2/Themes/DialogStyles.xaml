@@ -19,7 +19,7 @@
         <Setter Property="MaxHeight" Value="640" />
         <Setter Property="CornerRadius" Value="{DynamicResource OverlayCornerRadius}" />
         <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource GlassStrokeBrush}" />
         <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorQuarternaryBrush}" />
         <Setter Property="Effect" Value="{DynamicResource DialogShadowEffect}" />
         <Setter Property="SnapsToDevicePixels" Value="True" />

@@ -107,10 +107,10 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource GlassHoverBrush}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            <Setter TargetName="Root" Property="Background" Value="{DynamicResource GlassSurfaceHoverBrush}" />
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.5" />
@@ -124,18 +124,22 @@
     <!-- ===== 卡片 -->
     <Style TargetType="{x:Type fl:Card}">
         <Setter Property="AlternationCount" Value="1000" />
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource GlassSurfaceBrush}" />
         <Setter Property="ItemsPanel">
             <Setter.Value><ItemsPanelTemplate><StackPanel /></ItemsPanelTemplate></Setter.Value>
         </Setter>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="{x:Type fl:Card}">
+                    <!-- 液态玻璃卡片：半透明渐变面 + 上白下黑的折射描边 + 顶部镜面反光 + 柔投影 -->
                     <Border CornerRadius="{DynamicResource CardCornerRadius}" BorderThickness="1"
                             Background="{TemplateBinding Background}"
-                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                            BorderBrush="{DynamicResource GlassStrokeBrush}"
+                            Effect="{DynamicResource GlassShadowEffect}">
                         <Grid ClipToBounds="True">
-                            <!-- 顶边内高光：卡片「有厚度」的那道亮线 -->
+                            <Border Height="{DynamicResource GlassSheenHeight}" VerticalAlignment="Top"
+                                    IsHitTestVisible="False" Opacity="0.55"
+                                    Background="{DynamicResource GlassSheenBrush}" />
                             <Border Height="1" VerticalAlignment="Top"
                                     Background="{DynamicResource HairlineHighlightBrush}" />
                             <ItemsPresenter Margin="{TemplateBinding Padding}" />
@@ -280,9 +284,14 @@
                                    Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
 
                         <Border CornerRadius="{DynamicResource CardCornerRadius}" BorderThickness="1"
-                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}">
+                                Background="{DynamicResource GlassSurfaceBrush}"
+                                BorderBrush="{DynamicResource GlassStrokeBrush}"
+                                Effect="{DynamicResource GlassShadowEffect}">
                             <Grid ClipToBounds="True">
+                                <!-- 顶部镜面反光（在内容下面，不影响文字对比度） -->
+                                <Border Height="{DynamicResource GlassSheenHeight}" VerticalAlignment="Top"
+                                        IsHitTestVisible="False" Opacity="0.55"
+                                        Background="{DynamicResource GlassSheenBrush}" />
                                 <Border Height="1" VerticalAlignment="Top"
                                         Background="{DynamicResource HairlineHighlightBrush}" />
                                 <ItemsPresenter Margin="{TemplateBinding CardPadding}" />

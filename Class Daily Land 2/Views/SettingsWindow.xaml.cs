@@ -9,6 +9,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 
 namespace ClassDailyLand2.App.Views;
@@ -150,7 +151,9 @@ public partial class SettingsWindow : Window
 
     void OnVmChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SettingsViewModel.SettingsMica) or nameof(SettingsViewModel.ThemeMode))
+        if (e.PropertyName is nameof(SettingsViewModel.SettingsMica) or nameof(SettingsViewModel.ThemeMode)
+            or nameof(SettingsViewModel.SettingsBackground) or nameof(SettingsViewModel.SettingsBackgroundColor)
+            or nameof(SettingsViewModel.SettingsBackgroundImage))
             ApplyWindowChrome();
         if (e.PropertyName is nameof(SettingsViewModel.TouchOptimize))
             ApplyTouchOptimize();
@@ -205,38 +208,96 @@ public partial class SettingsWindow : Window
 
     void ApplyWindowChrome()
     {
-        // Win11 → 云母（Mica）；Win10 1803+ → 亚克力（Acrylic）；更老/关掉 → 不透明。
-        // 圆角不在这里做：Win11 由 DWM 自己加，Win10 原生就是直角。
-        var kind = Interop.ApplyBackdrop(this, Vm.SettingsMica, ThemeService.IsDark);
-        Core.Logger.Current?.Info($"[设置材质] 开关={Vm.SettingsMica} 实际={kind} 深色={ThemeService.IsDark}");
+        var mode = Vm.SettingsBackground;
+        var imagePath = Vm.SettingsBackgroundImage;
+        var useImage = mode == "image" && !string.IsNullOrWhiteSpace(imagePath) && System.IO.File.Exists(imagePath);
 
-        if (kind == WindowBackdrop.None)
+        // 自定义背景（纯色/图片）必须先把系统背板撤掉，否则 DWM 的云母会画在自己背景前面
+        WindowBackdrop kind;
+        if (mode == "solid" || useImage)
         {
-            // 云母没生效：把云母态覆盖撤掉，卡片/面板回到 App 级画刷（否则会留着一层过透的底）
-            Resources.Remove("CardBackgroundFillColorDefaultBrush");
-            Resources.Remove("SolidBackgroundFillColorQuarternaryBrush");
-
-            Background = (Brush)FindResource("SolidBackgroundFillColorBaseBrush");
-            TitleBar.Background = Background;
-            NavPane.Background = Background;
-            ContentPane.Background = (Brush)FindResource("SolidBackgroundFillColorTertiaryBrush");
-            return;
+            Interop.ClearBackdrop(this);
+            kind = WindowBackdrop.None;
+        }
+        else
+        {
+            kind = Interop.ApplyBackdrop(this, Vm.SettingsMica, ThemeService.IsDark);
         }
 
-        // 云母 / 亚克力：窗口和侧栏都透明，让背板透上来，内容区只压一层薄雾
-        Background = Brushes.Transparent;
-        TitleBar.Background = Brushes.Transparent;
-        NavPane.Background = Brushes.Transparent;
-        ContentPane.Background = (Brush)FindResource("MicaLayerBrush");
+        Core.Logger.Current?.Info($"[设置背景] 模式={mode} 材质={kind} 深色={ThemeService.IsDark}");
 
-        // ★ 内容卡片也换成「云母态」画刷。
-        //   默认 Layer(50%) + 卡片(70%) 叠出来是 85% 白，有内容的地方云母完全看不见；
-        //   覆盖窗口级资源后只有设置中心受影响，其它窗口照旧。
-        Resources["CardBackgroundFillColorDefaultBrush"] = FindResource("MicaCardBackgroundBrush");
+        // 背景层
+        if (useImage)
+        {
+            Background = BuildImageBrush(imagePath!);
+        }
+        else if (mode == "solid")
+        {
+            Background = BuildSolidBrush(Vm.SettingsBackgroundColor);
+        }
+        else if (kind == WindowBackdrop.None)
+        {
+            Background = (Brush)FindResource("SolidBackgroundFillColorBaseBrush");
+        }
+        else
+        {
+            Background = Brushes.Transparent;   // 让云母/亚克力透上来
+        }
 
-        // 对话框/插件设置浮层用的是 SolidBackgroundFillColorQuarternaryBrush（纯白/纯黑），
-        // 那个不换成半透明的话，弹出来的面板永远是一块"雪白"，云母完全被盖住。
-        Resources["SolidBackgroundFillColorQuarternaryBrush"] = FindResource("MicaDialogBrush");
+        // 云雾底：卡片和对话框在"自定义背景/无材质"时必须收薄，否则会盖住自己的背景
+        if (kind == WindowBackdrop.None)
+        {
+            Resources.Remove("CardBackgroundFillColorDefaultBrush");
+            Resources.Remove("SolidBackgroundFillColorQuarternaryBrush");
+        }
+        else
+        {
+            Resources["CardBackgroundFillColorDefaultBrush"] = FindResource("MicaCardBackgroundBrush");
+            Resources["SolidBackgroundFillColorQuarternaryBrush"] = FindResource("MicaDialogBrush");
+        }
+
+        // 玻璃层：标题栏、侧栏、内容区薄雾
+        TitleBar.Background = (Brush)FindResource("GlassTitleBarBrush");
+        NavPane.Background = (Brush)FindResource("GlassNavBrush");
+        ContentPane.Background = (Brush)FindResource("GlassVeilBrush");
+    }
+
+    /// <summary>纯色背景：解析失败就退回主题底色（不让用户因为填错一个色值看到黑窗口）。</summary>
+    static Brush BuildSolidBrush(string? hex)
+    {
+        try
+        {
+            var color = (Color)ColorConverter.ConvertFromString(hex ?? "");
+            var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+        catch
+        {
+            return (Brush)Application.Current.FindResource("SolidBackgroundFillColorBaseBrush");
+        }
+    }
+
+    /// <summary>图片背景：铺满窗口（保持比例裁切）。</summary>
+    static Brush BuildImageBrush(string path)
+    {
+        try
+        {
+            var bitmap = new BitmapImage();
+            bitmap.BeginInit();
+            bitmap.CacheOption = BitmapCacheOption.OnLoad;   // 立刻读进内存，不锁文件
+            bitmap.UriSource = new Uri(path, UriKind.Absolute);
+            bitmap.EndInit();
+            bitmap.Freeze();
+
+            var brush = new ImageBrush(bitmap) { Stretch = Stretch.UniformToFill };
+            brush.Freeze();
+            return brush;
+        }
+        catch
+        {
+            return (Brush)Application.Current.FindResource("SolidBackgroundFillColorBaseBrush");
+        }
     }
 
     // ————————————————————— 导航 —————————————————————

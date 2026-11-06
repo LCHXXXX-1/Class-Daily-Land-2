@@ -51,7 +51,15 @@ public static class Palette
     public static Brush Text => IsDark ? DarkText : LightText;
     public static Brush TextDim => IsDark ? DarkTextDim : LightTextDim;
     public static Brush Hover => IsDark ? DarkHover : LightHover;
-    public static Brush Accent { get; } = Frozen(Color.FromRgb(0x0a, 0x84, 0xff));
+    // 强调色跟随配色主题（ThemeService 切换时写进来）
+    static Brush _accent = Frozen(Color.FromRgb(0x00, 0x5f, 0xb8));
+
+    public static Brush Accent => _accent;
+
+    public static void SetAccent(Color color) => _accent = Frozen(color);
+
+    /// <summary>只广播一次重画（颜色本身已由 SetAccent 写好）。</summary>
+    public static void Refresh() => Changed?.Invoke(null, EventArgs.Empty);
     public static Brush AccentText { get; } = Frozen(Color.FromRgb(0xff, 0xff, 0xff));
     public static Brush ToggleOff => IsDark ? Frozen(Color.FromRgb(0x48, 0x48, 0x4a)) : Frozen(Color.FromRgb(0xc6, 0xc6, 0xcb));
     public static Brush Danger { get; } = Frozen(Color.FromRgb(0xff, 0x45, 0x3a));

@@ -37,8 +37,93 @@ public static class ThemeService
         };
 
         SwapThemeDictionary(IsDark);
+        ApplyAccentCore();            // 深浅变了，强调色要重算（深色下种子要提亮）
+        Palette.SetAccent(ColorThemes.ForBackground(ColorThemes.Get(_colorTheme), IsDark));
         Palette.Apply(mode);          // 岛 / 主窗 / 面板同步
         Changed?.Invoke();
+    }
+
+    // ————————————————————— 配色主题 —————————————————————
+
+    static string _colorTheme = "blue";
+    static ResourceDictionary? _accentDict;
+
+    /// <summary>当前配色主题 key（blue / violet / teal / green / amber / rose / graphite）。</summary>
+    public static string ColorThemeKey => _colorTheme;
+
+    /// <summary>换配色主题：只替换强调色系，深浅色板不动。</summary>
+    public static void ApplyColorTheme(string key)
+    {
+        _colorTheme = ColorThemes.Get(key).Key;
+        ApplyAccentCore();
+        Palette.SetAccent(ColorThemes.ForBackground(ColorThemes.Get(_colorTheme), IsDark));
+        Palette.Refresh();            // 自绘窗口（岛/主窗/面板）跟着重画
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// 生成一份"强调色覆盖字典"并合并到 App 级资源**末尾**（后合并的优先）。
+    /// 只覆盖与强调色相关的键，其他色板继续用 Tokens.Light/Dark —— 这样加主题色
+    /// 不需要再复制两整套色板文件。
+    /// </summary>
+    static void ApplyAccentCore()
+    {
+        var app = Application.Current;
+        if (app is null) return;
+
+        var theme = ColorThemes.Get(_colorTheme);
+        var bg = ColorThemes.ForBackground(theme, IsDark);
+        var fg = ColorThemes.ForForeground(theme, IsDark);
+
+        var dict = new ResourceDictionary
+        {
+            ["AccentFillColorDefaultBrush"] = Solid(bg),
+            ["AccentFillColorSecondaryBrush"] = Solid(ColorThemes.WithAlpha(bg, 0xE6)),
+            ["AccentFillColorTertiaryBrush"] = Solid(ColorThemes.WithAlpha(bg, 0xCC)),
+            ["AccentTextFillColorPrimaryBrush"] = Solid(fg),
+            ["AccentTextFillColorTertiaryBrush"] = Solid(ColorThemes.WithAlpha(fg, 0x80)),
+            ["SystemFillColorAttentionBrush"] = Solid(bg),
+            // 导航/列表选中底：玻璃上要薄一点，太浓会变成"一块色斑"
+            ["NavSelectedBrush"] = Solid(ColorThemes.WithAlpha(bg, IsDark ? (byte)0x33 : (byte)0x1C)),
+            ["NavSelectedHoverBrush"] = Solid(ColorThemes.WithAlpha(bg, IsDark ? (byte)0x47 : (byte)0x2A)),
+            ["AccentGlowEffect"] = Glow(bg),
+        };
+
+        // 覆盖字典必须排在最后（MergedDictionaries 后加入的优先）
+        var all = app.Resources.MergedDictionaries;
+        if (_accentDict is not null)
+        {
+            var index = all.IndexOf(_accentDict);
+            if (index >= 0)
+            {
+                all[index] = dict;
+                _accentDict = dict;
+                return;
+            }
+        }
+        all.Add(dict);
+        _accentDict = dict;
+    }
+
+    static SolidColorBrush Solid(Color c)
+    {
+        var brush = new SolidColorBrush(c);
+        brush.Freeze();
+        return brush;
+    }
+
+    static System.Windows.Media.Effects.DropShadowEffect Glow(Color c)
+    {
+        var effect = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            Color = c,
+            Opacity = 0.32,
+            BlurRadius = 10,
+            ShadowDepth = 2,
+            Direction = 270,
+        };
+        effect.Freeze();
+        return effect;
     }
 
     static void SwapThemeDictionary(bool dark)

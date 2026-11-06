@@ -431,6 +431,20 @@ internal static class Interop
         return ApplyAcrylic(hwnd, dark, tintAlpha) ? WindowBackdrop.Acrylic : WindowBackdrop.None;
     }
 
+    /// <summary>
+    /// 撤掉系统背板（云母 / 亚克力一起关）：自定义纯色或图片背景时用，
+    /// 否则 DWM 的云母会画在自己的背景前面，用户看到的还是壁纸。
+    /// </summary>
+    public static void ClearBackdrop(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return;
+
+        TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, 1);   // DWMSBT_NONE
+        TrySetDwm(hwnd, DWMWA_MICA_EFFECT, 0);
+        SetAccent(hwnd, 0 /* ACCENT_DISABLED */, 0);
+    }
+
     /// <summary>关掉亚克力（切回纯色时调用），否则窗口会一直保持模糊。</summary>
     public static void ClearBlur(Window window)
     {
