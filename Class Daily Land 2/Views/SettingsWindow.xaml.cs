@@ -213,8 +213,9 @@ public partial class SettingsWindow : Window
 
         if (kind == WindowBackdrop.None)
         {
-            // 云母没生效：把云母态覆盖撤掉，卡片回到 App 级画刷（否则会留着一层过透的卡片）
+            // 云母没生效：把云母态覆盖撤掉，卡片/面板回到 App 级画刷（否则会留着一层过透的底）
             Resources.Remove("CardBackgroundFillColorDefaultBrush");
+            Resources.Remove("SolidBackgroundFillColorQuarternaryBrush");
 
             Background = (Brush)FindResource("SolidBackgroundFillColorBaseBrush");
             TitleBar.Background = Background;
@@ -233,6 +234,10 @@ public partial class SettingsWindow : Window
         //   默认 Layer(50%) + 卡片(70%) 叠出来是 85% 白，有内容的地方云母完全看不见；
         //   覆盖窗口级资源后只有设置中心受影响，其它窗口照旧。
         Resources["CardBackgroundFillColorDefaultBrush"] = FindResource("MicaCardBackgroundBrush");
+
+        // 对话框/插件设置浮层用的是 SolidBackgroundFillColorQuarternaryBrush（纯白/纯黑），
+        // 那个不换成半透明的话，弹出来的面板永远是一块"雪白"，云母完全被盖住。
+        Resources["SolidBackgroundFillColorQuarternaryBrush"] = FindResource("MicaDialogBrush");
     }
 
     // ————————————————————— 导航 —————————————————————

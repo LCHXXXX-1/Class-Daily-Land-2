@@ -30,6 +30,7 @@
         <Border x:Name="CountdownLayer"
                 Height="38"
                 HorizontalAlignment="Left" VerticalAlignment="Center"
+                ClipToBounds="True"
                 Visibility="Collapsed">
             <Grid>
                 <Rectangle x:Name="Sheen" Height="38" HorizontalAlignment="Left">

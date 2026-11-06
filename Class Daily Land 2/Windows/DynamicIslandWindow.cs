@@ -178,6 +178,8 @@ public sealed partial class DynamicIslandWindow : Window
         TextPrev.FontFamily = UiFont;
         TextCur2.Foreground = TextFill;
         CountdownLayer.Background = ProgressFill;
+        // 蓝条里的流光/前缘都是矩形元素，必须按圆角裁掉，否则会扫出蓝色区域外
+        CountdownLayer.SizeChanged += (_, _) => UpdateBarClip();
         Sheen.Fill = SheenFill;
         HeadGlow.Fill = HeadGlowBrush;
         HeadDot.Fill = HeadFill;
@@ -393,6 +395,7 @@ public sealed partial class DynamicIslandWindow : Window
         CountdownLayer.CornerRadius = new CornerRadius(CountdownLayer.Height / 2);
         Sheen.Height = CountdownLayer.Height;
         HeadGlow.Height = CountdownLayer.Height;
+        UpdateBarClip();
 
         // 文字区：左起 42，右侧让出 10（加长片段另算）
         var left = _state is IslandState.Mini or IslandState.Hidden ? 12 : TextLeft();
@@ -686,6 +689,31 @@ public sealed partial class DynamicIslandWindow : Window
         CountdownLayer.BeginAnimation(WidthProperty, null);
         CountdownLayer.Width = layerW;
         Sheen.Width = Math.Max(40, layerW * 0.5);
+        UpdateBarClip();
+        UpdateBarHead(layerW);
+    }
+
+    /// <summary>
+    /// 给蓝条套一个**圆角**裁剪：它内部的流光(Sheen)和光晕(HeadGlow)都是矩形，
+    /// 不裁的话会在蓝条两端露出直角/扫到条外（就是用户看到的"浅白色方块扫过来"）。
+    /// </summary>
+    void UpdateBarClip()
+    {
+        var w = CountdownLayer.ActualWidth;
+        var h = CountdownLayer.ActualHeight;
+        if (w <= 0.5 || h <= 0.5) { CountdownLayer.Clip = null; return; }
+
+        var r = Math.Min(h / 2, Math.Min(w / 2, h / 2));
+        CountdownLayer.Clip = new RectangleGeometry(new Rect(0, 0, w, h), r, r);
+    }
+
+    /// <summary>彗星前缘（白点 + 光晕）要占约 30px；蓝条比它还窄时藏起来，不然会凸出条外。</summary>
+    void UpdateBarHead(double layerW)
+    {
+        var show = layerW >= 34;
+        var v = show ? Visibility.Visible : Visibility.Collapsed;
+        if (HeadDot.Visibility != v) HeadDot.Visibility = v;
+        if (HeadGlow.Visibility != v) HeadGlow.Visibility = v;
     }
 
     Geometry ArcGeometry(double ratio)
@@ -773,8 +801,13 @@ public sealed partial class DynamicIslandWindow : Window
             RenderBar(_barShown);
         }
         Sheen.Width = Math.Max(40, targetW * 0.5);
-        HeadGlow.Width = Math.Min(20.0, Math.Max(8.0, CountdownLayer.Height));
-        HeadDot.Margin = new Thickness(0, 0, 7, 0);
+        // 光晕是个竖直矩形：宽度压到 ≤ 圆角半径，右端会被蓝条的圆角裁成弧形，
+        // 否则它那条笔直的竖边就从白球后面露出来（用户看到的那根"竖杠"）。
+        HeadGlow.Width = Math.Min(12.0, Math.Max(6.0, CountdownLayer.Height * 0.33));
+        // 右留 14px：球(23px)主体落在圆角内，只让边缘的弧自然过渡，不会被切出直角缺口
+        HeadDot.Margin = new Thickness(0, 0, 14, 0);
+        UpdateBarHead(targetW);
+        UpdateBarClip();
 
         // 流光：从左外侧扫到右外侧，循环
         if (!_sheenOn)
