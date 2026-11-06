@@ -6,6 +6,8 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 
 namespace ClassDailyLand2.App.Views.Pages;
 
@@ -77,6 +79,11 @@ public partial class TimetableEditorPage : UserControl
         RowsGrid.ItemsSource = _rows;
         WeekendGrid.ItemsSource = _weekendRows;
 
+        // 表格会把滚轮事件"吃掉"（DataGrid 内层 ScrollViewer 无条件标记 Handled），
+        // 页面里表格高度是随内容撑开的，自己没有可滚区间，于是鼠标停在课表上就滚不动页面。
+        EnableWheelBubbling(RowsGrid);
+        EnableWheelBubbling(WeekendGrid);
+
         Loaded += (_, _) =>
         {
             // DataContext 是父级给的，Loaded 之前拿不到
@@ -84,6 +91,57 @@ public partial class TimetableEditorPage : UserControl
             _loadedOnce = true;
             Reload();
         };
+    }
+
+    // ————————————————————— 滚轮：表格滚得动就自己滚，滚不动就交给页面 —————————————————————
+
+    /// <summary>
+    /// DataGrid 内部的 ScrollViewer 会把 MouseWheel 标记为 Handled，哪怕它自己没得滚。
+    /// 页面里的课表是按内容撑开的（没有可滚区间），所以事件被吞掉后外层 ScrollViewer
+    /// 永远收不到 → 鼠标停在课表上滚不动。这里在**隧道**阶段（内层还没处理）先判一次：
+    /// 表格自己滚得动就放行，滚不动（或已到边界）就把这一格滚轮转给外层滚动容器。
+    /// </summary>
+    static void EnableWheelBubbling(UIElement element)
+    {
+        element.PreviewMouseWheel += (_, e) =>
+        {
+            if (FindAncestor<ScrollViewer>(element) is not { } outer) return;
+            if (FindChild<ScrollViewer>(element) is { } inner && CanScroll(inner, e.Delta)) return;
+
+            // 一格滚轮 120 → 48px，和系统默认"3 行"的手感接近
+            var step = e.Delta / 120.0 * 48;
+            outer.ScrollToVerticalOffset(outer.VerticalOffset - step);
+            e.Handled = true;
+        };
+    }
+
+    static bool CanScroll(ScrollViewer viewer, int delta)
+    {
+        if (viewer.ScrollableHeight <= 0.5) return false;   // 没有可滚区间（内容撑开时就是这种）
+        return delta > 0 ? viewer.VerticalOffset > 0 : viewer.VerticalOffset < viewer.ScrollableHeight;
+    }
+
+    static T? FindAncestor<T>(DependencyObject start) where T : DependencyObject
+    {
+        var current = VisualTreeHelper.GetParent(start);
+        while (current is not null)
+        {
+            if (current is T hit) return hit;
+            current = VisualTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    static T? FindChild<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T hit) return hit;
+            if (FindChild<T>(child) is { } deeper) return deeper;
+        }
+        return null;
     }
 
     SettingsViewModel? Vm => DataContext as SettingsViewModel;

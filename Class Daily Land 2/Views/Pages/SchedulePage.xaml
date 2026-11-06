@@ -22,12 +22,11 @@
                     </fl:SettingRow>
         </fl:SettingGroup>
 
-        <!-- 课表与值日（二级入口，图标底色沿用 web 版；课表编辑已升为左侧一级导航） -->
+        <!-- 课表与值日（二级入口，图标底色沿用 web 版；课表编辑是本组第一个入口，打开为二级页） -->
         <fl:SettingGroup Title="课表与值日" Icon="{StaticResource Icon.Calendar}" TileColor="#FF107C10"
                          IsSection="True">
                     <fl:LinkRow x:Name="TimetableLink" Title="课表编辑" Hint="编辑周一到周五与周末课表"
                                 Icon="{StaticResource Icon.Calendar}" TileColor="#FF107C10" />
-                                Icon="{StaticResource Icon.Clock}" TileColor="#FF8661C5" />
                     <fl:LinkRow x:Name="HolidaysLink" Title="假期与调休" Hint="设置假期与调休日"
                                 Icon="{StaticResource Icon.Calendar}" TileColor="#FFF7630C" />
                     <fl:LinkRow x:Name="DutyLink" Title="值日生名单" Hint="设置值日轮流安排"
