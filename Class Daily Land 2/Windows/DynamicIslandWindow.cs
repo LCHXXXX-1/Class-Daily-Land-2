@@ -657,7 +657,10 @@ public sealed partial class DynamicIslandWindow : Window
         _ringStampUtc = DateTime.UtcNow;
         _ringBaseRatio = Math.Clamp(ratio, 0, 1);
         _ringTotalSec = Math.Max(1, total);
-        RenderRing(_ringBaseRatio);
+
+        // ★ 这里绝不直接 Render：数据是整秒取整的，硬设就等于每秒把弧"拽"一下。
+        //   只在首帧给个初值，之后交给 SmoothTick 逐帧平滑跟随。
+        if (_ringShown < 0) { _ringShown = _ringBaseRatio; RenderRing(_ringShown); }
     }
 
     /// <summary>把圆环画到指定比例（平滑定时器每帧调用）。</summary>
@@ -753,7 +756,6 @@ public sealed partial class DynamicIslandWindow : Window
         _barStampUtc = DateTime.UtcNow;
         _barBaseRatio = Math.Clamp(ratio, 0, 1);
         _barTotalSec = Math.Max(1, input.CountdownSec);
-        _barLastW = -1;
         var targetW = Math.Max(0, Math.Max(0, ActualWidth * _barBaseRatio) - BarInset);
 
         if (_fillPending)
@@ -763,10 +765,12 @@ public sealed partial class DynamicIslandWindow : Window
             CountdownLayer.BeginAnimation(WidthProperty,
                 Anim.Slide(targetW, (int)CountdownFillMs));
             _barFillDoneUtc = DateTime.UtcNow.AddMilliseconds(CountdownFillMs + 60);
+            _barShown = -1;          // 长完之后重新起算，交给逐帧平滑
         }
-        else
+        else if (_barShown < 0)
         {
-            RenderBar(_barBaseRatio);
+            _barShown = _barBaseRatio;
+            RenderBar(_barShown);
         }
         Sheen.Width = Math.Max(40, targetW * 0.5);
         HeadGlow.Width = Math.Min(20.0, Math.Max(8.0, CountdownLayer.Height));
@@ -791,6 +795,9 @@ public sealed partial class DynamicIslandWindow : Window
     // 数据每秒才来一次；圆环和蓝条若只在 tick 时改值，就是每秒跳一格。
     // 这里保留「快照 + 时刻」，由定时器按流逝时间插值，视觉上连续。
     bool _frameHooked;
+    double _ringShown = -1;          // 当前"画出来"的比例（逐帧逼近目标）
+    double _barShown = -1;
+    DateTime _lastFrameUtc = DateTime.UtcNow;
     DateTime _ringStampUtc = DateTime.UtcNow;
     double _ringBaseRatio;
     double _ringTotalSec = 60;
@@ -821,18 +828,36 @@ public sealed partial class DynamicIslandWindow : Window
 
         var now = DateTime.UtcNow;
 
+        // 帧间隔 → 一阶低通系数（时间常数 ≈90ms）。
+        // 为什么不直接等于目标：数据每秒才来一次，而且 UntilSec 是整秒取整的，
+        // 目标值本身就是"台阶"。直接赋值 = 每秒把条硬拽一下（就是"闪一下、跳一下"）；
+        // 用指数逼近，台阶会被抹成一段连续的滑动。
+        var dt = Math.Clamp((now - _lastFrameUtc).TotalSeconds, 0.001, 0.1);
+        _lastFrameUtc = now;
+        var alpha = 1 - Math.Exp(-dt / 0.09);
+
+        var ringTarget = _ringBaseRatio - (now - _ringStampUtc).TotalSeconds / _ringTotalSec;
+
         if (_state == IslandState.Countdown)
         {
             // 蓝条：等"长出"动画结束后再接管，否则会把动画顶掉
             if (now >= _barFillDoneUtc)
-                RenderBar(_barBaseRatio - (now - _barStampUtc).TotalSeconds / _barTotalSec);
+            {
+                var barTarget = _barBaseRatio - (now - _barStampUtc).TotalSeconds / _barTotalSec;
+                _barShown = _barShown < 0 ? barTarget : _barShown + (barTarget - _barShown) * alpha;
+                RenderBar(_barShown);
+            }
 
             if (_input?.Emergency is null)
-                RenderRing(_ringBaseRatio - (now - _ringStampUtc).TotalSeconds / _ringTotalSec);
+            {
+                _ringShown = _ringShown < 0 ? ringTarget : _ringShown + (ringTarget - _ringShown) * alpha;
+                RenderRing(_ringShown);
+            }
             return;
         }
 
-        RenderRing(_ringBaseRatio - (now - _ringStampUtc).TotalSeconds / _ringTotalSec);
+        _ringShown = _ringShown < 0 ? ringTarget : _ringShown + (ringTarget - _ringShown) * alpha;
+        RenderRing(_ringShown);
     }
 
     // ————————————————————— 各状态可见性 —————————————————————

@@ -566,6 +566,9 @@ public sealed class MainBoardWindow : Window
             Interop.ClearBlur(this);
             _backdrop = Interop.ApplyBackdrop(this, false, ThemeService.IsDark);
         }
+        // 贴边挂件一律直角：DWM 的圆角会在贴屏幕那一侧留缝，和原样式也不符
+        Interop.UseSquareCorners(this);
+
         ApplyBackdropPaint();
         Logger.Current?.Info($"[材质] 开关={(_material ? "开" : "关")} 实际={_backdrop} 系统Build={Environment.OSVersion.Version.Build}");
     }

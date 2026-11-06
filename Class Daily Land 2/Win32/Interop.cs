@@ -297,6 +297,7 @@ internal static class Interop
     const int DWMWA_MICA_EFFECT = 1029;      // Win11 21H2 的私有属性
 
     const int DWMWCP_ROUND = 2;              // 圆角
+    const int DWMWCP_DONOTROUND = 1;         // 直角（主窗要贴屏幕边缘，不能有圆角）
     const int DWMSBT_MAINWINDOW = 2;         // Mica（主窗口云母）
 
     const int WCA_ACCENT_POLICY = 19;
@@ -414,11 +415,11 @@ internal static class Interop
         if (!TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, dark ? 1 : 0))
             TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, dark ? 1 : 0);
 
-        if (IsWindows11)
-        {
-            TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
-            TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, 1);   // DWMSBT_NONE：先让位给亚克力
-        }
+        // 老系统没有可靠的亚克力：直接判失败，让调用方整套回退成纯色（宁可朴素也别半透明坏掉）
+        if (!IsWindows11) return WindowBackdrop.None;
+
+        TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND);
+        TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, 1);   // DWMSBT_NONE：先让位给亚克力
 
         try
         {
@@ -449,6 +450,17 @@ internal static class Interop
         if (hwnd == IntPtr.Zero) return;
         SetWindowPos(hwnd, IntPtr.Zero /* HWND_TOP */, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
+    /// <summary>
+    /// 强制直角。主窗是贴着屏幕边缘的挂件，DWM 圆角会在贴边一侧留出缝隙，
+    /// 而且和原来的"整块底板"外观不一致 —— 这里明确要求不圆角。
+    /// </summary>
+    public static void UseSquareCorners(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero || !IsWindows11) return;
+        TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND);
     }
 
     /// <summary>只加圆角（岛 / 主窗这类不需要云母的窗口）。</summary>

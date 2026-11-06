@@ -123,6 +123,11 @@ public sealed class AppController
 
         // 异常退出检测：正常关闭会删掉运行标记；标记还在 = 上一次没走正常流程就结束了
         CheckAbnormalExit();
+
+        // 正常关机 / 重启：系统会先发 WM_QUERYENDSESSION（WPF 转成 SessionEnding），
+        // 趁这一刻把运行标记清掉，下次开机就不会被误判成上次异常退出。
+        if (Application.Current is { } app)
+            app.SessionEnding += (_, _) => ClearRunningMarker();
         sw.Restart();
         Schedule = new ScheduleManager(Paths);
         Schedule.Load();
@@ -289,6 +294,16 @@ public sealed class AppController
             }
 
             var previous = File.ReadAllText(RunningMarkerPath);
+
+            // 系统刚启动（5 分钟内）说明上次十有八九是正常关机 / 重启 / 断电：
+            // 关机时进程是被系统直接结束的，走不到正常关闭那条路，标记自然会留下。
+            // 这种场景不该打扰用户，只留一条日志。
+            if (Environment.TickCount64 < 5 * 60 * 1000)
+            {
+                Log.Info("[异常退出] 开机不足 5 分钟，上次按正常关机处理，不上报");
+                WriteRunningMarker();
+                return;
+            }
 
             // 被更新程序强杀属于"预期内"的结束：新更新器替换成功后会清标记，
             // 但旧版更新器不会（或清失败），这里再兜一层——若更新结果是成功、
