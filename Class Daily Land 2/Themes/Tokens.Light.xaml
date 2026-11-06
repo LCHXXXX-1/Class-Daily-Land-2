@@ -24,7 +24,8 @@
       合成约 59%：云母透得出来，文字仍是深色压在浅底上，可读性不受影响。
     -->
     <SolidColorBrush x:Key="MicaLayerBrush" Color="#40FFFFFF" />
-    <SolidColorBrush x:Key="MicaCardBackgroundBrush" Color="#73FFFFFF" />
+    <!-- 35% 白：再厚就把云母完全盖住了（之前 45% 叠在 25% 的层上几乎纯白） -->
+    <SolidColorBrush x:Key="MicaCardBackgroundBrush" Color="#59FFFFFF" />
 
     <!-- 卡片 -->
     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#B3FFFFFF" />

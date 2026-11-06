@@ -101,6 +101,15 @@ public sealed class MainBoardWindow : Window
         Stylus.SetIsPressAndHoldEnabled(this, false);
         Stylus.SetIsTapFeedbackEnabled(this, false);
 
+        // 窗口刚 Show 出来时 DWM 还没稳定，圆角/材质容易"迟一拍"。
+        // 首帧渲染完再补挂一次（幂等，代价只有两个 DwmSetWindowAttribute）。
+        ContentRendered += (_, _) =>
+        {
+            if (_rendered) return;
+            _rendered = true;
+            ApplyMaterial();
+        };
+
         // 关掉 WPF/DWM 的非客户区白边：无边框窗口在 Win10/Win11 上很容易被 DWM
         // 画出一圈白色轮廓，这里强制不画玻璃帧、不画标题栏、不做圆角。
         WindowChrome.SetWindowChrome(this, new WindowChrome
@@ -540,6 +549,7 @@ public sealed class MainBoardWindow : Window
     static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
     // ————————————————————— 云母 / 亚克力背板 —————————————————————
+    bool _rendered;                 // 首帧渲染后是否已补挂过一次材质
     bool _material;                 // 设置里的「窗口材质」开关
     bool _materialHooked;           // 句柄未就绪时只挂一次 SourceInitialized
     WindowBackdrop _backdrop;       // 实际生效的材质（系统不支持时是 None）
@@ -606,6 +616,11 @@ public sealed class MainBoardWindow : Window
             NonClientFrameEdges = NonClientFrameEdges.None,
             UseAeroCaptionButtons = false,
         });
+
+        // ★ 必须放在 SetWindowChrome 之后：重设 chrome 会让 DWM 重新计算非客户区，
+        //   之前设好的圆角会被顶掉（表现就是"愣一下才出现 / 要重开才圆"）。
+        if (Interop.IsWindows11) Interop.ApplyRoundedCorners(this);
+        else Interop.UseSquareCorners(this);
     }
 
     /// <summary>云母底板上压的一层"雾"：既看得到材质，又保住文字对比度。</summary>

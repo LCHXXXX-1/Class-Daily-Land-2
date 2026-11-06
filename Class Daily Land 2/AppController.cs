@@ -85,6 +85,116 @@ public sealed class AppController
 
     readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
 
+    // ————— 状态演示：在**真实灵动岛**上按倍速跑一遍 —————
+    // 演示期间 Tick 的状态来源改成模拟时钟，其它（副岛、主窗、插件）照旧跟随，
+    // 这样用户看到的就是岛上真实的表现，而不是对话框里另画的预览。
+    DispatcherTimer? _demoTimer;
+    Func<DateTime, ScheduleStatus>? _demoProvider;
+    IslandInput? _demoInput;              // 最近一次真实 tick 的输入模板（演示帧复用）
+    DateTime _demoStart;
+    double _demoTotalSim;
+    double _demoSpeed = 60;
+    double _demoRealBase;                 // 暂停前累计的真实秒
+    DateTime _demoResumeAt = DateTime.Now;
+
+    /// <summary>是否正在演示。</summary>
+    public bool DemoRunning => _demoProvider is not null;
+
+    /// <summary>演示当前的模拟时刻（真实时间轴 + 倍速）。</summary>
+    public DateTime DemoClock =>
+        _demoStart.AddSeconds((_demoRealBase + (DateTime.Now - _demoResumeAt).TotalSeconds) * _demoSpeed);
+
+    public double DemoTotalSim => _demoTotalSim;
+    public double DemoSpeed
+    {
+        get => _demoSpeed;
+        set
+        {
+            if (value <= 0 || Math.Abs(value - _demoSpeed) < 0.001) return;
+            // 换速度以"当前进度"为新起点，避免时间轴跳一段
+            _demoRealBase += (DateTime.Now - _demoResumeAt).TotalSeconds;
+            _demoResumeAt = DateTime.Now;
+            _demoSpeed = value;
+        }
+    }
+
+    /// <summary>在真实灵动岛上开始演示。</summary>
+    public void StartDemo(Func<DateTime, ScheduleStatus> provider, DateTime start, double totalSimSeconds, double speed)
+    {
+        StopDemo();
+        _demoProvider = provider;
+        _demoStart = start;
+        _demoTotalSim = Math.Max(1, totalSimSeconds);
+        _demoSpeed = speed <= 0 ? 60 : speed;
+        _demoRealBase = 0;
+        _demoResumeAt = DateTime.Now;
+
+        if (_demoTimer is null)
+        {
+            _demoTimer = new DispatcherTimer(DispatcherPriority.Render)
+            {
+                Interval = TimeSpan.FromMilliseconds(33),
+            };
+            _demoTimer.Tick += (_, _) => DemoTick();   // 只订阅一次
+        }
+        if (!_demoTimer.IsEnabled) _demoTimer.Start();
+
+        Tick();          // 立刻推一帧，岛马上切到演示状态
+        Log?.Info($"[演示] 开始：{start:HH:mm:ss} 起，共 {totalSimSeconds:0} 秒模拟时长，{_demoSpeed:0}×");
+    }
+
+    public void PauseDemo()
+    {
+        if (_demoProvider is null) return;
+        _demoRealBase += (DateTime.Now - _demoResumeAt).TotalSeconds;
+        _demoTimer?.Stop();
+    }
+
+    public void ResumeDemo()
+    {
+        if (_demoProvider is null) return;
+        _demoResumeAt = DateTime.Now;
+        _demoTimer?.Start();
+    }
+
+    public void StopDemo()
+    {
+        _demoTimer?.Stop();
+        if (_demoProvider is null) return;
+        _demoProvider = null;
+        _demoRealBase = 0;
+        Log?.Info("[演示] 结束，灵动岛恢复真实课表状态");
+        Tick();          // 立刻回到真实状态
+    }
+
+    /// <summary>演示帧：只更新灵动岛（不动 Duty / 音频 / 插件，避免每 33ms 跑整套逻辑）。</summary>
+    void DemoTick()
+    {
+        try
+        {
+            if (_demoProvider is null || Island is null) return;
+
+            var clock = DemoClock;
+            var status = _demoProvider(clock);
+            var text = ScheduleText.WithPlugin(ScheduleText.Core(status), GetPluginIslandText());
+
+            Island.SetText(text, animate: true);
+            if (_demoInput is not null)
+                // 演示期间强制可见：不因为"前台是全屏窗口"就被藏掉
+                Island.Update(_demoInput with { Status = status, IslandText = text, Visible = true, HideOnFullscreen = false });
+            else
+                Tick();
+
+            var played = (_demoRealBase + (DateTime.Now - _demoResumeAt).TotalSeconds) * _demoSpeed;
+            if (played >= _demoTotalSim) StopDemo();
+        }
+        catch (Exception ex)
+        {
+            Log?.Warn("[演示] 帧处理失败：" + ex.Message);
+            StopDemo();
+        }
+    }
+
     ScheduleStatus _last = ScheduleStatus.Empty;
     bool _firstTick = true;
     bool _alertInFlight;
@@ -406,9 +516,7 @@ public sealed class AppController
         // 顺序很重要：先把报告写盘、报信进程拉起来，再结束自己 —— 反了窗口就跟主程序一起没了
         Views.Dialogs.ErrorReportWindow.Report(
             "主窗口被强制结束",
-            "主窗口进程已被强制结束，程序没有走正常关闭流程。" +
-            "本窗口由独立的报信进程显示，不受主程序影响；" +
-            "下次启动程序时会补报一次「上次异常退出」，也可以直接在下方重启或重装。",
+            "主窗口进程已被强制结束，程序没有走正常关闭流程。",
             null, "系统 · 进程看门狗", ErrorCodes.ProcessTerminated);
 
         // 给报信进程 1.5 秒拉起窗口，然后结束自己（Exit 不走 WPF 正常关闭 → 标记保留）
@@ -554,7 +662,8 @@ public sealed class AppController
         Duty.RollOverIfNeeded(DateTime.Today);
 
         var now = DateTime.Now;
-        var status = Schedule.Compute(now);
+        // 演示期间状态来自模拟时钟；平时就是真实课表
+        var status = _demoProvider is not null ? _demoProvider(DemoClock) : Schedule.Compute(now);
         CurrentStatus = status;
 
         // 内置集成每秒跑一次：媒体决定片段，灾害预警决定是否红条接管
@@ -568,7 +677,7 @@ public sealed class AppController
         var text = emergency?.Text
                    ?? ScheduleText.WithPlugin(ScheduleText.Core(status), GetPluginIslandText());
         Island.SetText(text, animate: emergency is null);
-        Island.Update(new IslandInput(
+        var islandInput = new IslandInput(
             status,
             text,
             ExtraWidth: GetPluginExtraWidth(),
@@ -579,7 +688,10 @@ public sealed class AppController
             Visible: showIsland,
             Badge: GetPluginIslandBadge(),
             Media: media,
-            Emergency: emergency));
+            Emergency: emergency);
+
+        _demoInput = islandInput;      // 演示帧复用这份模板，只换状态与文案
+        Island.Update(islandInput);
 
         SubIsland.Tick(Island.RightEdgeDip, Island.TopDip, status);
         // 主窗的插件区块/徽标可能是动态的（倒计时、天气…），每秒给一次机会；

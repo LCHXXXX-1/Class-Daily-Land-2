@@ -103,6 +103,15 @@ public partial class SettingsWindow : Window
         ApplyTouchOptimize();
 
         SourceInitialized += (_, _) => ApplyWindowChrome();
+
+        // 和主窗一样：SourceInitialized 时 DWM 还没稳定，云母/圆角偶尔不会立刻生效
+        // （表现就是"要点一下 / 重开才出来"）。首帧渲染后再补挂一次（幂等）。
+        ContentRendered += (_, _) =>
+        {
+            if (_chromeRendered) return;
+            _chromeRendered = true;
+            ApplyWindowChrome();
+        };
         // 主窗是贴桌面边缘的挂件，和设置窗口都不置顶时很容易压在上面（会露出半截作业列表）
         ContentRendered += (_, _) => Interop.RaiseToFront(this);
         Loaded += (_, _) => Select(_pendingPage ?? PageHome, animate: false);
@@ -193,11 +202,14 @@ public partial class SettingsWindow : Window
     /// 内容区是云母 + 一层薄白）。
     /// 云母没生效（Win10 / 关掉开关）就退回原来的不透明底色，保证可读。
     /// </summary>
+    bool _chromeRendered;
+
     void ApplyWindowChrome()
     {
         // Win11 → 云母（Mica）；Win10 1803+ → 亚克力（Acrylic）；更老/关掉 → 不透明。
         // 圆角不在这里做：Win11 由 DWM 自己加，Win10 原生就是直角。
         var kind = Interop.ApplyBackdrop(this, Vm.SettingsMica, ThemeService.IsDark);
+        Core.Logger.Current?.Info($"[设置材质] 开关={Vm.SettingsMica} 实际={kind} 深色={ThemeService.IsDark}");
 
         if (kind == WindowBackdrop.None)
         {
