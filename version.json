@@ -1,12 +1,12 @@
 {
   "stable": {
-    "version": "1.7.24",
+    "version": "1.7.25",
     "release_date": "2026-11-07",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.24.zip",
-    "sha256": "1b72c30dd021c05056a1ca7524c55afc56667bf5a1998b1f709f16713b4df959",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.25.zip",
+    "sha256": "c16a07b13458de6f9e732e92603ee0d6ff9ba93eeeae463ae32a2e605a6ae0ca",
     "changelog": [
-      "课表编辑：周末课表去掉「上午 / 下午分界点」，改成一整天的完整节次表（老配置会自动合并成完整表）",
-      "课表编辑：周末新增一节默认从 08:00 起排，节次名统一为「第 n 节」"
+      "修复：「课表与提醒」页里「课表编辑」条目下方露出一行 XAML 源码（上一版删旧条目残留）",
+      "修复：鼠标停在课表表格上滚轮无法滚动页面（表格不再吞掉滚轮，滚到头会交给页面继续滚）"
     ],
     "is_mandatory": false
   },
