@@ -1,12 +1,14 @@
 {
   "stable": {
-    "version": "1.7.19",
+    "version": "1.7.20",
     "release_date": "2026-11-06",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.19.zip",
-    "sha256": "b48da4f354692be032407a938f60289fda284241e46644f743784075d1fa2c72",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.20.zip",
+    "sha256": "63a525ddf1b526e98e8ea76071eef637d0d6f695b8a54cae13ed3fff8c4006d9",
     "changelog": [
-      "修复：恢复「班级日常」在 Windows 11 上的系统圆角（上一版误改成了直角）；非 Win11 仍整体回退纯色",
-      "改进：状态测试在「今天没课 / 今日课程已结束」时也能演示——自动走模拟课堂（倒计时→上课→下课）"
+      "修复：主窗口/设置窗口的圆角与云母不再「愣一下 / 要重开才出现」——首帧渲染后补挂一次",
+      "修复：设置中心子页面的云母重新可见（浅色主题卡片遮罩 70%→35%）",
+      "改进：状态测试的演示改为在**真实灵动岛**上播放（倍速/暂停照旧），今天没课时自动走模拟课堂",
+      "调整：ESY4002 提示精简为一句「主窗口进程已被强制结束，程序没有走正常关闭流程。」"
     ],
     "is_mandatory": false
   },
