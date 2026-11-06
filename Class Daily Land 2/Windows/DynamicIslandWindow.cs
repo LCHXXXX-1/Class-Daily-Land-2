@@ -68,7 +68,9 @@ public sealed partial class DynamicIslandWindow : Window
     const double MarqueeRestSec = 0.9; // 每轮回起点前停 0.9s
     const double SheenCycleMs = 1400;
     const double BarInset = 1;
-    const double TextSwitchMs = 140;
+    /// <summary>文案切换时长：倒计时每秒变一次，太快（140ms）看着就是"硬跳"，
+    /// 放慢到 300ms 并配合先快后慢的缓动，才像数字在往上滚。</summary>
+    const double TextSwitchMs = 300;
     const double CountdownFillMs = 180;
     const double BadgeGap = 10;        // 徽标与文案之间的最小间距
     const double BadgeFontSize = 11;
@@ -323,9 +325,7 @@ public sealed partial class DynamicIslandWindow : Window
     // ————————————————————— 状态机 —————————————————————
     void SetState(IslandState next)
     {
-        // 隐藏时没必要继续跑逐帧动画；其它状态确保它开着
-        if (next == IslandState.Hidden) _smooth?.Stop();
-        else EnsureSmoothTimer();
+        EnsureSmoothTimer();   // 幂等：逐帧回调只挂一次（Hidden 时 SmoothTick 自己早退）
 
         if (next == _state) { AnimateTo(GeometryFor(_state)); return; }
         _state = next;
@@ -567,23 +567,32 @@ public sealed partial class DynamicIslandWindow : Window
         var h = ActualHeight;
         var dur = Anim.Span((int)TextSwitchMs);
 
+        // 位移与淡出都用「先快后慢」（EaseOut）的样条：起手迅速离位、末尾缓缓归位，
+        // 比线性顺滑得多 —— 倒计时每秒触发一次，曲线不对就会显得一跳一跳。
+        var slideOut = new KeySpline(0.16, 0.84, 0.28, 1);
+        var slideIn = new KeySpline(0.12, 0.82, 0.24, 1);
+
         TextPrevShift.BeginAnimation(TranslateTransform.YProperty,
             new DoubleAnimation(0, -h, dur) { EasingFunction = Anim.Ease() });
+
         var prevFade = new DoubleAnimationUsingKeyFrames();
-        prevFade.KeyFrames.Add(new LinearDoubleKeyFrame(1, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-        prevFade.KeyFrames.Add(new LinearDoubleKeyFrame(0,
-            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(TextSwitchMs * 0.667))));
+        prevFade.KeyFrames.Add(new SplineDoubleKeyFrame(1,
+            KeyTime.FromTimeSpan(TimeSpan.Zero), slideOut));
+        prevFade.KeyFrames.Add(new SplineDoubleKeyFrame(0,
+            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(TextSwitchMs * 0.75)), slideOut));
+        prevFade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(dur.TimeSpan)));
         TextPrev.BeginAnimation(OpacityProperty, prevFade);
 
         MarqueeShift.BeginAnimation(TranslateTransform.YProperty,
             new DoubleAnimation(h, 0, dur) { EasingFunction = Anim.Ease() });
         MarqueeShift.BeginAnimation(TranslateTransform.XProperty, null);
+
         var curFade = new DoubleAnimationUsingKeyFrames();
         curFade.KeyFrames.Add(new LinearDoubleKeyFrame(0, KeyTime.FromTimeSpan(TimeSpan.Zero)));
-        curFade.KeyFrames.Add(new LinearDoubleKeyFrame(0,
-            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(TextSwitchMs * 0.333))));
-        curFade.KeyFrames.Add(new LinearDoubleKeyFrame(1,
-            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(TextSwitchMs))));
+        curFade.KeyFrames.Add(new SplineDoubleKeyFrame(0,
+            KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(TextSwitchMs * 0.28)), slideIn));
+        curFade.KeyFrames.Add(new SplineDoubleKeyFrame(1,
+            KeyTime.FromTimeSpan(dur.TimeSpan), slideIn));
         TextCur.BeginAnimation(OpacityProperty, curFade);
     }
 
@@ -781,7 +790,7 @@ public sealed partial class DynamicIslandWindow : Window
     // ————————————————————— 平滑进度（约 30fps） —————————————————————
     // 数据每秒才来一次；圆环和蓝条若只在 tick 时改值，就是每秒跳一格。
     // 这里保留「快照 + 时刻」，由定时器按流逝时间插值，视觉上连续。
-    DispatcherTimer? _smooth;
+    bool _frameHooked;
     DateTime _ringStampUtc = DateTime.UtcNow;
     double _ringBaseRatio;
     double _ringTotalSec = 60;
@@ -791,22 +800,21 @@ public sealed partial class DynamicIslandWindow : Window
     DateTime _barFillDoneUtc;
     double _barLastW = -1;
 
+    /// <summary>
+    /// 挂上逐帧回调。
+    ///
+    /// 之前用的是 33ms 的 DispatcherTimer，实测有两个问题：
+    /// ① 状态切到 Hidden 就被停表，回来后只补一帧 —— 正好表现成"一秒跳一格"；
+    /// ② 定时器和渲染节拍不同步，偶尔会被 UI 线程挤掉几帧。
+    /// 换成 CompositionTarget.Rendering：跟着 WPF 的每一帧走，画面要多顺有多顺；
+    /// 没有可见内容时（比例没变化、不产生无效化）WPF 自己就不再回调，等于自动省电。
+    /// </summary>
     void EnsureSmoothTimer()
     {
-        if (_smooth is not null)
-        {
-            if (!_smooth.IsEnabled) _smooth.Start();
-            return;
-        }
-
-        _smooth = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = TimeSpan.FromMilliseconds(33),   // ≈30fps：够顺滑，也不费电
-        };
-        _smooth.Tick += (_, _) => SmoothTick();
-        _smooth.Start();
+        if (_frameHooked) return;
+        _frameHooked = true;
+        CompositionTarget.Rendering += (_, _) => SmoothTick();
     }
-
     void SmoothTick()
     {
         if (_state is IslandState.Hidden or IslandState.Mini or IslandState.Alert) return;

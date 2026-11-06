@@ -367,30 +367,75 @@ internal static class Interop
     /// Win10 的亚克力/模糊背板（SetWindowCompositionAttribute，未公开但稳定）。
     /// 1803+ 用 ACRYLIC，更早只支持普通 BLUR。
     /// </summary>
-    static bool ApplyAcrylic(IntPtr hwnd, bool dark)
+    static bool ApplyAcrylic(IntPtr hwnd, bool dark, byte alpha = 0xC8)
     {
         // GradientColor 是 AABBGGRR；深色用深灰，浅色用近白
-        var tint = unchecked((int)(dark ? 0xC8202020u : 0xC8F5F5F5u));
+        var tint = unchecked((int)(((uint)alpha << 24) | (dark ? 0x202020u : 0xF5F5F5u)));
         foreach (var state in new[] { ACCENT_ENABLE_ACRYLICBLURBEHIND, ACCENT_ENABLE_BLURBEHIND })
         {
-            var policy = new AccentPolicy { AccentState = state, AccentFlags = 2, GradientColor = tint };
-            var size = Marshal.SizeOf<AccentPolicy>();
-            var buffer = Marshal.AllocHGlobal(size);
-            try
-            {
-                Marshal.StructureToPtr(policy, buffer, false);
-                var data = new WindowCompositionAttributeData
-                {
-                    Attribute = WCA_ACCENT_POLICY,
-                    Data = buffer,
-                    SizeOfData = size,
-                };
-                if (SetWindowCompositionAttribute(hwnd, ref data) != 0) return true;
-            }
-            catch { /* 换下一种 */ }
-            finally { Marshal.FreeHGlobal(buffer); }
+            if (SetAccent(hwnd, state, tint)) return true;
         }
         return false;
+    }
+
+    /// <summary>设置/清除 accent policy 的底层调用（state=0 即关闭）。</summary>
+    static bool SetAccent(IntPtr hwnd, int state, int tint)
+    {
+        var policy = new AccentPolicy { AccentState = state, AccentFlags = 2, GradientColor = tint };
+        var size = Marshal.SizeOf<AccentPolicy>();
+        var buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            Marshal.StructureToPtr(policy, buffer, false);
+            var data = new WindowCompositionAttributeData
+            {
+                Attribute = WCA_ACCENT_POLICY,
+                Data = buffer,
+                SizeOfData = size,
+            };
+            return SetWindowCompositionAttribute(hwnd, ref data) != 0;
+        }
+        catch { return false; }
+        finally { Marshal.FreeHGlobal(buffer); }
+    }
+
+    /// <summary>
+    /// 实时模糊（亚克力）：给「班级日常」这类贴壁纸的挂件用。
+    ///
+    /// 和 <see cref="ApplyBackdrop"/> 的区别：Mica 是**壁纸采样**，透出来基本是一层静态底色，
+    /// 背后有窗口在动也不会跟着糊；亚克力是**逐帧模糊**，才是肉眼能看出来的"毛玻璃"。
+    /// Win11 上两者互斥，所以先把系统背板置为 NONE 再挂 accent policy。
+    /// </summary>
+    public static WindowBackdrop ApplyBlur(Window window, bool dark, byte tintAlpha = 0xB4)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return WindowBackdrop.None;
+
+        if (!TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, dark ? 1 : 0))
+            TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, dark ? 1 : 0);
+
+        if (IsWindows11)
+        {
+            TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
+            TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, 1);   // DWMSBT_NONE：先让位给亚克力
+        }
+
+        try
+        {
+            var margins = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+            DwmExtendFrameIntoClientArea(hwnd, ref margins);
+        }
+        catch { /* 老系统没有也不影响 */ }
+
+        return ApplyAcrylic(hwnd, dark, tintAlpha) ? WindowBackdrop.Acrylic : WindowBackdrop.None;
+    }
+
+    /// <summary>关掉亚克力（切回纯色时调用），否则窗口会一直保持模糊。</summary>
+    public static void ClearBlur(Window window)
+    {
+        var hwnd = new WindowInteropHelper(window).Handle;
+        if (hwnd == IntPtr.Zero) return;
+        SetAccent(hwnd, 0 /* ACCENT_DISABLED */, 0);
     }
 
     /// <summary>

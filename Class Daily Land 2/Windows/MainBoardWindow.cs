@@ -555,10 +555,19 @@ public sealed class MainBoardWindow : Window
             return;
         }
 
-        // Win11 → 云母；Win10 1803+ → 亚克力；更老/关掉开关 → None（不透明底色）
-        _backdrop = Interop.ApplyBackdrop(this, _material, ThemeService.IsDark);
+        // 主窗贴壁纸，要的是**实时模糊**（亚克力）；Mica 只是壁纸采样，几乎看不出"糊"。
+        // 关掉开关时把 accent policy 撤掉，退回不透明底色。
+        if (_material)
+        {
+            _backdrop = Interop.ApplyBlur(this, ThemeService.IsDark, 0xA0);
+        }
+        else
+        {
+            Interop.ClearBlur(this);
+            _backdrop = Interop.ApplyBackdrop(this, false, ThemeService.IsDark);
+        }
         ApplyBackdropPaint();
-        Logger.Current?.Info($"[云母] 开关={(_material ? "开" : "关")} 实际={_backdrop} 系统Build={Environment.OSVersion.Version.Build}");
+        Logger.Current?.Info($"[材质] 开关={(_material ? "开" : "关")} 实际={_backdrop} 系统Build={Environment.OSVersion.Version.Build}");
     }
 
     void ApplyBackdropPaint()
@@ -599,8 +608,9 @@ public sealed class MainBoardWindow : Window
     {
         var c = Palette.WindowBackground is SolidColorBrush scb ? scb.Color : Colors.Black;
 
-        // 云母很淡，压 61% 主题色：材质仍看得见，文字对比度也稳；整体不透明度一起乘进来
-        var alpha = (byte)Math.Clamp(0x9C * _opacity, 0, 255);
+        // 亚克力自身已带一层浓度（ApplyBlur 的 tintAlpha），这里只压薄薄一层主题色
+        // 把文字对比度托住；再厚就看不见模糊了。
+        var alpha = (byte)Math.Clamp(0x3D * _opacity, 0, 255);
         return new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
     }
 
