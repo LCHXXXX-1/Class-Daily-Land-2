@@ -10,7 +10,7 @@ namespace DeveloperTool;
 /// </summary>
 public static class VersionInfo
 {
-    public const string Version = "1.0.3";
+    public const string Version = "1.0.4";
 
     /// <summary>主更新源（version.json）。</summary>
     public const string VersionUrl =

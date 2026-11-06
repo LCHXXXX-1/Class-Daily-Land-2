@@ -187,35 +187,57 @@ internal static class BrowserLogin
         }
     }
 
-        /// <summary>
+    /// <summary>
     /// 回调页：用户在浏览器里看到的结论页。
-    /// 成功时给出「可以直接关闭」的明确提示，并尝试自动关闭标签页（浏览器通常会拦，
-    /// 那就把提示改成手动关闭方式）；失败时说明原因并提示回到 IDE 重试。
+    /// 成功时显示「登录成功」+ 图标外圈的圆形倒计时（纯 CSS 动画，逐帧平滑），
+    /// 环走完再柔和淡出并尝试关闭标签页；被浏览器拦下时恢复页面并提示手动关闭。
     /// </summary>
     static string ResultPage(string title, string message, bool ok)
     {
         var accent = ok ? "#2ED573" : "#FF6B6B";
         var accentSoft = ok ? "rgba(46,213,115,.14)" : "rgba(255,107,107,.14)";
 
-        // 成功：描边勾；失败：感叹号
+        // 成功：描边勾（配 pathLength=100，描边进度才准确）；失败：感叹号
         var badge = ok
-            ? "<svg viewBox=\"0 0 48 48\" aria-hidden=\"true\"><path d=\"M13 25.5l7.5 7.5L35 16\"/></svg>"
+            ? "<svg class=\"check\" viewBox=\"0 0 48 48\" aria-hidden=\"true\"><path pathLength=\"100\" d=\"M13 25.5l7.5 7.5L35 16\"/></svg>"
             : "<span class=\"mark\">!</span>";
 
-        var autoClose = ok
-            ? "      // 浏览器一般不允许脚本关闭\"用户手动打开\"的标签页：先试一次，\n" +
-              "      // 关不掉就把提示换成手动关闭方式，免得用户以为页面卡住了。\n" +
-              "      setTimeout(function () {\n" +
-              "        closeTab();\n" +
-              "        setTimeout(function () {\n" +
-              "          if (!document.hidden) {\n" +
-              "            hint.textContent = '浏览器阻止了自动关闭：按 Ctrl+W，或点击上面的按钮即可。';\n" +
-              "          }\n" +
-              "        }, 600);\n" +
-              "      }, 2200);"
-            : "      // 失败时不自动关闭：用户可能要看清原因。";
+        // 倒计时环只出现在成功页
+        var ring = ok
+            ? "<svg class=\"ring\" viewBox=\"0 0 72 72\" aria-hidden=\"true\">" +
+              "<circle cx=\"36\" cy=\"36\" r=\"34\" pathLength=\"100\" /></svg>"
+            : "";
 
-        var hint = ok ? "正在尝试自动关闭此页面…" : "可以关闭此页面，回到 IDE 重新登录。";
+        var hint = ok ? "3 秒后自动关闭此页面…" : "可以关闭此页面，回到 IDE 重新登录。";
+
+        var autoClose = ok
+            ? """
+      // —— 倒计时：环走完 = 时间到（CSS 动画与视觉天然同步，不做逐帧算位） ——
+      var ringCircle = document.querySelector('.ring circle');
+
+      // 只在"整秒"变化时改文字：每帧写 DOM 会引发布局抖动，看起来就"卡"
+      var totalSec = Math.round(DURATION / 1000);
+      var startedAt = performance.now();
+      var lastSecond = -1;
+      function tick() {
+        if (closing) return;
+        var left = Math.max(0, DURATION - (performance.now() - startedAt));
+        var sec = Math.min(totalSec, Math.ceil(left / 1000));
+        if (sec !== lastSecond) {
+          lastSecond = sec;
+          hintText.textContent = sec > 0 ? sec + ' 秒后自动关闭此页面…' : '正在关闭此页面…';
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      // 主轴：环画完就关；兜底：万一动画事件没来（标签页被节流）也照关
+      if (ringCircle) ringCircle.addEventListener('animationend', beginClose, { once: true });
+      var fallback = setTimeout(beginClose, DURATION + 600);
+"""
+            : """
+      // 失败时不自动关闭：用户可能要看清原因。
+""";
 
         var html = """
 <!doctype html>
@@ -268,27 +290,51 @@ internal static class BrowserLogin
     width: min(440px, 100%); padding: 40px 34px 26px; border-radius: 22px;
     background: var(--card); border: 1px solid var(--border);
     box-shadow: var(--shadow); text-align: center;
-    animation: rise .36s cubic-bezier(.2,.8,.3,1) both;
+    will-change: opacity;
+    /* 关闭前用这个过渡柔和淡出，而不是让页面"啪"地消失 */
+    transition: opacity .26s ease;
+    animation: rise .5s cubic-bezier(.16,1,.3,1) both;
   }
+  .card.closing { opacity: 0; }
   @keyframes rise {
-    from { opacity: 0; transform: translateY(12px) scale(.985); }
+    from { opacity: 0; transform: translateY(14px) scale(.982); }
     to   { opacity: 1; transform: none; }
   }
+  .badge-wrap { position: relative; width: 66px; height: 66px; margin: 0 auto 22px; }
   .badge {
-    width: 66px; height: 66px; margin: 0 auto 22px; border-radius: 21px;
+    position: absolute; inset: 0; border-radius: 21px;
     display: grid; place-items: center;
     background: var(--accent-soft);
     border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+    animation: pop .55s .06s cubic-bezier(.34,1.42,.48,1) both;
   }
-  .badge svg {
+  @keyframes pop {
+    from { transform: scale(.72); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+  /* 倒计时环：绕在图标外圈，从满到空匀速走完 */
+  .ring {
+    position: absolute; inset: -5px; width: 76px; height: 76px;
+    transform: rotate(-90deg); transform-origin: 50% 50%;
+    pointer-events: none;
+    transition: opacity .2s ease;
+  }
+  .ring circle {
+    fill: none; stroke: var(--accent); stroke-width: 2.6;
+    stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0;
+    opacity: .8;
+    animation: countdown {{DURATION_S}}s linear forwards;
+  }
+  @keyframes countdown { to { stroke-dashoffset: 100; } }
+  .check {
     width: 36px; height: 36px; fill: none;
     stroke: var(--accent); stroke-width: 4;
     stroke-linecap: round; stroke-linejoin: round;
-    stroke-dasharray: 46; stroke-dashoffset: 46;
-    animation: draw .5s .18s cubic-bezier(.4,.6,.25,1) forwards;
+    stroke-dasharray: 100; stroke-dashoffset: 100;
+    animation: draw .42s .2s cubic-bezier(.62,0,.36,1) forwards;
   }
   @keyframes draw { to { stroke-dashoffset: 0; } }
-  .badge .mark { font-size: 31px; font-weight: 800; color: var(--accent); line-height: 1; }
+  .mark { font-size: 31px; font-weight: 800; color: var(--accent); line-height: 1; }
   h1 { margin: 0 0 10px; font-size: 20px; font-weight: 650; letter-spacing: .2px; }
   p { margin: 0; font-size: 13.5px; line-height: 1.75; color: var(--muted); }
   .actions { margin-top: 26px; display: flex; gap: 10px; justify-content: center; }
@@ -300,34 +346,63 @@ internal static class BrowserLogin
   }
   button:hover { background: var(--btn-hover); }
   button:active { transform: translateY(1px); }
-  .hint { margin-top: 14px; min-height: 17px; font-size: 11.5px; color: var(--muted); opacity: .85; }
+  .hint {
+    margin-top: 14px; min-height: 17px; font-size: 11.5px;
+    color: var(--muted); opacity: .85;
+    font-variant-numeric: tabular-nums;   /* 秒数变化时宽度不跳 */
+  }
   .brand {
     margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border);
     font-size: 10.5px; letter-spacing: 1.1px; text-transform: uppercase;
     color: var(--muted); opacity: .5;
   }
+  @media (prefers-reduced-motion: reduce) {
+    .card, .badge, .check, .ring circle { animation-duration: .01s; }
+  }
 </style>
 </head>
 <body>
-  <main class="card">
-    <div class="badge">{{BADGE}}</div>
+  <main class="card" id="card">
+    <div class="badge-wrap">
+      <div class="badge">{{BADGE}}</div>
+      {{RING}}
+    </div>
     <h1>{{TITLE}}</h1>
     <p>{{MESSAGE}}</p>
     <div class="actions"><button id="closeBtn" type="button">关闭此页面</button></div>
-    <div class="hint" id="hint">{{HINT}}</div>
+    <div class="hint"><span id="hintText">{{HINT}}</span></div>
     <div class="brand">Class Daily Land 2 · 插件市场</div>
   </main>
   <script>
   (function () {
-    var hint = document.getElementById('hint');
+    var card = document.getElementById('card');
+    var hintText = document.getElementById('hintText');
+    var DURATION = {{DURATION_MS}};
+    var closing = false;
 
-    function closeTab() {
+    function attemptClose() {
       try { window.open('', '_self'); } catch (e) {}
       try { window.close(); } catch (e) {}
     }
 
-    document.getElementById('closeBtn').addEventListener('click', closeTab);
+    // 关闭统一走这里：先淡出（视觉上有收束感），再真正关；
+    // 若浏览器拦下了（页面还活着），把页面恢复出来并提示手动关闭，
+    // 否则用户会看到一张全透明的空白页，以为卡死。
+    function beginClose() {
+      if (closing) return;
+      closing = true;
+      card.classList.add('closing');
+      setTimeout(attemptClose, 260);
+      setTimeout(function () {
+        if (document.hidden) return;
+        card.classList.remove('closing');
+        hintText.textContent = '浏览器阻止了自动关闭：按 Ctrl+W，或点击上面的按钮即可。';
+        var ring = document.querySelector('.ring');
+        if (ring) ring.style.opacity = '0';
+      }, 900);
+    }
 
+    document.getElementById('closeBtn').addEventListener('click', beginClose);
 {{AUTO_CLOSE}}
   })();
   </script>
@@ -339,9 +414,12 @@ internal static class BrowserLogin
             .Replace("{{ACCENT}}", accent)
             .Replace("{{ACCENT_SOFT}}", accentSoft)
             .Replace("{{BADGE}}", badge)
+            .Replace("{{RING}}", ring)
             .Replace("{{TITLE}}", System.Net.WebUtility.HtmlEncode(title))
             .Replace("{{MESSAGE}}", System.Net.WebUtility.HtmlEncode(message))
             .Replace("{{HINT}}", System.Net.WebUtility.HtmlEncode(hint))
+            .Replace("{{DURATION_S}}", "3.2")
+            .Replace("{{DURATION_MS}}", "3200")
             .Replace("{{AUTO_CLOSE}}", autoClose);
     }
 }

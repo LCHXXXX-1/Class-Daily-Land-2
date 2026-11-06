@@ -323,6 +323,10 @@ public sealed partial class DynamicIslandWindow : Window
     // ————————————————————— 状态机 —————————————————————
     void SetState(IslandState next)
     {
+        // 隐藏时没必要继续跑逐帧动画；其它状态确保它开着
+        if (next == IslandState.Hidden) _smooth?.Stop();
+        else EnsureSmoothTimer();
+
         if (next == _state) { AnimateTo(GeometryFor(_state)); return; }
         _state = next;
         ApplyBadge();                 // 状态变了徽标可见性也变，宽度必须在算几何之前定
@@ -636,13 +640,40 @@ public sealed partial class DynamicIslandWindow : Window
     /// <summary>进度弧：12 点方向顺时针，比例 0~1。用 Path + ArcSegment（原生元素）。</summary>
     void UpdateRing(ScheduleStatus status)
     {
-        var (brush, ratio) = RingSpec(status);
+        var (brush, ratio, total) = RingSpec(status);
         RingArc.Stroke = brush;
+
+        // 秒级 tick 只更新「基准快照」，真正的推进交给 SmoothTick 逐帧插值，
+        // 否则圆环每秒跳一格，看起来就是一卡一卡的。
+        _ringStampUtc = DateTime.UtcNow;
+        _ringBaseRatio = Math.Clamp(ratio, 0, 1);
+        _ringTotalSec = Math.Max(1, total);
+        RenderRing(_ringBaseRatio);
+    }
+
+    /// <summary>把圆环画到指定比例（平滑定时器每帧调用）。</summary>
+    void RenderRing(double ratio)
+    {
+        // 这些状态下圆环本来就让位（ApplyStateVisuals 已隐藏），别再抢回可见
+        if (_state is IslandState.Hidden or IslandState.Mini or IslandState.Alert) return;
+        if (_input?.Emergency is not null) return;
+
         ratio = Math.Clamp(ratio, 0, 1);
-        if (Math.Abs(ratio - _lastRatio) < 0.002) return;
+        if (Math.Abs(ratio - _lastRatio) < 0.0015) return;
         _lastRatio = ratio;
         RingArc.Visibility = ratio <= 0.001 ? Visibility.Collapsed : Visibility.Visible;
         RingArc.Data = ArcGeometry(ratio);
+    }
+
+    /// <summary>把倒计时蓝条画到指定比例（平滑定时器每帧调用）。</summary>
+    void RenderBar(double ratio)
+    {
+        var layerW = Math.Max(0, Math.Max(0, ActualWidth * Math.Clamp(ratio, 0, 1)) - BarInset);
+        if (Math.Abs(layerW - _barLastW) < 0.4) return;   // 亚像素抖动直接跳过
+        _barLastW = layerW;
+        CountdownLayer.BeginAnimation(WidthProperty, null);
+        CountdownLayer.Width = layerW;
+        Sheen.Width = Math.Max(40, layerW * 0.5);
     }
 
     Geometry ArcGeometry(double ratio)
@@ -664,26 +695,26 @@ public sealed partial class DynamicIslandWindow : Window
     }
 
     /// <summary>环颜色与比例：即将上课=蓝（剩余/窗口），上课中=绿（剩余/时长），其余=灰。</summary>
-    (Brush brush, double ratio) RingSpec(ScheduleStatus status)
+    (Brush brush, double ratio, double totalSec) RingSpec(ScheduleStatus status)
     {
         if (_state == IslandState.Countdown)
         {
             var input = _input;
-            if (input is null) return (RingUpcoming, 0);
+            if (input is null) return (RingUpcoming, 0, 1);
             var window = Math.Max(1, input.CountdownSec);
-            return (RingUpcoming, Math.Clamp((double)input.Status.UntilSec / window, 0, 1));
+            return (RingUpcoming, Math.Clamp((double)input.Status.UntilSec / window, 0, 1), window);
         }
         if (status.IsUpcoming)
         {
             var total = Math.Max(1, Math.Max(status.AdvanceSec, _countdownSec));
-            return (RingUpcoming, Math.Clamp((double)status.UntilSec / total, 0, 1));
+            return (RingUpcoming, Math.Clamp((double)status.UntilSec / total, 0, 1), total);
         }
         if (status.IsOngoing)
         {
             var total = Math.Max(1, status.DurationSec);
-            return (RingOngoing, Math.Clamp((double)status.RemainSec / total, 0, 1));
+            return (RingOngoing, Math.Clamp((double)status.RemainSec / total, 0, 1), total);
         }
-        return (RingIdle, 0);
+        return (RingIdle, 0, 1);
     }
 
     // ————————————————————— 倒计时 —————————————————————
@@ -709,29 +740,33 @@ public sealed partial class DynamicIslandWindow : Window
         CountdownLayer.Background = emergency is not null
             ? Frozen(emergency.BarColor)
             : ProgressFill;
-        var fillW = Math.Max(0, ActualWidth * ratio);
-        var layerW = Math.Max(0, fillW - BarInset);
+        // 同样只记「基准」：蓝条每秒跳一格会像卡住，逐帧推进交给 SmoothTick
+        _barStampUtc = DateTime.UtcNow;
+        _barBaseRatio = Math.Clamp(ratio, 0, 1);
+        _barTotalSec = Math.Max(1, input.CountdownSec);
+        _barLastW = -1;
+        var targetW = Math.Max(0, Math.Max(0, ActualWidth * _barBaseRatio) - BarInset);
 
         if (_fillPending)
         {
             // 第一次：从 0 长出到目标（OutCubic 180ms），流光等长完再扫
             _fillPending = false;
             CountdownLayer.BeginAnimation(WidthProperty,
-                Anim.Slide(layerW, (int)CountdownFillMs));
+                Anim.Slide(targetW, (int)CountdownFillMs));
+            _barFillDoneUtc = DateTime.UtcNow.AddMilliseconds(CountdownFillMs + 60);
         }
         else
         {
-            CountdownLayer.BeginAnimation(WidthProperty, null);
-            CountdownLayer.Width = layerW;
+            RenderBar(_barBaseRatio);
         }
-        Sheen.Width = Math.Max(40, layerW * 0.5);
+        Sheen.Width = Math.Max(40, targetW * 0.5);
         HeadGlow.Width = Math.Min(20.0, Math.Max(8.0, CountdownLayer.Height));
         HeadDot.Margin = new Thickness(0, 0, 7, 0);
 
         // 流光：从左外侧扫到右外侧，循环
         if (!_sheenOn)
         {
-            var anim = new DoubleAnimation(-Sheen.Width, layerW,
+            var anim = new DoubleAnimation(-Sheen.Width, targetW,
                 new Duration(TimeSpan.FromMilliseconds(SheenCycleMs)))
             {
                 RepeatBehavior = RepeatBehavior.Forever,
@@ -742,6 +777,55 @@ public sealed partial class DynamicIslandWindow : Window
     }
 
     bool _sheenOn;
+
+    // ————————————————————— 平滑进度（约 30fps） —————————————————————
+    // 数据每秒才来一次；圆环和蓝条若只在 tick 时改值，就是每秒跳一格。
+    // 这里保留「快照 + 时刻」，由定时器按流逝时间插值，视觉上连续。
+    DispatcherTimer? _smooth;
+    DateTime _ringStampUtc = DateTime.UtcNow;
+    double _ringBaseRatio;
+    double _ringTotalSec = 60;
+    DateTime _barStampUtc = DateTime.UtcNow;
+    double _barBaseRatio;
+    double _barTotalSec = 60;
+    DateTime _barFillDoneUtc;
+    double _barLastW = -1;
+
+    void EnsureSmoothTimer()
+    {
+        if (_smooth is not null)
+        {
+            if (!_smooth.IsEnabled) _smooth.Start();
+            return;
+        }
+
+        _smooth = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(33),   // ≈30fps：够顺滑，也不费电
+        };
+        _smooth.Tick += (_, _) => SmoothTick();
+        _smooth.Start();
+    }
+
+    void SmoothTick()
+    {
+        if (_state is IslandState.Hidden or IslandState.Mini or IslandState.Alert) return;
+
+        var now = DateTime.UtcNow;
+
+        if (_state == IslandState.Countdown)
+        {
+            // 蓝条：等"长出"动画结束后再接管，否则会把动画顶掉
+            if (now >= _barFillDoneUtc)
+                RenderBar(_barBaseRatio - (now - _barStampUtc).TotalSeconds / _barTotalSec);
+
+            if (_input?.Emergency is null)
+                RenderRing(_ringBaseRatio - (now - _ringStampUtc).TotalSeconds / _ringTotalSec);
+            return;
+        }
+
+        RenderRing(_ringBaseRatio - (now - _ringStampUtc).TotalSeconds / _ringTotalSec);
+    }
 
     // ————————————————————— 各状态可见性 —————————————————————
     void ApplyStateVisuals()

@@ -394,7 +394,9 @@ public sealed class MainBoardWindow : Window
     {
         _fontSize = Math.Clamp(s.Int("main_font_size"), 10, 34);
         _widthRatio = Math.Clamp(s.Int("main_width_ratio"), 10, 80) / 100.0;
-        Opacity = Math.Clamp(s.Int("main_opacity"), 30, 100) / 100.0;
+        _opacity = Math.Clamp(s.Int("main_opacity"), 30, 100) / 100.0;
+        _material = s.Bool("settings_mica");
+        Opacity = _opacity;
         _autoScroll = s.Bool("homework_auto_scroll");
         _scrollStep = s.Int("homework_scroll_step");
         _scrollPauseMs = s.Int("homework_scroll_pause_ms");
@@ -413,7 +415,8 @@ public sealed class MainBoardWindow : Window
     {
         _fontSize = Math.Clamp(s.Int("main_font_size"), 10, 34);
         _widthRatio = Math.Clamp(s.Int("main_width_ratio"), 10, 80) / 100.0;
-        Opacity = Math.Clamp(s.Int("main_opacity"), 30, 100) / 100.0;
+        _opacity = Math.Clamp(s.Int("main_opacity"), 30, 100) / 100.0;
+        ApplyBackdropPaint();
 
         ApplyFontScale(_fontSize);
     }
@@ -536,10 +539,75 @@ public sealed class MainBoardWindow : Window
     [DllImport("user32.dll")]
     static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
+    // ————————————————————— 云母 / 亚克力背板 —————————————————————
+    bool _material;                 // 设置里的「窗口材质」开关
+    bool _materialHooked;           // 句柄未就绪时只挂一次 SourceInitialized
+    WindowBackdrop _backdrop;       // 实际生效的材质（系统不支持时是 None）
+    double _opacity = 1;            // 用户设定的整体不透明度（云母态折进底板 alpha）
+
+    void ApplyMaterial()
+    {
+        if (new WindowInteropHelper(this).Handle == IntPtr.Zero)
+        {
+            if (_materialHooked) return;
+            _materialHooked = true;
+            SourceInitialized += (_, _) => ApplyMaterial();
+            return;
+        }
+
+        // Win11 → 云母；Win10 1803+ → 亚克力；更老/关掉开关 → None（不透明底色）
+        _backdrop = Interop.ApplyBackdrop(this, _material, ThemeService.IsDark);
+        ApplyBackdropPaint();
+        Logger.Current?.Info($"[云母] 开关={(_material ? "开" : "关")} 实际={_backdrop} 系统Build={Environment.OSVersion.Version.Build}");
+    }
+
+    void ApplyBackdropPaint()
+    {
+        var material = _backdrop != WindowBackdrop.None;
+
+        if (material)
+        {
+            // 云母：窗口自身必须透明，DWM 的背板才透得上来。
+            // ★ Opacity 不能小于 1 —— WPF 会把窗口变成分层窗口（WS_EX_LAYERED），
+            //   云母随即失效；所以自定义不透明度改成折进底板的 alpha。
+            Opacity = 1;
+            Background = Brushes.Transparent;
+            _root.Background = TintedBackdrop();
+        }
+        else
+        {
+            Opacity = _opacity;
+            Background = Palette.WindowBackground;
+            // 非云母：必须 Transparent（不能是 null）整块底板才能命中触摸
+            _root.Background = Brushes.Transparent;
+        }
+
+        // 玻璃帧：云母需要把边框扩到整个客户区；否则保持 0，免得 Win10 被 DWM 画出白边
+        WindowChrome.SetWindowChrome(this, new WindowChrome
+        {
+            CaptionHeight = 0,
+            ResizeBorderThickness = new Thickness(0),
+            GlassFrameThickness = material ? new Thickness(-1) : new Thickness(0),
+            CornerRadius = new CornerRadius(0),
+            NonClientFrameEdges = NonClientFrameEdges.None,
+            UseAeroCaptionButtons = false,
+        });
+    }
+
+    /// <summary>云母底板上压的一层"雾"：既看得到材质，又保住文字对比度。</summary>
+    Brush TintedBackdrop()
+    {
+        var c = Palette.WindowBackground is SolidColorBrush scb ? scb.Color : Colors.Black;
+
+        // 云母很淡，压 61% 主题色：材质仍看得见，文字对比度也稳；整体不透明度一起乘进来
+        var alpha = (byte)Math.Clamp(0x9C * _opacity, 0, 255);
+        return new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
+    }
+
     void ApplyTheme()
     {
-        // 原版主窗：整块 window_bg 底板 + 纯文字，无卡片、无描边
-        Background = Palette.WindowBackground;
+        // 原版主窗：整块 window_bg 底板 + 纯文字，无卡片、无描边。
+        // 底色不在这里直接给：开了云母窗口要透明，统一交给 ApplyBackdropPaint。
 
         // ★ 必须是 Transparent 而不是 null：null 背景的容器不参与命中测试，
         //   整块底板只有文字上能收到触摸/鼠标事件（长按菜单曾因此只在文字处出现）。
@@ -556,6 +624,9 @@ public sealed class MainBoardWindow : Window
         RefreshPluginContent();
         foreach (var tb in new[] { _title, _dutyLabel, _attendanceLabel, _homeworkEmpty })
             tb.TextWrapping = TextWrapping.Wrap;
+
+        // 主题一变（尤其深/浅切换），云母的暗色标记和底板"雾"都要重挂
+        ApplyMaterial();
     }
 
     /// <summary>
