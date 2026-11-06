@@ -1,14 +1,12 @@
 {
   "stable": {
-    "version": "1.7.18",
+    "version": "1.7.19",
     "release_date": "2026-11-06",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.18.zip",
-    "sha256": "32969452a3d7acd462bf96efe960487294c814d1af085788843ce18c3cf1b52d",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.19.zip",
+    "sha256": "b48da4f354692be032407a938f60289fda284241e46644f743784075d1fa2c72",
     "changelog": [
-      "修复：灵动岛进度条不再「闪一下跳一下」——数据每秒来一次时不再硬设宽度，改为逐帧平滑跟随",
-      "新增：状态测试支持按倍速完整演示「倒计时 → 上课 → 下课」，可暂停/重播，倍速 1×~120×",
-      "修复：正常关机/重启后再次启动不再误报「上次异常退出」（关机时清标记 + 开机 5 分钟内豁免）",
-      "修复：「班级日常」恢复直角（贴屏幕边缘不留缝），非 Windows 11 自动整体回退成纯色"
+      "修复：恢复「班级日常」在 Windows 11 上的系统圆角（上一版误改成了直角）；非 Win11 仍整体回退纯色",
+      "改进：状态测试在「今天没课 / 今日课程已结束」时也能演示——自动走模拟课堂（倒计时→上课→下课）"
     ],
     "is_mandatory": false
   },
