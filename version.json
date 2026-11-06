@@ -1,12 +1,15 @@
 {
   "stable": {
-    "version": "1.7.25",
+    "version": "1.7.29",
     "release_date": "2026-11-07",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.25.zip",
-    "sha256": "c16a07b13458de6f9e732e92603ee0d6ff9ba93eeeae463ae32a2e605a6ae0ca",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.29.zip",
+    "sha256": "02937d0b5facc5c1628b746fc3afcd51a8decbed783111bd775d0349a251fe09",
     "changelog": [
-      "修复：「课表与提醒」页里「课表编辑」条目下方露出一行 XAML 源码（上一版删旧条目残留）",
-      "修复：鼠标停在课表表格上滚轮无法滚动页面（表格不再吞掉滚轮，滚到头会交给页面继续滚）"
+      "新增：配色主题系统——个性化里 7 套配色（蓝/紫/青/绿/橙/粉/灰），按钮、开关、选中态即时换色",
+      "新增：背景可自定义——设置中心支持 云母取色 / 纯色 / 图片 三种背景",
+      "新增：「班级日常」窗口支持整窗纯色或图片背景，深色底会自动把文字换成浅色",
+      "新增：关于页「支持项目 → 给项目点个 Star」，一键打开 GitHub 仓库",
+      "修复：设置项说明文字被居中导致的莫名缩进"
     ],
     "is_mandatory": false
   },
