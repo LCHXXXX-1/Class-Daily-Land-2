@@ -1,13 +1,12 @@
 {
   "stable": {
-    "version": "1.7.23",
+    "version": "1.7.24",
     "release_date": "2026-11-07",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.23.zip",
-    "sha256": "284fdc448845ec83dd692d865627a64812515ff522ffa1f579f15c19f0b3d276",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.24.zip",
+    "sha256": "1b72c30dd021c05056a1ca7524c55afc56667bf5a1998b1f709f16713b4df959",
     "changelog": [
-      "课表编辑重做：上方只显示周一到周五，顶部可开启「自定义周六 / 周日作息」，开启后周末课表显示在下方",
-      "课表编辑入口移到「课表与提醒」页第一位（原左侧独立导航项已移除）",
-      "主窗口右键菜单「周末作息」改名为「编辑课表…」，直接打开课表编辑"
+      "课表编辑：周末课表去掉「上午 / 下午分界点」，改成一整天的完整节次表（老配置会自动合并成完整表）",
+      "课表编辑：周末新增一节默认从 08:00 起排，节次名统一为「第 n 节」"
     ],
     "is_mandatory": false
   },
