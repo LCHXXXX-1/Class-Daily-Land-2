@@ -1,12 +1,13 @@
 {
   "stable": {
-    "version": "1.7.22",
-    "release_date": "2026-11-06",
-    "download_url": "https://github.com/LCHXXXX-1/Class-Daily-Land-2/releases/download/Version/Class-Daily-Land-2-1.7.22.zip",
-    "sha256": "e84881c8e8f6324ac4b24a042ec5ba52e15eccd7dc5c815916d16cc72c60087b",
+    "version": "1.7.23",
+    "release_date": "2026-11-07",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.23.zip",
+    "sha256": "284fdc448845ec83dd692d865627a64812515ff522ffa1f579f15c19f0b3d276",
     "changelog": [
-      "状态测试：底部只保留「关闭」，去掉「保存为当前参数」与「试算此刻」",
-      "状态测试：新增「上课时长」（5~120 分钟），演示里一节课上多久可调（模拟课堂生效）"
+      "课表编辑重做：上方只显示周一到周五，顶部可开启「自定义周六 / 周日作息」，开启后周末课表显示在下方",
+      "课表编辑入口移到「课表与提醒」页第一位（原左侧独立导航项已移除）",
+      "主窗口右键菜单「周末作息」改名为「编辑课表…」，直接打开课表编辑"
     ],
     "is_mandatory": false
   },
