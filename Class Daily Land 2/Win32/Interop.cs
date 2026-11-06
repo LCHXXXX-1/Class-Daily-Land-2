@@ -418,7 +418,7 @@ internal static class Interop
         // 老系统没有可靠的亚克力：直接判失败，让调用方整套回退成纯色（宁可朴素也别半透明坏掉）
         if (!IsWindows11) return WindowBackdrop.None;
 
-        TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_DONOTROUND);
+        TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
         TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, 1);   // DWMSBT_NONE：先让位给亚克力
 
         try

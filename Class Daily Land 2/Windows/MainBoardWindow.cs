@@ -566,8 +566,10 @@ public sealed class MainBoardWindow : Window
             Interop.ClearBlur(this);
             _backdrop = Interop.ApplyBackdrop(this, false, ThemeService.IsDark);
         }
-        // 贴边挂件一律直角：DWM 的圆角会在贴屏幕那一侧留缝，和原样式也不符
-        Interop.UseSquareCorners(this);
+        // Win11 用系统原生圆角（用户明确要）；非 Win11 保持直角，
+        // 且材质在上面已经整体回退成纯色 —— 不会出现"半透明但没模糊"的坏状态。
+        if (Interop.IsWindows11) Interop.ApplyRoundedCorners(this);
+        else Interop.UseSquareCorners(this);
 
         ApplyBackdropPaint();
         Logger.Current?.Info($"[材质] 开关={(_material ? "开" : "关")} 实际={_backdrop} 系统Build={Environment.OSVersion.Version.Build}");

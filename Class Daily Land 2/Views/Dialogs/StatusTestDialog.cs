@@ -53,6 +53,10 @@ public sealed class StatusTestDialog : DialogPanel
     double _simTotal;                 // 整段演示的模拟时长（秒）
     bool _playing;
 
+    /// <summary>演示期间的状态来源：真实课表，或"模拟课堂"（今天没课时用）。</summary>
+    Func<DateTime, ScheduleStatus>? _provider;
+    bool _simulated;
+
     public StatusTestDialog(ViewModels.SettingsViewModel vm) : base(vm, "状态测试",
         "试算某一个时刻，或按倍速完整演示「倒计时 → 上课 → 下课」。", 560)
     {
@@ -160,11 +164,14 @@ public sealed class StatusTestDialog : DialogPanel
 
         DateTime start;
         double total;
+
         if (probe.IsOngoing)
         {
             // 已经上课了：就从此刻开始看，跑到下课
             start = baseTime;
             total = Math.Max(5, probe.RemainSec + 4);
+            _provider = t => Ctx.Schedule.Engine.Compute(t, _advance.Value, _offset.Value);
+            _simulated = false;
         }
         else if (probe.IsUpcoming)
         {
@@ -174,11 +181,17 @@ public sealed class StatusTestDialog : DialogPanel
             var atStart = Ctx.Schedule.Engine.Compute(start, _advance.Value, _offset.Value);
             var dur = atStart.DurationSec > 0 ? atStart.DurationSec : 45 * 60;
             total = lead + dur + 4;
+            _provider = t => Ctx.Schedule.Engine.Compute(t, _advance.Value, _offset.Value);
+            _simulated = false;
         }
         else
         {
-            Tell(this, "这个时间点不在「下节课」的范围内，换个更靠近上课的时间试试。", "状态测试");
-            return;
+            // 今天没课 / 已经放学：用"模拟课堂"跑同一套界面，
+            // 让用户随时都能看清 倒计时 → 上课 → 下课 的完整表现。
+            start = baseTime;
+            total = Math.Max(5, _countdown.Value) + 45 * 60 + 4;
+            _provider = FakeClassStatus;
+            _simulated = true;
         }
 
         _simStart = start;
@@ -192,6 +205,36 @@ public sealed class StatusTestDialog : DialogPanel
     }
 
     double CurrentRealSeconds() => _baseRealSeconds + (DateTime.Now - _resumeAt).TotalSeconds;
+
+    /// <summary>
+    /// 模拟课堂：倒计时 _countdown 秒 → 上课 45 分钟 → 下课。
+    /// 只在真实课表给不出「下节课/上课中」时使用，字段口径与 ScheduleEngine 保持一致。
+    /// </summary>
+    ScheduleStatus FakeClassStatus(DateTime t)
+    {
+        const int classSec = 45 * 60;
+        var countdown = Math.Max(5, _countdown.Value);
+        var elapsed = (t - _simStart).TotalSeconds;
+
+        if (elapsed < countdown)
+        {
+            var left = Math.Max(0, countdown - elapsed);
+            return new ScheduleStatus("upcoming", "演示课程", "演示", "08:00", "08:45",
+                (int)Math.Ceiling(left), Math.Max(1, (int)Math.Ceiling(left / 60)), countdown,
+                0, 0, classSec, 0, null);
+        }
+
+        if (elapsed < countdown + classSec)
+        {
+            var remain = countdown + classSec - elapsed;
+            return new ScheduleStatus("ongoing", "演示课程", "演示", "08:00", "08:45",
+                0, 0, countdown,
+                (int)Math.Ceiling(remain), Math.Max(1, (int)Math.Ceiling(remain / 60)), classSec, 0, null);
+        }
+
+        return new ScheduleStatus("done", "演示课程", "", "", "",
+            0, 0, 0, 0, 0, classSec, 0, null);
+    }
 
     void OnTick()
     {
@@ -229,7 +272,8 @@ public sealed class StatusTestDialog : DialogPanel
 
     void Render(DateTime simNow, ScheduleStatus? precomputed = null, bool single = false, bool finished = false)
     {
-        var status = precomputed ?? Ctx.Schedule.Engine.Compute(simNow, _advance.Value, _offset.Value);
+        var status = precomputed
+            ?? (_provider is not null ? _provider(simNow) : Ctx.Schedule.Engine.Compute(simNow, _advance.Value, _offset.Value));
 
         _capsuleText.Text = ScheduleText.Core(status);
 
@@ -267,7 +311,8 @@ public sealed class StatusTestDialog : DialogPanel
                  : status.IsUpcoming ? $"距离上课 {status.UntilMin} 分钟"
                  : "—";
 
-        _stage.Text = $"模拟时刻 {simNow:HH:mm:ss}   ·   {stage}   ·   {left}";
+        _stage.Text = $"模拟时刻 {simNow:HH:mm:ss}   ·   {stage}   ·   {left}"
+                    + (_simulated ? "   ·   模拟课堂（当前课表无课）" : "");
 
         _detail.Text =
             $"状态：{status.Status}    节次：{(status.Index < 0 ? "—" : (status.Index + 1).ToString())}    " +
