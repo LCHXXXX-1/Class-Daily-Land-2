@@ -1,5 +1,6 @@
 using ClassDailyLand2.App.Integrations.Audio;
 using ClassDailyLand2.App.Integrations.Disaster;
+using ClassDailyLand2.App.Integrations.Weather;
 using ClassDailyLand2.App.Market;
 using ClassDailyLand2.App.Plugins;
 using ClassDailyLand2.App.Theme;
@@ -70,6 +71,12 @@ public sealed class AppController
     /// <summary>内置灾害预警集成（地震倒计时 + 气象预警）。</summary>
     public DisasterService Disaster { get; private set; } = null!;
 
+    /// <summary>
+    /// 内置实时天气集成（IP 定位 + Open-Meteo + 天气动画）。
+    /// 它的 <see cref="WeatherService.Location"/> 同时是灾害预警自动定位的坐标来源。
+    /// </summary>
+    public WeatherService Weather { get; private set; } = null!;
+
     MediaCardWindow? _mediaCard;
 
     /// <summary>检查更新编排（关于页与启动检查共用同一个实例）。</summary>
@@ -87,6 +94,9 @@ public sealed class AppController
 
     /// <summary>作业提交时间看门狗：每秒扫一遍，到点就通知 + 重排作业区。</summary>
     readonly HomeworkDueWatcher _homeworkDue = new();
+
+    /// <summary>提交时段内每 5 秒重扫一次；记录每条作业上次扫的时间。</summary>
+    readonly Dictionary<string, DateTime> _dueSweepAt = new(StringComparer.Ordinal);
 
     // ————— 状态演示：在**真实灵动岛**上按倍速跑一遍 —————
     // 演示期间 Tick 的状态来源改成模拟时钟，其它（副岛、主窗、插件）照旧跟随，
@@ -218,6 +228,7 @@ public sealed class AppController
         Log = new Logger(Paths);
         Logger.Current = Log;   // Core 层（AtomicJson / ScheduleEngine / Managers）经它写详细日志
         Log.VersionOverride = VersionInfo.Version;
+        ToastService.Init(Log);   // 启动即注册系统通知身份（HKCU，不需要管理员；每台机器各自建）
         _startedAt = DateTime.Now;
         var sw = System.Diagnostics.Stopwatch.StartNew();
 
@@ -225,6 +236,10 @@ public sealed class AppController
         Log.EnvironmentBanner();
         Log.Trace($"[启动] 数据目录：{Paths.Root}（回退：{Paths.UsedFallback}）");
         if (Paths.UsedFallback) Log.Warn(Paths.FallbackNotice ?? "");
+
+        // 上次「作业/课表/设置自检」如果没正常结束（程序被杀 / 异常退出），
+        // 数据目录里会留下 *.test-backup.json —— 先恢复，再加载设置、作业与课表。
+        RecoverTestBackups();
 
         Settings = new SettingsManager(Paths);
         Settings.Load();
@@ -242,6 +257,7 @@ public sealed class AppController
         if (Application.Current is { } app)
             app.SessionEnding += (_, _) => ClearRunningMarker();
         sw.Restart();
+
         Schedule = new ScheduleManager(Paths);
         Schedule.Load();
         Log.Step("启动", "课表加载完成", sw.ElapsedMilliseconds);
@@ -257,6 +273,10 @@ public sealed class AppController
         sw.Restart();
         Homework.Load();
         Log.Step("启动", $"作业加载完成（{Homework.Items.Count} 项）", sw.ElapsedMilliseconds);
+
+        // 课表与作业都加载完：把"选了某一节课"的提交时间对齐到当前课表。
+        // 覆盖两种情况：关闭期间课表被改过；上次测试课表/测试作业没走完恢复流程。
+        SyncHomeworkDueToSchedule();
         HomeworkHistory.CleanOldSnapshots(Settings.Int("homework_history_days"));
         if (HomeworkHistory.LastError is { } historyError) Log.Warn(historyError);
         Duty = new StudentOnDuty(Paths);
@@ -295,11 +315,23 @@ public sealed class AppController
         Audio = new AudioService(Paths, Log);
         Audio.ApplySettings(Settings);
 
+        // 实时天气：定位是异步的（IP 三个源 +缓存），所以灾害预警拿的是个**惰性 Func**，
+        // 不受创建顺序影响；定位结果回来时由下面的事件驱动灾害重新取坐标。
+        Weather = new WeatherService(App.Dispatcher, Settings, Log, Paths.Root);
+        Weather.ApplySettings();
+        Weather.LocationChanged += () =>
+        {
+            if (App.Dispatcher.CheckAccess()) Disaster?.ApplySettings();
+            else App.Dispatcher.BeginInvoke(new Action(() => Disaster?.ApplySettings()));
+        };
+
         Disaster = new DisasterService(
             App.Dispatcher, Settings, Log,
             Path.Combine(Paths.Root, "disaster-cache.json"),
             isInClass: () => CurrentStatus.IsOngoing,
-            notify: (title, message) => Tray?.Balloon(title, message));
+            // 灾害类通知走 urgent：能穿透「专注助手 / 免打扰」
+            notify: (title, message) => Tray?.Balloon(title, message, 6, urgent: true),
+            autoLocation: () => Weather?.Location);
         Disaster.ApplySettings();
 
         Main = new MainBoardWindow();
@@ -311,7 +343,10 @@ public sealed class AppController
         Main.ApplySettings(Settings);
         Island.ApplySettings(Settings);
         SubIsland.ApplySettings(Settings);
-        SubIsland.SetProvider(PickSubIslandContent);   // 插件优先，没插件时用内置内容源
+        SubIsland.SetProvider(PickSubIslandContent);
+        // 先跑一遍让 _subIslandOwner 有个初值：主窗区块"要不要放天气"依赖它，
+        // 而主窗可能在第一次副岛 tick 之前就被要求刷新
+        PickSubIslandContent();   // 插件优先，没插件时用内置内容源
 
         WireEvents();
         WireWindows();
@@ -368,8 +403,41 @@ public sealed class AppController
             if (dispatcher.CheckAccess()) OnSettingsChanged(e);
             else dispatcher.BeginInvoke(new Action(() => OnSettingsChanged(e)), DispatcherPriority.Send);
         };
-        Schedule.Changed += (_, _) => dispatcher.BeginInvoke(Tick);
+        Schedule.Changed += (_, _) =>
+        {
+            // 课表时间改了：按节次设置的作业提交时间要跟着改。
+            // 在 UI 线程时同步跑，保证后面的编辑器刷新下拉框时拿到的已经是新时间。
+            void Apply()
+            {
+                SyncHomeworkDueToSchedule();
+                Tick();
+            }
+
+            if (dispatcher.CheckAccess()) Apply();
+            else dispatcher.BeginInvoke(new Action(Apply));
+        };
         Duty.Changed += (_, _) => dispatcher.BeginInvoke(() => Main?.RefreshAll());
+    }
+
+    /// <summary>
+    /// 课表保存后，把「选了某一节课」的作业提交时间按当前课表重算一遍。
+    /// 只动 due_kind=period 且记录了节次下标的条目；自定义 / 补交 / 不交不受影响。
+    /// </summary>
+    void SyncHomeworkDueToSchedule()
+    {
+        if (Homework is null) return;
+
+        var now = DateTime.Now;
+        var changed = false;
+        foreach (var item in Homework.Items)
+        {
+            if (HomeworkDue.RefreshPeriodDue(item, Schedule.Engine, now))
+                changed = true;
+        }
+
+        if (!changed) return;
+        Log?.Info("[作业] 课表时间变了，已同步按节次设置的提交时间");
+        Homework.Save();
     }
 
     void WireWindows()
@@ -450,6 +518,37 @@ public sealed class AppController
         {
             Log?.Warn("[异常退出] 检测失败：" + ex.Message);
             try { WriteRunningMarker(); } catch { }
+        }
+    }
+
+    /// <summary>
+    /// 测试按钮会在数据目录留两份 <c>*.test-backup.json</c>；正常结束会删掉。
+    /// 启动时如果还看到它们，说明上次测试没走完恢复流程 —— 先还原再加载。
+    /// </summary>
+    void RecoverTestBackups()
+    {
+        RestoreOne("settings.test-backup.json", Paths.Settings, "设置");
+        RestoreOne("schedule.test-backup.json", Paths.Schedule, "课表");
+        RestoreOne("schedule.timetable-backup.json", Paths.Schedule, "课表（测试）");
+        RestoreOne("homework.test-backup.json", Paths.Homework, "作业");
+
+        void RestoreOne(string name, string target, string label)
+        {
+            var backup = Path.Combine(Paths.Root, name);
+            if (!File.Exists(backup)) return;
+
+            try
+            {
+                File.Copy(backup, target, overwrite: true);
+                Log.Warn($"[测试] 上次自检未正常结束，已用备份恢复{label}");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"[测试] 恢复{label}备份失败：" + ex.Message);
+                return;   // 失败就保留文件，下次再试
+            }
+
+            try { File.Delete(backup); } catch { }
         }
     }
 
@@ -628,6 +727,15 @@ public sealed class AppController
         PluginExtraWidthProvider = () => Plugins.Registry.IslandExtraWidth();
 
         Main!.BoardSectionsProvider = () => Plugins.Registry.BoardSections();
+        // 天气放到**标题行**（「班级日常」后面，带天气动画），不再占作业区的区块
+        Main.WeatherProvider = () =>
+        {
+            if (!WeatherOnBoard) return null;
+            if (Weather is not { } w || w.Snapshot is not { } s) return null;
+            return new WeatherChip($"{s.TempText} {s.Text}", s.Code.ToString(), s.IsDay, w.Animations,
+                string.Join("\n", s.Lines), Disaster?.WeatherWarningText);
+        };
+        // 徽标是单值位：只留给插件（天气已经有自己的胶囊了，再挂一个就重复）
         Main.BoardBadgeProvider = () => Plugins.Registry.BoardBadgeValue();
         Main.BoardActionsProvider = () => Plugins.Registry.BoardActions();
 
@@ -675,8 +783,10 @@ public sealed class AppController
         var status = _demoProvider is not null ? _demoProvider(DemoClock) : Schedule.Compute(now);
         CurrentStatus = status;
 
-        // 内置集成每秒跑一次：媒体决定片段，灾害预警决定是否红条接管
+        // 内置集成每秒跑一次：媒体决定片段，天气负责定位/实况，灾害预警决定是否红条接管
         Audio.Tick(status.IsOngoing);
+        Weather?.Tick();     // 可能同步完成定位 → 立刻触发 LocationChanged → Disaster.ApplySettings
+        Weather?.Flush();    // 定位/实况变了就落一次盘（没变是空操作）
         Disaster.Tick();
 
         var emergency = Disaster.Emergency;
@@ -740,18 +850,113 @@ public sealed class AppController
 
         if (_homeworkDue.LayoutChanged) Main?.RefreshHomework();
 
-        foreach (var item in justDue) NotifyHomeworkDue(item);
+        // 到点的那几行：重建行之后统一扫一次
+        if (justDue.Count > 0) Main?.FlashHomeworkDue(justDue);
+
+        // 提交时段内每 5 秒再扫一次（直接动画当前行，不重建列表）
+        var sweepNow = CollectDueSweeps(now, justDue);
+        if (sweepNow.Count > 0) Main?.FlashHomeworkNow(sweepNow);
+
+        // 同一拍到点的作业合成**一条**通知（同一节下课时，多个科目一起交）
+        if (justDue.Count > 0) NotifyHomeworkDue(justDue);
     }
 
-    void NotifyHomeworkDue(HomeworkItem item)
+    /// <summary>
+    /// 找出「正在提交时段内、距上次扫色已满 5 秒」的作业。
+    /// 到点那一拍已经由 FlashHomeworkDue 处理，这里排除掉，避免同一秒扫两次。
+    /// </summary>
+    List<HomeworkItem> CollectDueSweeps(DateTime now, IReadOnlyList<HomeworkItem> exclude)
     {
-        var subject = string.IsNullOrWhiteSpace(item.Subject) ? "作业" : item.Subject.Trim();
-        var content = (item.Content ?? "").Trim().Replace('\r', ' ').Replace('\n', ' ');
-        if (content.Length > 42) content = content[..42] + "…";
+        var excluded = exclude.Select(HomeworkDue.KeyOf).ToHashSet(StringComparer.Ordinal);
+        var list = new List<HomeworkItem>();
 
-        var detail = string.IsNullOrWhiteSpace(item.DueLabel) ? "" : $"（{item.DueLabel}）";
-        Log?.Info($"[作业到点] {subject}：{content}{detail} → 已顶到作业区第一位");
-        Tray?.Balloon("作业提交时间到了", $"{subject}：{content}\n已移到作业区第一位，记得交作业", 6);
+        foreach (var item in Homework.Items)
+        {
+            var key = HomeworkDue.KeyOf(item);
+            if (HomeworkDue.SlotOf(item, now) != HomeworkSlot.Top)
+            {
+                _dueSweepAt.Remove(key);
+                continue;
+            }
+
+            if (_dueSweepAt.TryGetValue(key, out var last) &&
+                now - last < TimeSpan.FromSeconds(5))
+                continue;
+
+            _dueSweepAt[key] = now;
+            if (!excluded.Contains(key)) list.Add(item);
+        }
+
+        // 删掉的作业不会再把 key 清掉，偶尔剪一次
+        if (_dueSweepAt.Count > 512)
+        {
+            var alive = Homework.Items.Select(HomeworkDue.KeyOf).ToHashSet(StringComparer.Ordinal);
+            foreach (var key in _dueSweepAt.Keys.Where(k => !alive.Contains(k)).ToList())
+                _dueSweepAt.Remove(key);
+        }
+
+        return list;
+    }
+
+    /// <summary>
+    /// 「本节下课需要提交作业」——同一次到点的作业按科目聚合成一条通知：
+    ///
+    ///   本节下课需要提交作业
+    ///   语文：背诵课文　默写单词
+    ///
+    ///   数学：习题 1.2
+    ///
+    /// 同科目多条作业并在一行，科目之间空一行；不逐条弹，不然一节下课时屏幕会被刷满。
+    /// </summary>
+    void NotifyHomeworkDue(IReadOnlyList<HomeworkItem> items)
+    {
+        var groups = new List<(string Subject, List<string> Contents)>();
+        foreach (var item in items)
+        {
+            var content = (item.Content ?? "").Trim().Replace('\r', ' ').Replace('\n', ' ');
+            if (content.Length == 0) continue;
+            if (content.Length > 20) content = content[..20] + "…";
+
+            var subject = string.IsNullOrWhiteSpace(item.Subject) ? "作业" : item.Subject.Trim();
+            var index = groups.FindIndex(g => string.Equals(g.Subject, subject, StringComparison.Ordinal));
+            if (index < 0) groups.Add((subject, new List<string> { content }));
+            else groups[index].Contents.Add(content);
+        }
+        if (groups.Count == 0) return;
+
+        // ★ Windows 的 toast 正文最多 4 行：前 3 行写详细科目，剩下的一律收成
+        //   「还有 N 科：物理、化学」放在第 4 行，避免 Windows 把后面几行静默吃掉。
+        var ordered = groups.OrderBy(g => g.Subject, StringComparer.CurrentCulture).ToList();
+        var lines = new List<string>();
+        var detailCount = ordered.Count <= 4 ? ordered.Count : 3;
+        for (var i = 0; i < detailCount; i++)
+        {
+            var group = ordered[i];
+            var text = group.Contents.Count <= 1
+                ? group.Contents.FirstOrDefault() ?? ""
+                : $"{group.Contents[0]} 等 {group.Contents.Count} 项";
+            var line = $"{group.Subject}：{text}";
+            if (line.Length > 28) line = line[..28] + "…";
+            lines.Add(line);
+        }
+        if (ordered.Count > 4)
+        {
+            lines.Add($"还有 {ordered.Count - 3} 科：" +
+                      string.Join("、", ordered.Skip(3).Select(g => g.Subject)));
+        }
+
+        var body = string.Join("\n", lines);
+
+        // 关掉提醒只是**不弹通知**：due_fired 已经写了、作业区照样顶到第一行，
+        // 排序和打扰是两件事，别一起关掉
+        if (!Settings.Bool("homework_notify_enabled"))
+        {
+            Log?.Info($"[作业到点] 提醒已关闭（作业仍顶到第一位）：\n{body}");
+            return;
+        }
+
+        Log?.Info($"[作业到点] 已顶到作业区第一位：\n{body}");
+        Tray?.Balloon("本节下课需要提交作业", body, 8);
     }
 
     /// <summary>上课瞬间弹「上课了！」（绿字），下课瞬间弹「下课了！」（白字）。</summary>
@@ -835,6 +1040,16 @@ public sealed class AppController
             Audio?.ApplySettings(Settings);
         if (e.Keys.Any(k => k.StartsWith("disaster_", StringComparison.Ordinal)))
             Disaster?.ApplySettings();
+        // 天气与定位：weather_* 是自己的键；auto_locate 与手选省市是**回退位置的输入**，
+        // 改了它们天气的回退坐标也得跟着重算（否则 IP 挂掉时会退回一个过期的省）
+        if (e.Keys.Any(k => k.StartsWith("weather_", StringComparison.Ordinal) ||
+                            k == "auto_locate" ||
+                            k is "disaster_province" or "disaster_city" or "disaster_district"))
+            Weather?.ApplySettings();
+        // auto_locate / 省市区同时决定灾害预警用哪套坐标
+        if (e.Keys.Any(k => k == "auto_locate" ||
+                            k is "disaster_province" or "disaster_city" or "disaster_district"))
+            Disaster?.ApplySettings();
 
         if (e.Keys.Contains("show_main_window"))
             Main?.SetVisible(Settings.Bool("show_main_window"));
@@ -885,22 +1100,56 @@ public sealed class AppController
         HolidayName: s.Name,
         Now: DateTime.Now.AddSeconds(Schedule.OffsetSeconds));
 
-    /// <summary>副岛内容：插件优先（按 Priority 竞争），没有插件接管时用内置的当前课程。</summary>
+    /// <summary>
+    /// 副岛内容的归属（"disaster-quake" / "disaster-weather" / "plugin" / "media" /
+    /// "weather" / "course" / null）。**主窗区块要不要放天气就看它** ——
+    /// <c>SubIsland.Tick</c> 每秒先跑、<c>Main.RefreshPluginContent</c> 后跑，
+    /// 所以主窗读到的一定是本秒刚算出来的判定，不会差一帧。
+    /// </summary>
+    string? _subIslandOwner;
+
+    /// <summary>
+    /// 副岛内容：灾害 &gt; 插件 &gt; 媒体 &gt; 实时天气 &gt; 内置当前课程。
+    ///
+    /// <para>这个顺序不是随手排的：地震红条与气象预警必须能抢占（用户定的规则是
+    /// 「有天气预警就让天气去作业窗口」）；插件是用户显式装的，压过内置内容；
+    /// 天气排在内置课程之前 —— 副岛默认就该显示天气，课程在主岛上还有。</para>
+    /// </summary>
     SubIslandContent? PickSubIslandContent()
     {
-        // 优先级：灾害预警 > 插件 > 媒体（显示位置设为副岛时）> 内置当前课程
-        if (Disaster?.SubIsland is { } d)
-            return new SubIslandContent(d.Title, d.Value, d.Progress);
+        if (Disaster?.QuakeSubIsland is { } q)
+            return SetOwner("disaster-quake", new SubIslandContent(q.Title, q.Value, q.Progress));
 
-        var fromPlugin = Plugins?.Registry.SubIsland();
-        if (fromPlugin is not null)
-            return new SubIslandContent(fromPlugin.Title, fromPlugin.Value, fromPlugin.Progress);
+        if (Disaster?.WeatherSubIsland is { } w)
+            return SetOwner("disaster-weather", new SubIslandContent(w.Title, w.Value, w.Progress));
+
+        if (Plugins?.Registry.SubIsland() is { } p)
+            return SetOwner("plugin", new SubIslandContent(p.Title, p.Value, p.Progress));
 
         if (Audio?.SubIsland is { } a)
-            return new SubIslandContent(a.Title, a.Value, 0);
+            return SetOwner("media", new SubIslandContent(a.Title, a.Value, 0));
 
-        return BuiltInSubIslandContent();
+        if (WeatherOnSub && Weather?.Snapshot is { } s)
+            return SetOwner("weather", new SubIslandContent(s.TempText, s.Text, 0, s));
+
+        return SetOwner("course", BuiltInSubIslandContent());
     }
+
+    SubIslandContent? SetOwner(string owner, SubIslandContent? content)
+    {
+        _subIslandOwner = content is null ? null : owner;
+        return content;
+    }
+
+    /// <summary>开关选了副岛、且已经有数据（这一秒它有没有真的拿到副岛，看 <see cref="_subIslandOwner"/>）。</summary>
+    bool WeatherOnSub => Weather is { Enabled: true, ShowOn: "sub", Snapshot: not null };
+
+    /// <summary>
+    /// 天气该不该出现在**作业窗口**：选了主窗；或选了副岛却被别人抢走 ——
+    /// 气象预警挤占就是最常见的一种，这正是「预警占上去、天气挤到作业那边去」。
+    /// </summary>
+    bool WeatherOnBoard => Weather is { } w && w.Enabled && w.Snapshot is not null &&
+                           (w.ShowOn == "main" || (w.ShowOn == "sub" && _subIslandOwner != "weather"));
 
     /// <summary>
     /// MVP 内置副岛内容源（无插件时兜底）。阶段 3 由插件按 Priority 竞争接管。
@@ -926,6 +1175,9 @@ public sealed class AppController
     {
         if (_settingsWindow is { IsVisible: true })
         {
+            // 插件 / 程序内部主动要开设置页时，最小化的话先还原（右键「设置」走的是 ShowSettings，不会到这儿）
+            if (_settingsWindow.WindowState == WindowState.Minimized)
+                _settingsWindow.WindowState = WindowState.Normal;
             _settingsWindow.Activate();
             return _settingsWindow;
         }
@@ -956,7 +1208,19 @@ public sealed class AppController
         }
     }
 
-    public void ShowSettings() => EnsureSettings();
+    public void ShowSettings()
+    {
+        // 设置窗已经开着但被最小化：不要从托盘/右键把它强行弹出来（很多人是故意收起来的），
+        // 只发一条普通通知，告诉用户去任务栏打开。
+        if (_settingsWindow is { IsVisible: true, WindowState: WindowState.Minimized })
+        {
+            Log?.Info("[设置] 已最小化到任务栏，右键「设置」只发提示，不还原窗口");
+            Tray?.Balloon("设置已在任务栏最小化", "请在任务栏打开设置窗口。", 5);
+            return;
+        }
+
+        EnsureSettings();
+    }
 
     /// <summary>打开设置中心并跳到指定页（插件调 OpenSettings("plugins") 用）。</summary>
     public void ShowSettings(string? pageKey)
@@ -1268,6 +1532,7 @@ public sealed class AppController
         catch (Exception ex) { Log?.Error("卸载插件失败: " + ex); }
         try { Audio?.Shutdown(); } catch { }
         try { Disaster?.Dispose(); } catch { }
+        try { Weather?.Flush(); Weather?.Dispose(); } catch { }
         try { _mediaCard?.Close(); } catch { }
         try
         {

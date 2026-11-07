@@ -71,7 +71,7 @@ public sealed class ScheduleEngine
         if (IsWeekend(date))
         {
             var split = _file.Weekend.MorningSplitMinutes;
-            var list = main.Periods.Where(p => p.IsValid && StartMin(p) < split).ToList();
+            var list = main.Periods.Where(p => p.IsValid && StartSec(p) < split * 60).ToList();
             list.AddRange(_file.Weekend.AfternoonPeriods.Where(p => p.IsValid));
             return list;
         }
@@ -131,7 +131,7 @@ public sealed class ScheduleEngine
     public List<(int Index, Period Period, string Course)> CoursesOfDay(DateTime date)
     {
         var periods = PeriodsFor(date);
-        var courses = CoursesFor(date);
+        var courses = DecorateDuplicates(CoursesFor(date));
         var list = new List<(int, Period, string)>();
         for (var i = 0; i < periods.Count; i++)
         {
@@ -153,8 +153,8 @@ public sealed class ScheduleEngine
     {
         var periods = PeriodsFor(date);
         var courses = _file.TempAdjust.Matches(date.Date)
-            ? Pad(_file.TempAdjust.Courses ?? new List<string>(), periods.Count)
-            : CoursesFor(date);
+            ? DecorateDuplicates(Pad(_file.TempAdjust.Courses ?? new List<string>(), periods.Count))
+            : DecorateDuplicates(CoursesFor(date));
 
         var list = new List<(int, Period, string)>(periods.Count);
         for (var i = 0; i < periods.Count; i++)
@@ -184,7 +184,7 @@ public sealed class ScheduleEngine
         {
             Logger.Current?.Trace("[课表计算] 今天命中临时调课，逐节覆盖课程名");
             var periods = PeriodsFor(today);
-            var temp = _file.TempAdjust.Courses ?? new List<string>();
+            var temp = DecorateDuplicates(Pad(_file.TempAdjust.Courses ?? new List<string>(), periods.Count));
             items = new List<(int, Period, string)>();
             for (var i = 0; i < periods.Count; i++)
             {
@@ -224,15 +224,15 @@ public sealed class ScheduleEngine
         var advanceSec = Math.Max(0, advanceMinutes) * 60;
         foreach (var (index, period, course) in items)
         {
-            var startMin = StartMin(period);
-            var endMin = EndMin(period);
-            if (endMin < startMin) endMin += 1440;   // 跨午夜
+            var startSec = StartSec(period);
+            var endSec = EndSec(period);
+            if (endSec < startSec) endSec += 86400;   // 跨午夜
 
-            var effStart = today.AddMinutes(startMin).AddSeconds(offsetSeconds).AddSeconds(-advanceSec);
-            var effEnd = today.AddMinutes(endMin).AddSeconds(offsetSeconds);
+            var effStart = today.AddSeconds(startSec).AddSeconds(offsetSeconds).AddSeconds(-advanceSec);
+            var effEnd = today.AddSeconds(endSec).AddSeconds(offsetSeconds);
 
-            var startStr = TimeUtil.Format(startMin);
-            var endStr = TimeUtil.Format(endMin);
+            var startStr = TimeUtil.FormatSeconds(startSec);
+            var endStr = TimeUtil.FormatSeconds(endSec);
 
             if (now >= effStart && now <= effEnd)
             {
@@ -268,7 +268,7 @@ public sealed class ScheduleEngine
         Logger.Current?.Trace($"[课表计算] {items.Count} 节课全部结束，状态 = done（最后一节「{last.Course}」）");
         return new ScheduleStatus(
             StatusDone, last.Course, last.Period.Name,
-            TimeUtil.Format(StartMin(last.Period)), TimeUtil.Format(EndMin(last.Period)),
+            TimeUtil.FormatSeconds(StartSec(last.Period)), TimeUtil.FormatSeconds(EndSec(last.Period)),
             0, 0, advanceSec, 0, 0, 0, last.Index, null);
     }
 
@@ -277,8 +277,8 @@ public sealed class ScheduleEngine
     {
         var periods = PeriodsFor(now.Date);
         var courses = _file.TempAdjust.Matches(now.Date)
-            ? Pad(_file.TempAdjust.Courses ?? new List<string>(), periods.Count)
-            : CoursesFor(now.Date);
+            ? DecorateDuplicates(Pad(_file.TempAdjust.Courses ?? new List<string>(), periods.Count))
+            : DecorateDuplicates(CoursesFor(now.Date));
 
         var status = Compute(now, advanceMinutes, offsetSeconds);
         var currentIndex = status.IsOngoing ? status.Index : int.MinValue;
@@ -286,15 +286,15 @@ public sealed class ScheduleEngine
         for (var i = 0; i < periods.Count; i++)
         {
             var course = i < courses.Count ? (courses[i] ?? "").Trim() : "";
-            var endMin = EndMin(periods[i]);
-            if (endMin < StartMin(periods[i])) endMin += 1440;
-            var ended = now.Date.AddMinutes(endMin).AddSeconds(offsetSeconds) <= now;
+            var endSec = EndSec(periods[i]);
+            if (endSec < StartSec(periods[i])) endSec += 86400;
+            var ended = now.Date.AddSeconds(endSec).AddSeconds(offsetSeconds) <= now;
             var state = string.IsNullOrEmpty(course) ? "empty"
                 : i == currentIndex ? "now"
                 : ended ? "past"
                 : "future";
             list.Add(new DayEntry(i, periods[i].Name, course,
-                TimeUtil.Format(StartMin(periods[i])), TimeUtil.Format(endMin), false, state));
+                TimeUtil.FormatSeconds(StartSec(periods[i])), TimeUtil.FormatSeconds(endSec), false, state));
         }
         return list;
     }
@@ -309,8 +309,34 @@ public sealed class ScheduleEngine
 
     static int ClampWeekday(int wd) => wd is >= 0 and <= 6 ? wd : 0;
 
-    static int StartMin(Period p) => TimeUtil.TryParse(p.Start, out var m) ? m : 0;
-    static int EndMin(Period p) => TimeUtil.TryParse(p.End, out var m) ? m : 0;
+    static int StartSec(Period p) => TimeUtil.TryParseSeconds(p.Start, out var s) ? s : 0;
+    static int EndSec(Period p) => TimeUtil.TryParseSeconds(p.End, out var s) ? s : 0;
+
+    /// <summary>
+    /// 同一天里重名的课程加序号：「自习、自习、数学自习」→「自习(1)、自习(2)、数学自习」。
+    /// 名字不同就不加。课表里存的仍是原名（编辑器看到的是原文），编号只出现在展示/读取这一层。
+    /// </summary>
+    internal static List<string> DecorateDuplicates(IEnumerable<string> raw)
+    {
+        var list = raw.Select(c => (c ?? "").Trim()).ToList();
+        var counts = list
+            .Where(c => c.Length > 0)
+            .GroupBy(c => c, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Count(), StringComparer.OrdinalIgnoreCase);
+
+        var seen = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 0; i < list.Count; i++)
+        {
+            var name = list[i];
+            if (name.Length == 0) continue;
+            if (!counts.TryGetValue(name, out var total) || total <= 1) continue;
+
+            seen.TryGetValue(name, out var n);
+            seen[name] = ++n;
+            list[i] = $"{name}({n})";
+        }
+        return list;
+    }
 
     /// <summary>该节次在主课表 periods 里的下标（周末下午的自定义节次返回 -1）。</summary>
     static int IndexOfMain(Timetable main, Period p)
@@ -328,6 +354,4 @@ public sealed class ScheduleEngine
         if (list.Count > count) list.RemoveRange(count, list.Count - count);
         return list;
     }
-
-    internal static int ParseMinutes(string hhmm) => TimeUtil.TryParse(hhmm, out var m) ? m : 0;
 }

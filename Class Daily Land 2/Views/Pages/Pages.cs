@@ -7,8 +7,14 @@ using ClassDailyLand2.App.Updates;
 using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.ViewModels;
 using ClassDailyLand2.App.Views.Dialogs;
+using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Engine;
 using ClassDailyLand2.Core.Market;
+using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Models;
+using ClassDailyLand2.Core.Storage;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using Microsoft.Win32;
@@ -472,6 +478,15 @@ public partial class HomeworkPage : UserControl
     bool _historyLoading;
     SettingsViewModel? _vm;
 
+    // —— 提交时段自检的临时状态 ——
+    System.Windows.Threading.DispatcherTimer? _dueTestTimer;
+    List<HomeworkItem>? _dueTestBackup;     // 测试前的作业（深拷贝）
+    string? _dueTestScheduleBackup;         // 测试前的 schedule.json（原样 JSON）
+    string? _dueTestScheduleBackupFile;     // 同一份 JSON 的磁盘备份（崩溃后可恢复）
+    string? _dueTestHomeworkBackupFile;     // 测试前的 homework.json 磁盘备份
+    string? _dueTestSettingsBackupFile;     // 测试前的 settings.json 磁盘备份
+    int _dueTestRemaining;
+
     public HomeworkPage()
     {
         InitializeComponent();
@@ -485,12 +500,19 @@ public partial class HomeworkPage : UserControl
                 // 内嵌模式：改动即时生效，没有取消 / 确认按钮
                 EditorHost.Content = new HomeworkEditor(vm, embedded: true);
                 OpenFolderButton.Click += (_, _) => DialogLauncher.OpenFolder(vm.ConfigPath);
+                DueTestButton.Click += (_, _) => StartDueTest();
+                DueTestAbortButton.Click += (_, _) => EndDueTest(aborted: true);
             }
 
             Hook(vm);
             SyncHistoryDays();
         };
-        Unloaded += (_, _) => Unhook();
+        Unloaded += (_, _) =>
+        {
+            Unhook();
+            // 页面被卸载（关设置窗口等）时测试还没结束：先把数据恢复，别把测试作业留在文件里
+            if (_dueTestBackup is not null) EndDueTest(aborted: true, toast: false);
+        };
     }
 
     void Hook(SettingsViewModel vm)
@@ -514,6 +536,395 @@ public partial class HomeworkPage : UserControl
         if (e.PropertyName is null or nameof(SettingsViewModel.HomeworkHistoryDays))
             SyncHistoryDays();
     }
+
+    /// <summary>
+    /// 到点提醒 + 提交时段 + 灵动岛自检：
+    ///
+    /// 1. **先备份**测试前的作业与 schedule.json；
+    /// 2. 往 schedule.json 里真写 5 节测试课（每节 10 秒上课 + 10 秒课间），课程名故意重名
+    ///    （自习、自习、数学自习、自习、自习），由引擎统一编号成 自习(1)/自习(2)/数学自习…
+    /// 3. 往 homework.json 里写每节课对应的作业：内容 = 这节课的名字，提交时间 = 下课时间，
+    ///    行尾显示「时间 + 自习(1)」；
+    /// 4. 让每秒的看门狗/课表引擎自己跑，灵动岛与作业区都按真实数据变化；
+    /// 5. 约 100 秒后（或点「中断测试」）把作业与课表原样写回。
+    ///
+    /// <para>★ 不直接调通知、也不直接告诉灵动岛"你在上课"：全部走数据文件 → 引擎读取。</para>
+    /// </summary>
+    void StartDueTest()
+    {
+        if (_dueTestBackup is not null) return;        // 已经在测试
+        if (_vm is not SettingsViewModel vm) return;
+
+        var now = DateTime.Now;
+        var today = now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        static string Stamp(DateTime t) =>
+            t.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+        // ★ 课表 / 设置 / 作业都先备份，测试结束原样恢复。
+        //   不往 homework.json 里写任何「测试」标记 —— 这样看到的行为完全由真实数据决定。
+        _dueTestScheduleBackup = vm.Ctx.Schedule.ExportJson();
+        _dueTestScheduleBackupFile = WriteDueTestBackup(vm.ConfigPath, "schedule.test-backup.json", _dueTestScheduleBackup);
+        _dueTestSettingsBackupFile = CopyDueTestBackup(vm.ConfigPath, "settings.json", "settings.test-backup.json");
+
+        // ★ 作业备份必须在改课表之前：写测试课表会触发"按节次同步"，
+        //   可能把原作业的提交时间改成测试课表的时间；先抓原始快照才不会被带跑。
+        var backup = vm.Ctx.Homework.Items.Select(CloneHomework).ToList();
+        _dueTestBackup = backup;
+        _dueTestHomeworkBackupFile = WriteDueTestBackup(vm.ConfigPath, "homework.test-backup.json",
+            JsonSerializer.Serialize(backup, AtomicJson.Options));
+
+        var (periodItems, totalSeconds) = BuildDueTestData(now, vm.Ctx.Schedule);
+
+        var tests = new List<HomeworkItem>(periodItems)
+        {
+            // 对照组：不交 → 正常段，应在「已过提交时间」之上
+            new()
+            {
+                Subject = "音乐",
+                Content = "音乐：练唱《歌唱祖国》，下节课检查",
+                Date = today,
+                DueKind = HomeworkDueKinds.None,
+            },
+            // 对照组：补交 → 正常作业之后，但仍在「已过提交时间」之上
+            new()
+            {
+                Subject = "美术",
+                Content = "美术：完成静物素描一张",
+                Date = today,
+                DueKind = HomeworkDueKinds.Late,
+            },
+            // 对照组：自定义文本 → 10 分钟后，仍属正常段
+            new()
+            {
+                Subject = "信息",
+                Content = "信息：完成 Python 循环练习 1-5 题",
+                Date = today,
+                Due = Stamp(now.AddMinutes(10)),
+                DueKind = HomeworkDueKinds.Custom,
+                DueLabel = $"自定义文本 · {HomeworkDue.Describe(now.AddMinutes(10), now)}",
+            },
+        };
+
+        var withTests = new List<HomeworkItem>(backup);
+        withTests.AddRange(tests);
+        vm.Ctx.Homework.ReplaceAll(withTests);
+        RefreshEditor();
+
+        _dueTestRemaining = totalSeconds;
+        _dueTestTimer?.Stop();
+        _dueTestTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _dueTestTimer.Tick += OnDueTestTick;
+        _dueTestTimer.Start();
+
+        SetDueTestRunning(true);
+        SetNavigationLocked(true);
+
+        DialogLauncher.Toast(this, InfoBarSeverity.Information, "测试开始",
+            "课表已写入 4 节测试课（每节 10 秒上课 + 10 秒课间，课程 自习/自习/数学自习/自习），灵动岛会按 自习(1) → 自习(2) → 数学自习 → 自习(3) 依次上课、下课。" +
+            "作业区：第 1/2/3/4 节下课分别有 2/3/5/5 个科目交；同一科目的多条作业错开到不同节次（语文 3 条分别在第 1/2/3 节交），" +
+            "每一条到点只扫它自己那一行，行尾显示「时间 + 自习(1)」。" +
+            $"约 {totalSeconds} 秒后自动结束并恢复测试前的作业与课表；测试期间不能切换设置页面，想提前结束点「中断测试」。");
+    }
+
+    void OnDueTestTick(object? sender, EventArgs e)
+    {
+        if (--_dueTestRemaining > 0) return;
+        EndDueTest(aborted: false);
+    }
+
+    /// <summary>结束测试：把开始时的备份原样写回去（自然结束 / 中断 / 页面被卸载都走这里）。</summary>
+    void EndDueTest(bool aborted, bool toast = true)
+    {
+        _dueTestTimer?.Stop();
+        if (_dueTestTimer is not null) _dueTestTimer.Tick -= OnDueTestTick;
+        _dueTestTimer = null;
+
+        var backup = _dueTestBackup;
+        _dueTestBackup = null;
+        var scheduleBackup = _dueTestScheduleBackup;
+        _dueTestScheduleBackup = null;
+        var vm = _vm;
+
+        if (backup is not null && vm is not null)
+        {
+            // 测试期间原作业万一正好到点，due_fired 可能已被写进文件；
+            // 回滚时按「内容 + 时间」把这层标记合并回去，避免恢复后重复提醒。
+            var fired = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var item in vm.Ctx.Homework.Items)
+            {
+                if (string.IsNullOrEmpty(item.DueFired)) continue;
+                fired[HomeworkDue.KeyOf(item)] = item.DueFired;
+            }
+            // 只把「备份里本来就有」的条目按 key 合并回来；测试期间新写的作业不会进备份。
+            foreach (var item in backup)
+                if (fired.TryGetValue(HomeworkDue.KeyOf(item), out var stamp))
+                    item.DueFired = stamp;
+
+            vm.Ctx.Homework.ReplaceAll(backup);
+            RefreshEditor();
+            DeleteDueTestBackup(ref _dueTestHomeworkBackupFile);
+        }
+
+        // 课表也原样写回：临时课表 / 偏移 / 周末配置 / 假期都是这里恢复的
+        if (scheduleBackup is not null && vm is not null)
+        {
+            if (vm.Ctx.Schedule.ImportJson(scheduleBackup))
+            {
+                Logger.Current?.Info("[测试] 已恢复测试前的课表");
+                DeleteDueTestBackup(ref _dueTestScheduleBackupFile);
+            }
+            else
+            {
+                // 恢复失败就把磁盘备份留着：下次启动会再试一次
+                Logger.Current?.Warn("[测试] 恢复临时课表失败，已保留备份供下次启动恢复");
+            }
+        }
+
+        // 设置也原样写回（测试期间改过的话恢复成测试前；没改就只删备份）
+        if (vm is not null) RestoreDueTestSettings(vm);
+
+        SetDueTestRunning(false);
+        SetNavigationLocked(false);
+
+        if (toast)
+            DialogLauncher.Toast(this, InfoBarSeverity.Success,
+                aborted ? "测试已中断" : "测试结束",
+                "已恢复测试前的作业、设置与课表。");
+    }
+
+    void SetDueTestRunning(bool running)
+    {
+        DueTestButton.Content = running ? "测试中" : "开始测试";
+        DueTestButton.IsEnabled = !running;
+        DueTestAbortButton.Visibility = running ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>测试期间锁住设置窗口的导航，避免切页丢掉"测试中"状态、把测试数据留在文件里。</summary>
+    void SetNavigationLocked(bool locked)
+    {
+        if (Window.GetWindow(this) is SettingsWindow window) window.NavigationLocked = locked;
+    }
+
+    /// <summary>
+    /// 测试开始/结束时 homework.json 是被外部整体替换的，内嵌编辑器不会自己感知；
+    /// 手动重建一次，免得它拿着一批过期的对象、下一次编辑把测试数据/恢复结果又盖回去。
+    /// </summary>
+    void RefreshEditor()
+    {
+        if (EditorHost.Content is HomeworkEditor editor) editor.Rebuild();
+    }
+
+    /// <summary>把一份 JSON 写到数据目录做磁盘备份；失败只记日志，不影响测试继续跑。</summary>
+    static string? WriteDueTestBackup(string folder, string name, string content)
+    {
+        try
+        {
+            var path = Path.Combine(folder, name);
+            File.WriteAllText(path, content, new System.Text.UTF8Encoding(false));
+            return path;
+        }
+        catch (Exception ex)
+        {
+            Logger.Current?.Warn($"[测试] 写备份 {name} 失败：{ex.Message}");
+            return null;
+        }
+    }
+
+    static void DeleteDueTestBackup(ref string? path)
+    {
+        if (path is null) return;
+        try { File.Delete(path); } catch { }
+        path = null;
+    }
+
+    /// <summary>把数据目录里的文件复制一份做磁盘备份。</summary>
+    static string? CopyDueTestBackup(string folder, string sourceName, string backupName)
+    {
+        try
+        {
+            var source = Path.Combine(folder, sourceName);
+            if (!File.Exists(source)) return null;
+            var target = Path.Combine(folder, backupName);
+            File.Copy(source, target, overwrite: true);
+            return target;
+        }
+        catch (Exception ex)
+        {
+            Logger.Current?.Warn($"[测试] 备份 {sourceName} 失败：{ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>测试结束时恢复 settings.json；内容没变就只删备份，避免无谓地重载设置。</summary>
+    void RestoreDueTestSettings(SettingsViewModel vm)
+    {
+        var backup = _dueTestSettingsBackupFile;
+        if (backup is null) return;
+
+        var target = Path.Combine(vm.ConfigPath, "settings.json");
+        try
+        {
+            if (!FilesEqual(target, backup))
+            {
+                File.Copy(backup, target, overwrite: true);
+                vm.Ctx.Settings.Reload();   // 让内存里的设置和文件保持一致，并广播刷新
+                Logger.Current?.Info("[测试] 已恢复测试前的设置");
+            }
+            DeleteDueTestBackup(ref _dueTestSettingsBackupFile);
+        }
+        catch (Exception ex)
+        {
+            // 恢复失败就把磁盘备份留着：下次启动会再试一次
+            Logger.Current?.Warn("[测试] 恢复设置失败，已保留备份供下次启动恢复：" + ex.Message);
+        }
+    }
+
+    static bool FilesEqual(string a, string b)
+    {
+        try
+        {
+            var fa = new FileInfo(a);
+            var fb = new FileInfo(b);
+            if (!fa.Exists || !fb.Exists || fa.Length != fb.Length) return false;
+            return File.ReadAllBytes(a).SequenceEqual(File.ReadAllBytes(b));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 往 schedule.json 里写入 4 节测试课（每节 10 秒上课 + 10 秒课间），并生成对应的作业：
+    ///   课程名故意重名（自习、自习、数学自习、自习），引擎会编号成
+    ///   自习(1)、自习(2)、数学自习、自习(3)；
+    ///   第 1/2/3/4 节下课分别有 2/3/5/5 个科目交；
+    ///   **同一科目的多条作业错开到不同节次**（语文 3 条分别在第 1/2/3 节下课交），
+    ///   用来观察"同一板块里一条到点了、另一条还没到"会不会打架；
+    ///   行尾显示「时间 + 这节课的名字」（如「10:00:10 自习(1)」）。
+    ///
+    /// ★ 全部通过写文件完成：灵动岛照常读 schedule.json 自己算，不是代码里塞一个假状态。
+    /// 原始 schedule.json 已整份备份，测试结束时 <see cref="ScheduleManager.ImportJson"/> 原样恢复。
+    /// </summary>
+    (List<HomeworkItem> Items, int TotalSeconds) BuildDueTestData(DateTime now, ScheduleManager sched)
+    {
+        // 4 节测试课：每节 10 秒上课 + 10 秒课间
+        string[] raw = { "自习", "自习", "数学自习", "自习" };
+        var display = ScheduleEngine.DecorateDuplicates(raw);
+
+        // (科目, 作业内容, 第几节下课交)
+        var plan = new (string Subject, string Content, int Period)[]
+        {
+            ("语文", "背诵《岳阳楼记》全文，默写第 3 段", 0),
+            ("语文", "完成《同步练习》第 3 单元 P45-P48，并把错题抄到错题本上，明天早读检查", 1),
+            ("语文", "预习第 4 课，标出不会读的字词", 2),
+
+            ("数学", "习题 3.2 第 1-8 题，写清步骤", 0),
+
+            ("英语", "背诵 Unit 4 单词表，家长签字", 1),
+            ("英语", "完成 Workbook P32-P34 的阅读和完形填空", 2),
+
+            ("物理", "完成《课时练》第 2 章第 3 节，重点看电路图那两道大题，不会的圈出来", 1),
+
+            ("化学", "整理实验室制取氧气的步骤", 2),
+            ("化学", "完成练习册 P18-P19", 3),
+
+            ("生物", "画一张细胞结构图，标出各部分的名称", 2),
+
+            ("政治", "背熟第三课知识点", 2),
+            ("政治", "完成《同步导学》P22 的材料分析题", 3),
+
+            ("历史", "整理隋唐时期的大事年表，至少写 8 条，每条后面用一句话说明影响", 3),
+            ("地理", "完成地图册 P12 的气候类型填图", 3),
+            ("体育", "明天带跳绳，课间操后测 1 分钟跳绳", 3),
+        };
+
+        static string Clock(DateTime t) =>
+            t.ToString("HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        static string Stamp(DateTime t) =>
+            t.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+        var today = now.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var firstStart = now.AddSeconds(-2);       // 第一节课已经开始，岛立刻是"上课中"
+        var starts = new DateTime[raw.Length];
+        var table = new Timetable();
+
+        for (var i = 0; i < raw.Length; i++)
+        {
+            starts[i] = firstStart.AddSeconds(i * 20);
+            table.Periods.Add(new Period($"第{i + 1}节", Clock(starts[i]), Clock(starts[i].AddSeconds(10))));
+            // 七天都排上，周末列 / 调休列也能取到课
+            for (var day = 0; day < 7; day++) table.SetCourse(i, day, raw[i]);
+        }
+
+        const string name = "【测试】提交时段";
+        sched.File.Timetables.Remove(name);
+        sched.File.Timetables[name] = table;
+        sched.File.Active = name;
+
+        // 周末 / 假期 / 临时调课都会走另一套取课规则，测试期间先绕开（备份里原样恢复）
+        sched.File.Weekend ??= new WeekendConfig();
+        sched.File.Weekend.MorningSplit = "23:59";
+        sched.File.Weekend.AfternoonPeriods.Clear();
+        sched.File.Weekend.Courses.Clear();
+        sched.File.Holidays.Clear();
+        sched.File.TempAdjust = new TempAdjust();
+
+        sched.SetAdvance(0);
+        sched.SetOffset(0);
+        sched.Save();      // 写 schedule.json
+
+        var items = new List<HomeworkItem>(plan.Length);
+        foreach (var (subject, content, period) in plan)
+        {
+            var due = starts[period].AddSeconds(10);
+            // 提交时段 = [本节下课, 下一节上课)；最后一节没有下一节，补 10 秒
+            var dueEnd = period + 1 < raw.Length ? starts[period + 1] : due.AddSeconds(10);
+
+            items.Add(new HomeworkItem
+            {
+                Subject = subject,          // 同一科目可能有多条，错开到不同节次
+                Content = content,          // 有长有短，方便看换行 / 多行
+                Date = today,
+                Due = Stamp(due),
+                DueEnd = Stamp(dueEnd),
+                DueName = display[period],  // 行尾「时间 + 自习(1)」
+                DuePeriod = period,         // 选的是第几节（课表改了会跟着重算）
+                DueKind = HomeworkDueKinds.Period,
+                DueLabel = $"{display[period]} · {Clock(due)} 下课",
+            });
+        }
+
+        var lastEnd = starts[^1].AddSeconds(10);
+        var total = (int)Math.Ceiling((lastEnd.AddSeconds(10) - now).TotalSeconds) + 2;
+        total = Math.Max(20, total);
+
+        var perPeriod = Enumerable.Range(0, raw.Length)
+            .Select(i => plan.Count(p => p.Period == i) + " 科");
+        Logger.Current?.Info(
+            $"[测试] 课表已写盘：{raw.Length} 节，每节 10 秒上课 + 10 秒课间；" +
+            $"课程 {string.Join("、", display)}；" +
+            $"作业 {string.Join(" / ", perPeriod)}（共 {items.Count} 条，同科错开）；" +
+            $"约 {total} 秒后结束");
+        return (items, total);
+    }
+
+    static HomeworkItem CloneHomework(HomeworkItem item) => new()
+    {
+        Subject = item.Subject,
+        Content = item.Content,
+        Date = item.Date,
+        Due = item.Due,
+        DueEnd = item.DueEnd,
+        DueName = item.DueName,
+        DuePeriod = item.DuePeriod,
+        DueKind = item.DueKind,
+        DueLabel = item.DueLabel,
+        DueFired = item.DueFired,
+    };
 
     /// <summary>把设置值回填到下拉框（不触发写回）。</summary>
     void SyncHistoryDays()
@@ -1625,37 +2036,30 @@ public partial class MediaPage : UserControl
 
 public partial class DisasterPage : UserControl
 {
-    const string AnyCity = "（不限）";
-    const string AnyDistrict = "（不限）";
-
     readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromSeconds(1) };
     bool _loading;
 
     public DisasterPage()
     {
         InitializeComponent();
-        ApplyCoordButton.Click += (_, _) => ApplyCoord();
         DrillButton.Click += (_, _) => Drill();
+        DrillWeatherButton.Click += (_, _) => DrillWeather();
         ClearDrillButton.Click += (_, _) => ClearDrill();
 
         Loaded += (_, _) => { Init(); _timer.Start(); };
         Unloaded += (_, _) => _timer.Stop();
-        _timer.Tick += (_, _) => UpdateStatus();
+        _timer.Tick += (_, _) =>
+        {
+            UpdateStatus();
+            UpdateLocationSummary();   // 位置由天气页在管，这里只跟着显示
+            UpdateDrillPreview();      // 位置一变，"距你多少公里 / 几秒到达"也要跟着变
+        };
     }
 
     void Init()
     {
         if (DataContext is not SettingsViewModel vm) return;
         _loading = true;
-
-        // 省份（最后加一个"不获取气象"）
-        ProvinceBox.Items.Clear();
-        foreach (var p in Cities.Provinces) ProvinceBox.Items.Add(p);
-        ProvinceBox.Items.Add(Cities.NoWeather);
-        Select(ProvinceBox, string.IsNullOrEmpty(vm.DisasterProvince) ? "四川省" : vm.DisasterProvince);
-
-        FillCities(vm.DisasterCity);
-        FillDistricts(vm.DisasterDistrict);
 
         foreach (var item in ThresholdBox.Items.OfType<ComboBoxItem>())
         {
@@ -1667,84 +2071,135 @@ public partial class DisasterPage : UserControl
         }
         if (ThresholdBox.SelectedItem is null) ThresholdBox.SelectedIndex = 1;
 
-        LatBox.Text = vm.DisasterLat;
-        LonBox.Text = vm.DisasterLon;
-
         _loading = false;
+        InitDrill();
         UpdateStatus();
+        UpdateLocationSummary();
     }
 
-    static void Select(ComboBox box, string value)
+    // ————————————————————— 演练 —————————————————————
+
+    const string DrillDefault = "（默认）";
+
+    /// <summary>演练用的震中/震级选择器初始化。默认全选「（默认）」= 往西 120km。</summary>
+    void InitDrill()
     {
-        foreach (var item in box.Items)
+        _loading = true;
+
+        DrillProvinceBox.Items.Clear();
+        DrillProvinceBox.Items.Add(DrillDefault);
+        foreach (var p in Cities.Provinces) DrillProvinceBox.Items.Add(p);
+        DrillProvinceBox.SelectedIndex = 0;
+
+        FillDrillCities();
+        FillDrillDistricts();
+
+        DrillMagBox.SelectedIndex = 3;     // 6.5（默认）
+        DrillSignalBox.SelectedIndex = 0;  // 暴雨
+        DrillLevelBox.SelectedIndex = 0;   // 橙色
+
+        _loading = false;
+        UpdateDrillPreview();
+    }
+
+    void OnDrillEpicenterChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+
+        _loading = true;
+        if (ReferenceEquals(sender, DrillProvinceBox))
         {
-            if (string.Equals(item?.ToString(), value, StringComparison.Ordinal))
-            {
-                box.SelectedItem = item;
-                return;
-            }
+            FillDrillCities();
+            FillDrillDistricts();
         }
-        if (box.Items.Count > 0) box.SelectedIndex = 0;
-    }
-
-    void FillCities(string keep)
-    {
-        var province = ProvinceBox.SelectedItem?.ToString() ?? "";
-        CityBox.Items.Clear();
-        CityBox.Items.Add(AnyCity);
-        foreach (var c in Cities.CitiesOf(province)) CityBox.Items.Add(c);
-        Select(CityBox, string.IsNullOrEmpty(keep) ? AnyCity : keep);
-    }
-
-    void FillDistricts(string keep)
-    {
-        var province = ProvinceBox.SelectedItem?.ToString() ?? "";
-        var city = CityBox.SelectedItem?.ToString() ?? AnyCity;
-        DistrictBox.Items.Clear();
-        DistrictBox.Items.Add(AnyDistrict);
-        foreach (var d in Cities.DistrictsOf(province, city == AnyCity ? "" : city))
-            DistrictBox.Items.Add(d);
-        Select(DistrictBox, string.IsNullOrEmpty(keep) ? AnyDistrict : keep);
-    }
-
-    string Province => ProvinceBox.SelectedItem?.ToString() ?? "";
-    string CityValue => CityBox.SelectedItem?.ToString() == AnyCity ? "" : CityBox.SelectedItem?.ToString() ?? "";
-    string DistrictValue => DistrictBox.SelectedItem?.ToString() == AnyDistrict ? "" : DistrictBox.SelectedItem?.ToString() ?? "";
-
-    void OnProvinceChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (_loading || DataContext is not SettingsViewModel vm) return;
-        _loading = true;
-        FillCities("");
-        FillDistricts("");
+        else if (ReferenceEquals(sender, DrillCityBox))
+        {
+            FillDrillDistricts();
+        }
         _loading = false;
 
-        vm.SetDisasterLocation(Province, "", "");
-        LatBox.Text = "";
-        LonBox.Text = "";
-        ApplyCoord();
+        UpdateDrillPreview();
     }
 
-    void OnCityChanged(object sender, SelectionChangedEventArgs e)
+    void FillDrillCities()
     {
-        if (_loading || DataContext is not SettingsViewModel vm) return;
-        _loading = true;
-        FillDistricts("");
-        _loading = false;
+        var province = DrillProvinceBox.SelectedItem?.ToString() ?? DrillDefault;
 
-        vm.SetDisasterLocation(Province, CityValue, "");
-        LatBox.Text = "";
-        LonBox.Text = "";
-        ApplyCoord();
+        DrillCityBox.Items.Clear();
+        DrillCityBox.Items.Add(DrillDefault);
+        if (province != DrillDefault)
+            foreach (var c in Cities.CitiesOf(province)) DrillCityBox.Items.Add(c);
+        DrillCityBox.SelectedIndex = 0;
     }
 
-    void OnDistrictChanged(object sender, SelectionChangedEventArgs e)
+    void FillDrillDistricts()
     {
-        if (_loading || DataContext is not SettingsViewModel vm) return;
-        vm.SetDisasterLocation(Province, CityValue, DistrictValue);
-        LatBox.Text = "";
-        LonBox.Text = "";
-        ApplyCoord();
+        var province = DrillProvinceBox.SelectedItem?.ToString() ?? DrillDefault;
+        var city = DrillCityBox.SelectedItem?.ToString() ?? DrillDefault;
+
+        DrillDistrictBox.Items.Clear();
+        DrillDistrictBox.Items.Add(DrillDefault);
+        if (province != DrillDefault && city != DrillDefault)
+            foreach (var d in Cities.DistrictsOf(province, city)) DrillDistrictBox.Items.Add(d);
+        DrillDistrictBox.SelectedIndex = 0;
+    }
+
+    /// <summary>把三个下拉框解析成震中坐标；全选「默认」时返回 null（服务端按往西 120km 处理）。</summary>
+    (double? Lat, double? Lon, string Name) ResolveDrillEpicenter()
+    {
+        var province = DrillProvinceBox.SelectedItem?.ToString() ?? DrillDefault;
+        if (province == DrillDefault) return (null, null, "默认（往西约 120km）");
+
+        var city = DrillCityBox.SelectedItem?.ToString() ?? DrillDefault;
+        var district = DrillDistrictBox.SelectedItem?.ToString() ?? DrillDefault;
+
+        var coord = Cities.CoordOf(
+            province,
+            city == DrillDefault ? "" : city,
+            district == DrillDefault ? "" : district);
+
+        var name = district != DrillDefault ? district
+                 : city != DrillDefault ? city
+                 : province;
+
+        return (coord?.Lat, coord?.Lon, name);
+    }
+
+    double DrillMagnitude() =>
+        DrillMagBox.SelectedItem is ComboBoxItem item &&
+        double.TryParse((string?)item.Tag, out var v) ? v : 6.5;
+
+    /// <summary>
+    /// 选完震中立刻把"距你多远 / 几秒到达 / 预估烈度"算出来 —— 不用真的注入就能对比不同震中。
+    /// 和真实评估走的是同一套 <see cref="QuakeCalc"/>，所以预览和真注入不会有出入。
+    /// </summary>
+    void UpdateDrillPreview()
+    {
+        if (DataContext is not SettingsViewModel vm) return;
+        if (DrillPreviewText is null) return;
+
+        var d = vm.Ctx.Disaster;
+        if (d?.Lat is null || d.Lon is null)
+        {
+            DrillPreviewText.Text = "你的位置还没有坐标 —— 先在上面「位置」里选好省市";
+            return;
+        }
+
+        var (lat, lon, name) = ResolveDrillEpicenter();
+        var evLat = lat ?? d.Lat.Value + 0.6;
+        var evLon = lon ?? d.Lon.Value - 1.1;
+
+        var mag = DrillMagnitude();
+        var depth = DrillDepthBox.Value;
+        var dist = QuakeCalc.HaversineKm(d.Lat.Value, d.Lon.Value, evLat, evLon);
+        var cd = QuakeCalc.CountdownSeconds(depth, dist);
+        var inten = QuakeCalc.IntensityAt(mag, dist);
+        var level = QuakeCalc.LevelOf(inten);
+
+        DrillPreviewText.Text =
+            $"震中 {name} · 距你 {dist:0} km · 横波约 {cd:0} 秒后到达 · " +
+            $"预估烈度 {inten:0.#}（{QuakeCalc.LevelWord(level)}）" +
+            (inten > d.Threshold ? "" : " · 低于阈值，主岛不会弹红条");
     }
 
     void OnThresholdChanged(object sender, SelectionChangedEventArgs e)
@@ -1754,19 +2209,56 @@ public partial class DisasterPage : UserControl
             vm.DisasterThresholdX10 = v;
     }
 
-    /// <summary>把（可能空着的）经纬度写回设置：空 = 按省市查表。</summary>
-    void ApplyCoord()
+    /// <summary>位置已经搬到「设置 → 天气」，这里只做跳转。</summary>
+    void OnGoWeatherLocation(object sender, RoutedEventArgs e)
     {
         if (DataContext is not SettingsViewModel vm) return;
-        vm.SetDisasterCoord(LatBox.Text?.Trim() ?? "", LonBox.Text?.Trim() ?? "");
-        UpdateStatus();
+        vm.Ctx.ShowSettings(AppSettings.PageWeather);
+    }
+
+    /// <summary>只读摘要：当前到底用的哪套坐标（自动定位 / 手选省市 / 手填经纬度）。</summary>
+    void UpdateLocationSummary()
+    {
+        if (DataContext is not SettingsViewModel vm) return;
+        if (LocationText is null) return;
+
+        var d = vm.Ctx.Disaster;
+        if (d is null || d.Lat is null || d.Lon is null)
+        {
+            LocationText.Text = "未设置 · 去「天气」里选省市";
+            return;
+        }
+
+        var parts = new[] { d.Province, d.City, d.District }
+            .Where(s => !string.IsNullOrWhiteSpace(s));
+        var name = string.Join(" / ", parts);
+        LocationText.Text = $"{(name.Length > 0 ? name : "—")} · {d.Lat:0.##},{d.Lon:0.##}（{d.LocationSource}）";
     }
 
     void Drill()
     {
         if (DataContext is not SettingsViewModel vm) return;
-        var result = vm.Ctx.Disaster?.StartDrill();
+
+        var (lat, lon, name) = ResolveDrillEpicenter();
+        var result = vm.Ctx.Disaster?.StartDrill(
+            DrillMagnitude(),
+            DrillDepthBox.Value,
+            lat, lon,
+            lat is null ? null : name);   // 没选震中就交给服务端按默认处理
+
         DialogLauncher.Toast(this, InfoBarSeverity.Warning, "地震演练", result ?? "服务未就绪");
+        UpdateStatus();
+    }
+
+    void DrillWeather()
+    {
+        if (DataContext is not SettingsViewModel vm) return;
+
+        var signal = (DrillSignalBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "暴雨";
+        var level = (DrillLevelBox.SelectedItem as ComboBoxItem)?.Tag as string ?? "orange";
+
+        var result = vm.Ctx.Disaster?.StartWeatherDrill(signal, level);
+        DialogLauncher.Toast(this, InfoBarSeverity.Information, "气象演练", result ?? "服务未就绪");
         UpdateStatus();
     }
 

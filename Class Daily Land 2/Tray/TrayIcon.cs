@@ -204,8 +204,16 @@ public sealed class TrayIcon : IDisposable
         _subChecked = sub;
     }
 
-    public void Balloon(string title, string text, int seconds = 3)
+    /// <summary>
+    /// 弹一条通知。默认走**系统 Toast**（进通知中心、带应用名）；
+    /// 只有灾害类才把 <paramref name="urgent"/> 传 true 标成重要。环境不支持时退回托盘气泡。
+    /// </summary>
+    public void Balloon(string title, string text, int seconds = 3, bool urgent = false)
     {
+        // 先走系统通知（进通知中心；urgent 标成重要，免打扰也拦不住）；
+        // 环境不支持（没注册上 AUMID / 策略禁掉）再回退到老的托盘气泡
+        if (ToastService.Show(title, text, urgent)) return;
+
         try
         {
             _notify.ShowBalloonTip(seconds * 1000, title, text, WinForms.ToolTipIcon.Info);

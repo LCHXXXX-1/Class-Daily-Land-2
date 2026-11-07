@@ -513,6 +513,50 @@ public sealed partial class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(DisasterLon));
     }
 
+    // ————————————————————— 天气（与灾害预警共用 auto_locate） —————————————————————
+
+    /// <summary>
+    /// IP 自动定位总开关：开 = IP 定位（失败退回手选省市区查表），关 = 手填经纬度 &gt; 省市区查表。
+    /// 实时天气、气象预警过滤、地震倒计时**三者共用这一个开关**，
+    /// 所以它同时出现在「天气」页与「灾害预警」页 —— 两处改的是同一个键。
+    /// </summary>
+    public bool AutoLocate
+    {
+        get => S.Bool("auto_locate");
+        set => Write("auto_locate", value);
+    }
+
+    public bool WeatherEnabled
+    {
+        get => S.Bool("weather_enabled");
+        set => Write("weather_enabled", value);
+    }
+
+    /// <summary>sub / main / off。</summary>
+    public string WeatherShowOn
+    {
+        get => S.Str("weather_show_on");
+        set => Write("weather_show_on", value);
+    }
+
+    public int WeatherRefreshSec
+    {
+        get => S.Int("weather_refresh_sec");
+        set => WriteDelayed("weather_refresh_sec", Math.Clamp(value, 300, 3600));
+    }
+
+    public int WeatherIdleCollapseSec
+    {
+        get => S.Int("weather_idle_collapse_sec");
+        set => WriteDelayed("weather_idle_collapse_sec", Math.Clamp(value, 0, 3600));
+    }
+
+    public bool WeatherAnimations
+    {
+        get => S.Bool("weather_animations");
+        set => Write("weather_animations", value);
+    }
+
     // ————————————————————— 灵动岛 —————————————————————
 
     public bool ShowIsland
@@ -602,6 +646,16 @@ public sealed partial class SettingsViewModel : ObservableObject
     {
         get => S.Int("homework_history_days");
         set => Write("homework_history_days", Math.Clamp(value, 1, 3650));
+    }
+
+    /// <summary>
+    /// 提交时间到点提醒。关掉只是**不弹通知**，作业区照样会在到点时把它顶到第一行 ——
+    /// 两件事分开，用户可能只想要排序不想要打扰。
+    /// </summary>
+    public bool HomeworkNotifyEnabled
+    {
+        get => S.Bool("homework_notify_enabled");
+        set => Write("homework_notify_enabled", value);
     }
 
     // ————————————————————— 维护 —————————————————————

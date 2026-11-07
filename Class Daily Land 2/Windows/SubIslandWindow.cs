@@ -1,3 +1,4 @@
+using ClassDailyLand2.App.Integrations.Weather;
 using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Win32;
 using ClassDailyLand2.Core.Models;
@@ -9,8 +10,13 @@ using System.Windows.Media.Animation;
 
 namespace ClassDailyLand2.App.Windows;
 
-/// <summary>副岛内容（阶段 3 由插件提供；MVP 允许为空）。</summary>
-public sealed record SubIslandContent(string Title, string Value, double Progress)
+/// <summary>
+/// 副岛内容（阶段 3 由插件提供；MVP 允许为空）。
+/// <paramref name="Weather"/> 非空表示这一秒的内容是**实时天气**：
+/// 收起态画天气动画而不是圆环，展开用「weather_idle_collapse_sec」那套超时（默认 5 分钟）。
+/// </summary>
+public sealed record SubIslandContent(string Title, string Value, double Progress,
+    WeatherSnapshot? Weather = null)
 {
     public static SubIslandContent? FromProvider(Func<SubIslandContent?>? provider)
     {
@@ -43,6 +49,14 @@ public sealed partial class SubIslandWindow : Window
     bool _expanded;
     DateTime _collapseAt = DateTime.MinValue;
     int _autoCollapseSec = 8;
+
+    /// <summary>天气内容的收起超时（"5 分钟没操作就收成圆"），与普通内容的 8 秒各走各的。</summary>
+    int _weatherIdleSec = 300;
+    bool _weatherAnimations = true;
+
+    /// <summary>当前内容是不是天气。进出这个状态时要重算收起时间、并在进场时自动展开一次。</summary>
+    bool _weatherMode;
+
     bool _enabledBySetting = true;
     bool _mainIslandVisible = true;
     SubIslandContent? _content;
@@ -89,9 +103,13 @@ public sealed partial class SubIslandWindow : Window
     {
         _enabledBySetting = s.Bool("show_sub_island");
         _autoCollapseSec = Math.Clamp(s.Int("sub_island_auto_collapse_sec"), 0, 600);
+        _weatherIdleSec = Math.Clamp(s.Int("weather_idle_collapse_sec"), 0, 3600);
+        _weatherAnimations = s.Bool("weather_animations");
         _animMs = s.Bool("fade_animation") ? Math.Clamp(s.Int("animation_duration_ms"), 0, 2000) : 0;
         _fade = s.Bool("fade_animation");
-        if (s.Bool("sub_island_default_collapsed")) _expanded = false;
+        // 「默认收起」是给课程 / 插件内容的；天气内容一进来就该展开给人看，
+        // 否则用户在设置里随便动一下就会把天气压回圆里、再也不出来
+        if (s.Bool("sub_island_default_collapsed") && _content?.Weather is null) _expanded = false;
         Refresh();
     }
 
@@ -113,12 +131,30 @@ public sealed partial class SubIslandWindow : Window
     public void Tick(double mainRightEdgeDip, double mainTopDip, ScheduleStatus status)
     {
         _content = SubIslandContent.FromProvider(_provider);
+
+        // 内容在「天气 / 非天气」之间切换时按新的超时重新起算；
+        // 刚变成天气就自动展开一次 —— 否则用户看到的永远是个收起的圆，
+        // 而需求是"展开着显示天气，5 分钟没操作才收成圆"。
+        var nowWeather = _content?.Weather is not null;
+        if (nowWeather != _weatherMode)
+        {
+            _weatherMode = nowWeather;
+            if (nowWeather && !_expanded) SetExpanded(true);
+            else if (_expanded) _collapseAt = Deadline();
+        }
+
         TargetFollow(mainRightEdgeDip, mainTopDip);
-        if (_expanded && _autoCollapseSec > 0 && _collapseAt != DateTime.MinValue &&
+        if (_expanded && CollapseSec > 0 && _collapseAt != DateTime.MinValue &&
             DateTime.Now >= _collapseAt)
             SetExpanded(false);
         Refresh();
     }
+
+    /// <summary>当前内容对应的自动收起超时：天气用「无操作」那把尺，其余照旧。</summary>
+    int CollapseSec => _weatherMode ? _weatherIdleSec : _autoCollapseSec;
+
+    DateTime Deadline() =>
+        CollapseSec > 0 ? DateTime.Now.AddSeconds(CollapseSec) : DateTime.MinValue;
 
     void TargetFollow(double mainRight, double mainTop)
     {
@@ -146,7 +182,9 @@ public sealed partial class SubIslandWindow : Window
     {
         if (_content is null) return MinExpandedW;
         var ft = BuildText(RenderText());
-        return (ft?.Width ?? 0) + 30;
+        // 天气内容展开时左边多出「7 边距 + 22 图 + 7 间隔 = 36」，比默认的 15 多 21
+        var art = _content.Weather is null ? 0 : 21;
+        return (ft?.Width ?? 0) + 30 + art;
     }
 
     string RenderText()
@@ -187,18 +225,49 @@ public sealed partial class SubIslandWindow : Window
         if (!shouldShow && IsVisible) Hide();
 
         var collapsed = _curW <= CollapsedW + 2;
-        RingOutline.Visibility = collapsed ? Visibility.Visible : Visibility.Collapsed;
-        ProgressDot.Visibility = collapsed && _content is not null && _content.Progress > 0
+        var weather = _content?.Weather;
+
+        // 天气内容：动画常驻。收起时占满圆（圆环/进度点让位），展开时挪到文字左边。
+        if (weather is not null)
+        {
+            Art.Visibility = Visibility.Visible;
+            Art.Kind = weather.Art;
+            Art.IsDay = weather.IsDay;
+            Art.Animated = _weatherAnimations;
+        }
+        else Art.Visibility = Visibility.Collapsed;
+
+        RingOutline.Visibility = collapsed && weather is null ? Visibility.Visible : Visibility.Collapsed;
+        ProgressDot.Visibility = collapsed && weather is null && _content is not null && _content.Progress > 0
             ? Visibility.Visible : Visibility.Collapsed;
+
         if (collapsed)
         {
-            var d = Math.Clamp(_content?.Progress ?? 0, 0, 1) * 10;
-            ProgressDot.Width = d;
-            ProgressDot.Height = d;
+            Art.HorizontalAlignment = HorizontalAlignment.Center;
+            Art.Margin = new Thickness(0);
+            Art.Width = 26;
+            Art.Height = 26;
+
+            if (weather is null)
+            {
+                var d = Math.Clamp(_content?.Progress ?? 0, 0, 1) * 10;
+                ProgressDot.Width = d;
+                ProgressDot.Height = d;
+            }
             Label.Visibility = Visibility.Collapsed;
         }
         else
         {
+            if (weather is not null)
+            {
+                Art.HorizontalAlignment = HorizontalAlignment.Left;
+                Art.Margin = new Thickness(7, 0, 0, 0);
+                Art.Width = 22;
+                Art.Height = 22;
+                Label.Margin = new Thickness(36, 0, 10, 0);
+            }
+            else Label.Margin = new Thickness(15, 0, 10, 0);
+
             Label.Text = RenderText();
             Label.Visibility = Visibility.Visible;
         }
@@ -207,8 +276,8 @@ public sealed partial class SubIslandWindow : Window
     public void SetExpanded(bool expanded)
     {
         _expanded = expanded;
-        _collapseAt = expanded && _autoCollapseSec > 0
-            ? DateTime.Now.AddSeconds(_autoCollapseSec)
+        _collapseAt = expanded && CollapseSec > 0
+            ? DateTime.Now.AddSeconds(CollapseSec)
             : DateTime.MinValue;
         TargetFollow(_tgtX - Gap, _tgtY);
         BeginAnim();

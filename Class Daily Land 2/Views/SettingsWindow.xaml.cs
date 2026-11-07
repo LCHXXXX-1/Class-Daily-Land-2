@@ -64,6 +64,7 @@ public partial class SettingsWindow : Window
             new(AppSettings.PageGeneral, "通用", "\uE713", () => new GeneralPage()),
             new(AppSettings.PageIsland, "灵动岛", "\uE7F4", () => new IslandPage()),
             new(AppSettings.PageMedia, "媒体", "\uE8D6", () => new MediaPage()),
+            new(AppSettings.PageWeather, "天气", "\uE706", () => new WeatherPage()),
             new(AppSettings.PageDisaster, "灾害预警", "\uE730", () => new DisasterPage()),
             new("interaction", "交互", "\uE7C9", () => new InteractionPage()),
             new(AppSettings.PageAppearance, "个性化", "\uE790", () => new AppearancePage()),
@@ -414,6 +415,17 @@ public partial class SettingsWindow : Window
     void Select(string id, bool animate)
     {
         if (!_navButtons.TryGetValue(id, out var button)) return;
+
+        // 作业页的提交时段自检进行中：不让切页（同页重复点没事）
+        if (NavigationLocked && !string.Equals(id, _currentId, StringComparison.Ordinal))
+        {
+            // 被点亮的导航按钮拨回当前页；强调条本来就没动
+            if (_selectedNav is not null) _selectedNav.IsChecked = true;
+            Toast(InfoBarSeverity.Information, "测试进行中",
+                "测试结束或点「中断测试」后才能切换页面。");
+            return;
+        }
+
         if (_currentId == id && PageHost.Content is not null) return;
 
         if (_subOpen)
@@ -726,6 +738,12 @@ public partial class SettingsWindow : Window
     public bool IsConfirmOpen => ConfirmHost.Visibility == Visibility.Visible;
 
     string? _pendingPage;
+
+    /// <summary>
+    /// 测试进行中：锁住导航（作业页的自检会置位）。切页会把「测试中」的页面搬走、
+    /// 测试数据留在 homework.json 里，所以这里直接不让切。
+    /// </summary>
+    public bool NavigationLocked { get; set; }
 
     /// <summary>
     /// 跳到某一页（插件调 OpenSettings("plugins") 时用）。

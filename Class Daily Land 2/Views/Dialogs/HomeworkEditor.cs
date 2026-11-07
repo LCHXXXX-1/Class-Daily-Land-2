@@ -159,9 +159,55 @@ public sealed class HomeworkEditor : UserControl
         _cardsHost.LostTouchCapture += (_, _) => EndDrag();
 
         // 关设置窗 / 切页面时焦点元素不一定收到 LostFocus，这里补一枪，免得刚打的字丢了
-        Unloaded += (_, _) => Commit(rebuild: false);
+        Unloaded += (_, _) =>
+        {
+            UnhookSchedule();
+            Commit(rebuild: false);
+        };
+
+        Loaded += (_, _) =>
+        {
+            HookSchedule();
+            RefreshDueCombos();   // 页面切回来时，课表可能已经改过了
+        };
 
         Rebuild();
+    }
+
+    // ————————————————————— 课表变化时刷新提交时间 —————————————————————
+
+    bool _scheduleHooked;
+
+    void HookSchedule()
+    {
+        if (_schedule is null || _scheduleHooked) return;
+        _scheduleHooked = true;
+        _schedule.Changed += OnScheduleChanged;
+    }
+
+    void UnhookSchedule()
+    {
+        if (_schedule is null || !_scheduleHooked) return;
+        _scheduleHooked = false;
+        _schedule.Changed -= OnScheduleChanged;
+    }
+
+    /// <summary>课表保存后：重新算每条"按节次"的作业时间，并重建下拉框。</summary>
+    void OnScheduleChanged(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(RefreshDueCombos);
+            return;
+        }
+        RefreshDueCombos();
+    }
+
+    void RefreshDueCombos()
+    {
+        foreach (var card in _cards)
+            foreach (var row in card.Rows)
+                RefreshDueCombo(row);
     }
 
     // ————————————————————— 渲染 —————————————————————
@@ -442,9 +488,10 @@ public sealed class HomeworkEditor : UserControl
         {
             var kind = (row.Item.DueKind ?? "").Trim();
             var due = row.Item.DueTime;
+            var dueEnd = row.Item.DueEndTime;
 
             row.Due.Items.Clear();
-            foreach (var option in HomeworkDueOptions.Build(_schedule?.Engine, DateTime.Now, kind, due, row.Item.DueLabel))
+            foreach (var option in HomeworkDueOptions.Build(_schedule?.Engine, DateTime.Now, kind, due, dueEnd, row.Item.DueLabel))
                 row.Due.Items.Add(option);
 
             row.Due.SelectedItem = HomeworkDueOptions.Find(row.Due.Items.OfType<HomeworkDueOption>(), kind, due);
@@ -473,8 +520,11 @@ public sealed class HomeworkEditor : UserControl
             }
 
             row.Item.DueKind = HomeworkDueKinds.Custom;
-            row.Item.Due = HomeworkDue.ToText(picked);
-            row.Item.DueLabel = $"自定义 · {HomeworkDue.Describe(picked, DateTime.Now)}";
+            row.Item.Due = HomeworkDue.ToTextPrecise(picked);
+            row.Item.DueEnd = "";   // 自定义文本没有"下一节上课"，不构成提交时段
+            row.Item.DueName = "";
+            row.Item.DuePeriod = -1;
+            row.Item.DueLabel = $"自定义文本 · {HomeworkDue.Describe(picked, DateTime.Now)}";
             row.Item.DueFired = "";
             row.Item.Date = picked.ToString("yyyy-MM-dd");
 
@@ -490,18 +540,26 @@ public sealed class HomeworkEditor : UserControl
         }
 
         var previousDue = row.Item.Due ?? "";
+        var previousEnd = row.Item.DueEnd ?? "";
         row.Item.DueKind = option.Kind;
-        row.Item.Due = option.Due is null ? "" : HomeworkDue.ToText(option.Due.Value);
+        row.Item.Due = option.Due is null ? "" : HomeworkDue.ToTextPrecise(option.Due.Value);
+        row.Item.DueEnd = option.WindowEnd is null ? "" : HomeworkDue.ToTextPrecise(option.WindowEnd.Value);
+        row.Item.DueName = option.CourseName ?? "";
+        row.Item.DuePeriod = option.PeriodIndex;
         row.Item.DueLabel = option.Text;
 
         if (option.Kind == HomeworkDueKinds.Late)
         {
             row.Item.Due = "";
+            row.Item.DueEnd = "";
+            row.Item.DueName = "";
+            row.Item.DuePeriod = -1;
             row.Item.DueFired = "";
         }
-        else if (!string.Equals(previousDue, row.Item.Due, StringComparison.Ordinal))
+        else if (!string.Equals(previousDue, row.Item.Due, StringComparison.Ordinal) ||
+                 !string.Equals(previousEnd, row.Item.DueEnd, StringComparison.Ordinal))
         {
-            // 时间换了，"已到点"的旧标记就作废
+            // 时间或时段换了，"已到点"的旧标记就作废
             row.Item.DueFired = "";
             if (option.Due is not null) row.Item.Date = option.Due.Value.ToString("yyyy-MM-dd");
         }
@@ -513,7 +571,7 @@ public sealed class HomeworkEditor : UserControl
     // ————————————————————— 落盘 —————————————————————
 
     static string Signature(IEnumerable<HomeworkItem> items) => string.Join("\n", items.Select(i =>
-        $"{i.Subject}\u0001{i.Content}\u0001{i.Date}\u0001{i.Due}\u0001{i.DueKind}\u0001{i.DueLabel}"));
+        $"{i.Subject}\u0001{i.Content}\u0001{i.Date}\u0001{i.Due}\u0001{i.DueEnd}\u0001{i.DueName}\u0001{i.DuePeriod}\u0001{i.DueKind}\u0001{i.DueLabel}"));
 
     /// <summary>把界面上的内容写回 homework.json（顺序 = 卡片顺序 → 行顺序）。内容没变就不写盘。</summary>
     void Commit(bool rebuild)

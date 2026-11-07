@@ -1,0 +1,465 @@
+<UserControl x:Class="ClassDailyLand2.App.Integrations.Weather.WeatherArt"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="32" Height="32"
+             ClipToBounds="True"
+             Focusable="False"
+             IsHitTestVisible="False"
+             SnapsToDevicePixels="True">
+    <!--
+      ══════════════════════════════════════════════════════════════════════════
+      天气动画控件（重写版）
+      ══════════════════════════════════════════════════════════════════════════
+
+      ★ 版式约定（改之前先读，这是上一版翻车的根源）：
+        · 舞台固定 32×32。
+        · **云只占 y7~21**，**所有降水/特效一律放在 y22~32**，两块区域**绝不重叠**。
+          上一版把特效放在 y17~27、云底在 y22，再叠一层顶部淡入遮罩 ——
+          特效大半被云和自己的遮罩吃掉，看起来就是"特效没了"。
+        · **没有任何 OpacityMask**：降水在 y22 静止时就是全不透明，
+          竖直下落 12px 到 y34（超出 32 被 ClipToBounds 裁掉）。
+          循环回跳发生在 y22（紧随云底 y21），视觉上是"从云里出来"。
+        · 分组面板 G_* 全部 Collapsed，由代码按 Kind 切换；名字全文件唯一。
+        · 每种天气一个 Storyboard，key = sb.<kind>（晴天分昼夜 sb.clear-day / sb.clear-night）。
+          代码查表时会在 key 前补 "sb." 前缀，两边必须一致。
+        · 所有会动的元素都在 XAML 里给足静态初值 —— Animated=false 时全靠它们。
+
+      ── 坐标速查 ──
+        云：x5.5~28.5, y7~21（底边 21）
+        太阳：圆心 (16,14)，核心 r6.5，光芒到 r12.5；多云/阵雨里的小太阳圆心 (9,9)
+        降水起点：y22；下落 12px 到 y34
+        雾带：y22.5 / 26 / 29.5，高 1.6
+        闪电：y22~32
+    -->
+    <UserControl.Resources>
+
+        <!-- ══════════ 共享几何 ══════════ -->
+
+        <!--
+          云：三个大小不一的圆 + 一块圆角底座求并。
+          求并后是**一整块几何**，渐变只铺一次，看不出接缝。
+          底座必须带 RadiusX/RadiusY，否则右下角会凸出直角小方块。
+        -->
+        <CombinedGeometry x:Key="CloudGeo" GeometryCombineMode="Union">
+            <CombinedGeometry.Geometry1>
+                <EllipseGeometry Center="18,14" RadiusX="7" RadiusY="7" />
+            </CombinedGeometry.Geometry1>
+            <CombinedGeometry.Geometry2>
+                <CombinedGeometry GeometryCombineMode="Union">
+                    <CombinedGeometry.Geometry1>
+                        <EllipseGeometry Center="10,16.5" RadiusX="4.5" RadiusY="4.5" />
+                    </CombinedGeometry.Geometry1>
+                    <CombinedGeometry.Geometry2>
+                        <CombinedGeometry GeometryCombineMode="Union">
+                            <CombinedGeometry.Geometry1>
+                                <EllipseGeometry Center="23.5,16" RadiusX="4.5" RadiusY="5" />
+                            </CombinedGeometry.Geometry1>
+                            <CombinedGeometry.Geometry2>
+                                <RectangleGeometry Rect="5.5,15,23,6" RadiusX="3" RadiusY="3" />
+                            </CombinedGeometry.Geometry2>
+                        </CombinedGeometry>
+                    </CombinedGeometry.Geometry2>
+                </CombinedGeometry>
+            </CombinedGeometry.Geometry2>
+        </CombinedGeometry>
+
+        <!-- 月牙：大圆减去右上角的圆，缺口朝右上 -->
+        <CombinedGeometry x:Key="MoonGeo" GeometryCombineMode="Exclude">
+            <CombinedGeometry.Geometry1>
+                <EllipseGeometry Center="15,15" RadiusX="8" RadiusY="8" />
+            </CombinedGeometry.Geometry1>
+            <CombinedGeometry.Geometry2>
+                <EllipseGeometry Center="21,11" RadiusX="7" RadiusY="7" />
+            </CombinedGeometry.Geometry2>
+        </CombinedGeometry>
+
+        <!-- 太阳柔光：固定暖金，压在光芒下面，给扁平图标一点体积 -->
+        <RadialGradientBrush x:Key="SunGlow" Center="0.5,0.5" GradientOrigin="0.5,0.5"
+                             RadiusX="0.5" RadiusY="0.5">
+            <GradientStop Color="#66F7B733" Offset="0.35" />
+            <GradientStop Color="#00F7B733" Offset="1" />
+        </RadialGradientBrush>
+
+        <!-- ══════════ 晴 · 白天：光芒自转 ══════════ -->
+        <Storyboard x:Key="sb.clear-day">
+            <DoubleAnimation Storyboard.TargetName="ClearRays"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)"
+                             From="0" To="360" Duration="0:0:24" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 晴 · 夜晚：星星明灭 ══════════ -->
+        <Storyboard x:Key="sb.clear-night">
+            <DoubleAnimation Storyboard.TargetName="ClearStar1" Storyboard.TargetProperty="Opacity"
+                             From="1" To="0.2" Duration="0:0:1.8" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="ClearStar2" Storyboard.TargetProperty="Opacity"
+                             From="0.3" To="1" Duration="0:0:2.4" BeginTime="0:0:0.6" AutoReverse="True" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 多云：云左右缓移 ══════════ -->
+        <Storyboard x:Key="sb.partly">
+            <DoubleAnimation Storyboard.TargetName="PartlyCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="-1.6" To="1.6" Duration="0:0:6" AutoReverse="True" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 阴：后云明暗 + 前云漂移 ══════════ -->
+        <Storyboard x:Key="sb.cloudy">
+            <DoubleAnimation Storyboard.TargetName="CloudyBack" Storyboard.TargetProperty="Opacity"
+                             From="0.5" To="0.8" Duration="0:0:3.6" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="CloudyFront"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="-2" To="2" Duration="0:0:7" AutoReverse="True" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 雾：云轻呼吸 + 三道雾带错时横移 ══════════ -->
+        <Storyboard x:Key="sb.fog">
+            <DoubleAnimation Storyboard.TargetName="FogCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.2" Duration="0:0:3" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="FogBar1"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="-3" To="3" Duration="0:0:2.8" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="FogBar2"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="3" To="-3" Duration="0:0:3.6" BeginTime="0:0:0.4" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="FogBar3"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="-2" To="4" Duration="0:0:3.2" BeginTime="0:0:0.9" AutoReverse="True" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 毛毛雨：4 滴慢落 ══════════ -->
+        <Storyboard x:Key="sb.drizzle">
+            <DoubleAnimation Storyboard.TargetName="DrizCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.2" Duration="0:0:2.6" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="DrizDrop1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.7" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="DrizDrop2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.7" BeginTime="0:0:0.42" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="DrizDrop3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.7" BeginTime="0:0:0.85" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="DrizDrop4" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.7" BeginTime="0:0:1.27" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 雨：5 滴快落 ══════════ -->
+        <Storyboard x:Key="sb.rain">
+            <DoubleAnimation Storyboard.TargetName="RainCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.2" Duration="0:0:2.2" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="RainDrop1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.15" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="RainDrop2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.15" BeginTime="0:0:0.23" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="RainDrop3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.15" BeginTime="0:0:0.46" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="RainDrop4" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.15" BeginTime="0:0:0.69" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="RainDrop5" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.15" BeginTime="0:0:0.92" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 阵雨：太阳 + 云 + 4 滴 ══════════ -->
+        <Storyboard x:Key="sb.showers">
+            <DoubleAnimation Storyboard.TargetName="ShowersCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.4" Duration="0:0:1.9" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="ShowDrop1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="ShowDrop2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1" BeginTime="0:0:0.25" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="ShowDrop3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1" BeginTime="0:0:0.5" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="ShowDrop4" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1" BeginTime="0:0:0.75" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 冻雨：2 滴 + 2 雪粒 ══════════ -->
+        <Storyboard x:Key="sb.sleet">
+            <DoubleAnimation Storyboard.TargetName="SleetCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.2" Duration="0:0:2.4" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SleetDrop1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.3" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SleetDrop2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1.3" BeginTime="0:0:0.65" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SleetFlake1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:2.6" BeginTime="0:0:0.3" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SleetFlake2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:2.6" BeginTime="0:0:1.5" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 雪：3 片雪花，飘着落 ══════════ -->
+        <Storyboard x:Key="sb.snow">
+            <DoubleAnimation Storyboard.TargetName="SnowCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.2" Duration="0:0:3" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SnowFlake1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:3.4" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SnowFlake1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="-2" To="2" Duration="0:0:1.6" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SnowFlake2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:3.9" BeginTime="0:0:1.2" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SnowFlake2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="2" To="-2" Duration="0:0:1.9" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SnowFlake3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:3.5" BeginTime="0:0:2.3" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="SnowFlake3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.X)"
+                             From="-1.6" To="1.6" Duration="0:0:1.4" BeginTime="0:0:0.5" AutoReverse="True" RepeatBehavior="Forever" />
+        </Storyboard>
+
+        <!-- ══════════ 雷阵雨：闪电双闪后歇一口气 ══════════ -->
+        <Storyboard x:Key="sb.thunder">
+            <DoubleAnimation Storyboard.TargetName="ThunderCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.4" Duration="0:0:2" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimationUsingKeyFrames Storyboard.TargetName="ThunderBolt"
+                                           Storyboard.TargetProperty="Opacity"
+                                           RepeatBehavior="Forever">
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0" Value="1" />
+                <DiscreteDoubleKeyFrame KeyTime="0:0:0.1" Value="0.15" />
+                <DiscreteDoubleKeyFrame KeyTime="0:0:1.8" Value="0.15" />
+                <DiscreteDoubleKeyFrame KeyTime="0:0:1.9" Value="1" />
+                <DiscreteDoubleKeyFrame KeyTime="0:0:2" Value="0.15" />
+                <DiscreteDoubleKeyFrame KeyTime="0:0:2.7" Value="0.15" />
+            </DoubleAnimationUsingKeyFrames>
+        </Storyboard>
+
+        <!-- ══════════ 冰雹：3 颗实心球快落 ══════════ -->
+        <Storyboard x:Key="sb.hail">
+            <DoubleAnimation Storyboard.TargetName="HailCloud"
+                             Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="-1.2" Duration="0:0:2.2" AutoReverse="True" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="HailBall1" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="HailBall2" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1" BeginTime="0:0:0.33" RepeatBehavior="Forever" />
+            <DoubleAnimation Storyboard.TargetName="HailBall3" Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                             From="0" To="12" Duration="0:0:1" BeginTime="0:0:0.66" RepeatBehavior="Forever" />
+        </Storyboard>
+    </UserControl.Resources>
+
+    <Viewbox Stretch="Uniform">
+        <Grid x:Name="Stage" Width="32" Height="32">
+
+            <!-- ═══════════ 晴 · 白天 ═══════════ -->
+            <Canvas x:Name="G_ClearDay" Visibility="Collapsed" Width="32" Height="32">
+                <Ellipse Width="26" Height="26" Canvas.Left="3" Canvas.Top="1" Fill="{StaticResource SunGlow}" />
+                <Path x:Name="ClearRays"
+                      Data="M16,1.5 L16,4.5 M16,23.5 L16,26.5 M3.5,14 L6.5,14 M25.5,14 L28.5,14 M7.16,5.16 L9.28,7.28 M22.72,20.72 L24.84,22.84 M24.84,5.16 L22.72,7.28 M9.28,20.72 L7.16,22.84"
+                      Stroke="#FFF7B733" StrokeThickness="2"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                    <Path.RenderTransform><RotateTransform CenterX="16" CenterY="14" /></Path.RenderTransform>
+                </Path>
+                <Ellipse x:Name="ClearSun" Width="13" Height="13" Canvas.Left="9.5" Canvas.Top="7.5" Fill="#FFF7B733" />
+            </Canvas>
+
+            <!-- ═══════════ 晴 · 夜晚 ═══════════ -->
+            <Canvas x:Name="G_ClearNight" Visibility="Collapsed" Width="32" Height="32">
+                <Ellipse x:Name="ClearStar1" Width="3" Height="3" Canvas.Left="25.5" Canvas.Top="5" Fill="#FFF7B733" />
+                <Ellipse x:Name="ClearStar2" Width="2" Height="2" Canvas.Left="6" Canvas.Top="19" Fill="#FFF7B733" />
+                <Path x:Name="ClearMoon" Data="{StaticResource MoonGeo}" Fill="#FFF7B733" />
+            </Canvas>
+
+            <!-- ═══════════ 多云：小太阳 + 云 ═══════════ -->
+            <Canvas x:Name="G_Partly" Visibility="Collapsed" Width="32" Height="32">
+                <Ellipse Width="16" Height="16" Canvas.Left="1" Canvas.Top="1" Fill="{StaticResource SunGlow}" />
+                <Ellipse x:Name="PartlySun" Width="9" Height="9" Canvas.Left="4.5" Canvas.Top="4.5" Fill="#FFF7B733" />
+                <Path x:Name="PartlyCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 阴：两朵云错位 ═══════════ -->
+            <Canvas x:Name="G_Cloudy" Visibility="Collapsed" Width="32" Height="32">
+                <Path x:Name="CloudyBack" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}"
+                      Opacity="0.5">
+                    <Path.RenderTransform><TranslateTransform X="-2" Y="-3.5" /></Path.RenderTransform>
+                </Path>
+                <Path x:Name="CloudyFront" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 雾：云 + 三道雾带 ═══════════ -->
+            <Canvas x:Name="G_Fog" Visibility="Collapsed" Width="32" Height="32">
+                <Path x:Name="FogCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+                <Rectangle x:Name="FogBar1" Width="22" Height="1.6" Canvas.Left="5" Canvas.Top="22.5"
+                           RadiusX="0.8" RadiusY="0.8" Opacity="0.95" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="FogBar2" Width="16" Height="1.6" Canvas.Left="8" Canvas.Top="26"
+                           RadiusX="0.8" RadiusY="0.8" Opacity="0.7" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="FogBar3" Width="19" Height="1.6" Canvas.Left="6.5" Canvas.Top="29.5"
+                           RadiusX="0.8" RadiusY="0.8" Opacity="0.5" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+            </Canvas>
+
+            <!-- ═══════════ 毛毛雨 ═══════════ -->
+            <Canvas x:Name="G_Drizzle" Visibility="Collapsed" Width="32" Height="32">
+                <Rectangle x:Name="DrizDrop1" Width="1.8" Height="4.5" Canvas.Left="8.5" Canvas.Top="22"
+                           RadiusX="0.9" RadiusY="0.9" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="DrizDrop2" Width="1.8" Height="4.5" Canvas.Left="13.5" Canvas.Top="22"
+                           RadiusX="0.9" RadiusY="0.9" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="DrizDrop3" Width="1.8" Height="4.5" Canvas.Left="18.5" Canvas.Top="22"
+                           RadiusX="0.9" RadiusY="0.9" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="DrizDrop4" Width="1.8" Height="4.5" Canvas.Left="23.5" Canvas.Top="22"
+                           RadiusX="0.9" RadiusY="0.9" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Path x:Name="DrizCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 雨 ═══════════ -->
+            <Canvas x:Name="G_Rain" Visibility="Collapsed" Width="32" Height="32">
+                <Rectangle x:Name="RainDrop1" Width="2.4" Height="7" Canvas.Left="6.5" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="RainDrop2" Width="2.4" Height="7" Canvas.Left="10.8" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="RainDrop3" Width="2.4" Height="7" Canvas.Left="15.1" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="RainDrop4" Width="2.4" Height="7" Canvas.Left="19.4" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="RainDrop5" Width="2.4" Height="7" Canvas.Left="23.7" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Path x:Name="RainCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 阵雨：太阳还露着 ═══════════ -->
+            <Canvas x:Name="G_Showers" Visibility="Collapsed" Width="32" Height="32">
+                <Ellipse Width="16" Height="16" Canvas.Left="1" Canvas.Top="1" Fill="{StaticResource SunGlow}" />
+                <Ellipse x:Name="ShowersSun" Width="9" Height="9" Canvas.Left="4.5" Canvas.Top="4.5" Fill="#FFF7B733" />
+                <Rectangle x:Name="ShowDrop1" Width="2.4" Height="6.5" Canvas.Left="7.8" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="ShowDrop2" Width="2.4" Height="6.5" Canvas.Left="12.8" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="ShowDrop3" Width="2.4" Height="6.5" Canvas.Left="17.8" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="ShowDrop4" Width="2.4" Height="6.5" Canvas.Left="22.8" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Path x:Name="ShowersCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 冻雨：雨滴 + 雪粒 ═══════════ -->
+            <Canvas x:Name="G_Sleet" Visibility="Collapsed" Width="32" Height="32">
+                <Rectangle x:Name="SleetDrop1" Width="2.4" Height="6.5" Canvas.Left="8.3" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Rectangle x:Name="SleetDrop2" Width="2.4" Height="6.5" Canvas.Left="21.3" Canvas.Top="22"
+                           RadiusX="1.2" RadiusY="1.2" Fill="#FF4A9EFF">
+                    <Rectangle.RenderTransform><TranslateTransform /></Rectangle.RenderTransform>
+                </Rectangle>
+                <Path x:Name="SleetFlake1"
+                      Data="M2.9,0 L2.9,5.8 M0.39,1.45 L5.41,4.35 M0.39,4.35 L5.41,1.45"
+                      Canvas.Left="13.5" Canvas.Top="22"
+                      Stroke="{DynamicResource WeatherSnowBrush}" StrokeThickness="1.1"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+                <Path x:Name="SleetFlake2"
+                      Data="M2.5,0 L2.5,5 M0.34,1.25 L4.66,3.75 M0.34,3.75 L4.66,1.25"
+                      Canvas.Left="23.5" Canvas.Top="22"
+                      Stroke="{DynamicResource WeatherSnowBrush}" StrokeThickness="1"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+                <Path x:Name="SleetCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 雪 ═══════════ -->
+            <Canvas x:Name="G_Snow" Visibility="Collapsed" Width="32" Height="32">
+                <Path x:Name="SnowFlake1"
+                      Data="M3.7,0 L3.7,7.4 M0.53,1.85 L6.87,5.55 M0.53,5.55 L6.87,1.85"
+                      Canvas.Left="6.5" Canvas.Top="22"
+                      Stroke="{DynamicResource WeatherSnowBrush}" StrokeThickness="1.35"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+                <Path x:Name="SnowFlake2"
+                      Data="M3,0 L3,6 M0.4,1.5 L5.6,4.5 M0.4,4.5 L5.6,1.5"
+                      Canvas.Left="15" Canvas.Top="22"
+                      Stroke="{DynamicResource WeatherSnowBrush}" StrokeThickness="1.15"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+                <Path x:Name="SnowFlake3"
+                      Data="M3.4,0 L3.4,6.8 M0.46,1.7 L6.34,5.1 M0.46,5.1 L6.34,1.7"
+                      Canvas.Left="22.5" Canvas.Top="22"
+                      Stroke="{DynamicResource WeatherSnowBrush}" StrokeThickness="1.25"
+                      StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+                <Path x:Name="SnowCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 雷阵雨 ═══════════ -->
+            <Canvas x:Name="G_Thunder" Visibility="Collapsed" Width="32" Height="32">
+                <Path x:Name="ThunderBolt"
+                      Data="M18.5,22 L11.5,29.5 L15.5,29.5 L13.5,32 L21,25.5 L16.5,25.5 Z"
+                      Fill="#FFF7B733" Stroke="#FFF7B733" StrokeThickness="0.8" StrokeLineJoin="Round" />
+                <Path x:Name="ThunderCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+
+            <!-- ═══════════ 冰雹 ═══════════ -->
+            <Canvas x:Name="G_Hail" Visibility="Collapsed" Width="32" Height="32">
+                <Ellipse x:Name="HailBall1" Width="4.6" Height="4.6" Canvas.Left="7" Canvas.Top="22"
+                         Fill="{DynamicResource WeatherSnowBrush}">
+                    <Ellipse.RenderTransform><TranslateTransform /></Ellipse.RenderTransform>
+                </Ellipse>
+                <Ellipse x:Name="HailBall2" Width="4.2" Height="4.2" Canvas.Left="14.4" Canvas.Top="22"
+                         Fill="{DynamicResource WeatherSnowBrush}">
+                    <Ellipse.RenderTransform><TranslateTransform /></Ellipse.RenderTransform>
+                </Ellipse>
+                <Ellipse x:Name="HailBall3" Width="4.6" Height="4.6" Canvas.Left="21.4" Canvas.Top="22"
+                         Fill="{DynamicResource WeatherSnowBrush}">
+                    <Ellipse.RenderTransform><TranslateTransform /></Ellipse.RenderTransform>
+                </Ellipse>
+                <Path x:Name="HailCloud" Data="{StaticResource CloudGeo}" Fill="{DynamicResource WeatherCloudBrush}">
+                    <Path.RenderTransform><TranslateTransform /></Path.RenderTransform>
+                </Path>
+            </Canvas>
+        </Grid>
+    </Viewbox>
+</UserControl>

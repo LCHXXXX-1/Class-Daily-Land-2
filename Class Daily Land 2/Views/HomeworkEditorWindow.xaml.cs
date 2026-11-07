@@ -59,6 +59,9 @@ public partial class HomeworkEditorWindow : Window
     // 当前下拉框选中的提交时间状态
     string _dueKind = HomeworkDueKinds.None;
     DateTime? _due;
+    DateTime? _dueEnd;       // 提交时段结束 = 下一节上课；自定义文本没有
+    string _dueName = "";    // 这节课的展示名（自习(1)）
+    int _duePeriod = -1;     // 选的是第几节（0 起）；-1 = 自定义/补交/不交
     string _dueLabel = "";
 
     bool _suppressDueEvent;
@@ -81,7 +84,8 @@ public partial class HomeworkEditorWindow : Window
         _courseSignature = CourseSignature();
         BuildDueOptions();
         Reload();
-        Loaded += (_, _) => SubjectInput.Focus();
+        Loaded += (_, _) => { SubjectInput.Focus(); HookSchedule(); };
+        Closed += (_, _) => UnhookSchedule();
 
         // 窗口开着的时候可能去改了课表/跨了天：回来时把课程列表重新对一遍（选中项按状态恢复，不会跳）
         Activated += (_, _) =>
@@ -94,6 +98,55 @@ public partial class HomeworkEditorWindow : Window
     }
 
     string _courseSignature = "";
+
+    // ————————————————————— 课表变化时刷新提交时间 —————————————————————
+
+    bool _scheduleHooked;
+
+    void HookSchedule()
+    {
+        if (_schedule is null || _scheduleHooked) return;
+        _scheduleHooked = true;
+        _schedule.Changed += OnScheduleChanged;
+    }
+
+    void UnhookSchedule()
+    {
+        if (_schedule is null || !_scheduleHooked) return;
+        _scheduleHooked = false;
+        _schedule.Changed -= OnScheduleChanged;
+    }
+
+    void OnScheduleChanged(object? sender, EventArgs e)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(RefreshDueFromSchedule);
+            return;
+        }
+        RefreshDueFromSchedule();
+    }
+
+    /// <summary>当前正在选的那节课如果时间变了，输入框里的时间也跟着变。</summary>
+    void RefreshDueFromSchedule()
+    {
+        if (_schedule is not null && _dueKind == HomeworkDueKinds.Period && _duePeriod >= 0)
+        {
+            var date = _due?.Date ?? DateTime.Today;
+            var match = HomeworkDue.PeriodOptions(_schedule.Engine.DaySlots(date), date)
+                .FirstOrDefault(o => o.Index == _duePeriod);
+            if (match.Text is not null)
+            {
+                _due = match.Due;
+                _dueEnd = match.End;
+                _dueName = match.Name;
+                _dueLabel = match.Text;
+            }
+        }
+
+        BuildDueOptions();
+        Reload();
+    }
 
     string CourseSignature()
     {
@@ -141,6 +194,9 @@ public partial class HomeworkEditorWindow : Window
         Date = item.Date,
         Content = item.Content,
         Due = item.Due,
+        DueEnd = item.DueEnd,
+        DueName = item.DueName,
+        DuePeriod = item.DuePeriod,
         DueKind = item.DueKind,
         DueLabel = item.DueLabel,
         DueFired = item.DueFired,
@@ -155,7 +211,7 @@ public partial class HomeworkEditorWindow : Window
         try
         {
             DueBox.Items.Clear();
-            foreach (var option in HomeworkDueOptions.Build(_schedule?.Engine, DateTime.Now, _dueKind, _due, _dueLabel))
+            foreach (var option in HomeworkDueOptions.Build(_schedule?.Engine, DateTime.Now, _dueKind, _due, _dueEnd, _dueLabel))
                 DueBox.Items.Add(option);
 
             DueBox.SelectedItem = HomeworkDueOptions.Find(DueBox.Items.OfType<HomeworkDueOption>(), _dueKind, _due);
@@ -171,7 +227,7 @@ public partial class HomeworkEditorWindow : Window
     /// <summary>下拉框旁边那句"这条作业会排在哪"。</summary>
     void UpdateDueHint()
     {
-        if (DueHint is not null) DueHint.Text = HomeworkDueOptions.HintFor(_dueKind, _due, DateTime.Now);
+        if (DueHint is not null) DueHint.Text = HomeworkDueOptions.HintFor(_dueKind, _due, _dueEnd, DateTime.Now);
     }
 
     void Due_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -191,7 +247,10 @@ public partial class HomeworkEditorWindow : Window
 
             _dueKind = HomeworkDueKinds.Custom;
             _due = picked;
-            _dueLabel = $"自定义 · {HomeworkDue.Describe(picked, DateTime.Now)}";
+            _dueEnd = null;   // 自定义文本没有"下一节上课"，不构成提交时段
+            _dueName = "";
+            _duePeriod = -1;
+            _dueLabel = $"自定义文本 · {HomeworkDue.Describe(picked, DateTime.Now)}";
             BuildDueOptions();
             return;
         }
@@ -204,6 +263,9 @@ public partial class HomeworkEditorWindow : Window
 
         _dueKind = option.Kind;
         _due = option.Due;
+        _dueEnd = option.WindowEnd;
+        _dueName = option.CourseName;
+        _duePeriod = option.PeriodIndex;
         _dueLabel = option.Text;
         UpdateDueHint();
     }
@@ -216,6 +278,9 @@ public partial class HomeworkEditorWindow : Window
     {
         _dueKind = HomeworkDueKinds.None;
         _due = null;
+        _dueEnd = null;
+        _dueName = "";
+        _duePeriod = -1;
         _dueLabel = "";
         BuildDueOptions();
     }
@@ -224,6 +289,9 @@ public partial class HomeworkEditorWindow : Window
     {
         _dueKind = (item.DueKind ?? "").Trim();
         _due = item.DueTime;
+        _dueEnd = item.DueEndTime;
+        _dueName = item.DueName ?? "";
+        _duePeriod = item.DuePeriod;
         _dueLabel = item.DueLabel ?? "";
         if (_dueKind.Length == 0) _dueKind = _due is null ? HomeworkDueKinds.None : HomeworkDueKinds.Custom;
         BuildDueOptions();
@@ -269,7 +337,8 @@ public partial class HomeworkEditorWindow : Window
     /// <summary>把当前输入拼成一条作业；提交时间变了就把「已触发」标记清掉。</summary>
     HomeworkItem BuildItem(string subject, string content, string previousDate, string previousDue, string previousFired)
     {
-        var dueText = _due is null ? "" : HomeworkDue.ToText(_due.Value);
+        var dueText = _due is null ? "" : HomeworkDue.ToTextPrecise(_due.Value);
+        var endText = _dueEnd is null ? "" : HomeworkDue.ToTextPrecise(_dueEnd.Value);
         var fired = string.Equals(dueText, previousDue ?? "", StringComparison.Ordinal)
             ? (previousFired ?? "")
             : "";
@@ -278,6 +347,9 @@ public partial class HomeworkEditorWindow : Window
         if (_dueKind == HomeworkDueKinds.Late)
         {
             dueText = "";
+            endText = "";
+            _dueName = "";
+            _duePeriod = -1;
             fired = "";
         }
 
@@ -288,6 +360,9 @@ public partial class HomeworkEditorWindow : Window
             // 日期备注：有提交时间就跟着走，没有就保留原来手填的
             Date = _due is null ? (previousDate ?? "").Trim() : _due.Value.ToString("yyyy-MM-dd"),
             Due = dueText,
+            DueEnd = endText,
+            DueName = _dueName,
+            DuePeriod = _duePeriod,
             DueKind = _dueKind,
             DueLabel = _dueLabel,
             DueFired = fired,

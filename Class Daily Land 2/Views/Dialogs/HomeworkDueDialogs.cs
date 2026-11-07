@@ -161,7 +161,7 @@ internal sealed class DueTimeDialog : CardDialog
 
     public DateTime Value { get; private set; }
 
-    public DueTimeDialog(DateTime? current) : base("自定义提交时间", 400)
+    public DueTimeDialog(DateTime? current) : base("自定义文本（提交时间）", 400)
     {
         var seed = current ?? DateTime.Now.AddMinutes(30);
         _date = Input(seed.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture), 148);

@@ -49,6 +49,18 @@
 
     <!-- 文字 -->
     <SolidColorBrush x:Key="TextFillColorPrimaryBrush" Color="#FFFFFFFF" />
+
+    <!--
+      天气图标（WeatherArt）专用：云与降水必须在**本主题的底色**上看得清。
+      浅色主题底浅 → 云要压深；深色主题底深 → 云要提亮。
+      用**竖向渐变**而不是纯色：云是球状堆叠，上亮下暗才有体积感。
+      两个值都取中灰蓝，所以就算控件跑到相反底色上也不会糊掉。
+    -->
+    <LinearGradientBrush x:Key="WeatherCloudBrush" StartPoint="0.5,0" EndPoint="0.5,1">
+        <GradientStop Color="#FFD6DFE8" Offset="0" />
+        <GradientStop Color="#FF9CAEC0" Offset="1" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="WeatherSnowBrush" Color="#FFE8F2FC" />
     <SolidColorBrush x:Key="TextFillColorSecondaryBrush" Color="#C8FFFFFF" />
     <SolidColorBrush x:Key="TextFillColorTertiaryBrush" Color="#8BFFFFFF" />
     <SolidColorBrush x:Key="TextFillColorDisabledBrush" Color="#5DFFFFFF" />

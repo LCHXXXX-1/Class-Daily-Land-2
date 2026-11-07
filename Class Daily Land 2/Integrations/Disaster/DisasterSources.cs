@@ -21,7 +21,7 @@ public static partial class DisasterSources
 {
     const string UserAgent = "ClassBoard-DisasterAlert/1.0";
 
-    /// <summary>单次请求超时（秒）。这个轮询每 8 秒一轮，超时设得太短会把网络抖动当成"源挂了"。</summary>
+    /// <summary>单次请求超时（秒）。地震轮询默认 5 秒一轮，超时设得太短会把网络抖动当成"源挂了"。</summary>
     const int TimeoutSeconds = 10;
 
     static readonly TimeSpan Timeout = TimeSpan.FromSeconds(TimeoutSeconds);
@@ -458,8 +458,18 @@ public static partial class DisasterSources
         return (merged, changed);
     }
 
+    /// <summary>
+    /// 裁掉过期事件。
+    ///
+    /// <para>★ 默认值必须和 <see cref="QuakeCalc.Evaluate"/> 的 <c>displayable</c> 窗口一致
+    /// （<c>MaxAgeSec + ArrivedHoldSec</c> = 240 秒）。原来默认 180 秒，比展示窗口短 60 秒：
+    /// 横波 175 秒后才到的地震，"已到达"那 60 秒提示只剩 5 秒就从库里被删掉；
+    /// 倒计时超过 180 秒的（约 730 km 外的 M7+，外推斜率 0.2334 s/km）更会**在读秒途中
+    /// 直接消失** —— 红条凭空不见，正是这条链路最不能出的那类 bug。</para>
+    /// </summary>
     public static Dictionary<string, QuakeEvent> PruneQuakes(
-        IReadOnlyDictionary<string, QuakeEvent> events, double now, double maxAge = 180)
+        IReadOnlyDictionary<string, QuakeEvent> events, double now,
+        double maxAge = QuakeCalc.MaxAgeSec + QuakeCalc.ArrivedHoldSec)
     {
         return events.Where(kv => now - kv.Value.OriginTs <= maxAge)
             .ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);

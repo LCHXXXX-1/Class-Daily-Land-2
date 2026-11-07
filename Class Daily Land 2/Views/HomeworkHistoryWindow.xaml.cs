@@ -119,6 +119,9 @@ public partial class HomeworkHistoryWindow : Window
                 Content = item.Content,
                 // 提交时间也一起恢复：否则一恢复就全变成"没设提交时间"
                 Due = item.Due,
+                DueEnd = item.DueEnd,
+                DueName = item.DueName,
+                DuePeriod = item.DuePeriod,
                 DueKind = item.DueKind,
                 DueLabel = item.DueLabel,
                 DueFired = item.DueFired,

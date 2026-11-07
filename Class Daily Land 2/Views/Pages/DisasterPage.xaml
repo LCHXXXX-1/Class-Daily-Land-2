@@ -56,26 +56,74 @@
         </fl:SettingGroup>
 
         <fl:SettingGroup Title="位置" Icon="{StaticResource Icon.Calendar}" TileColor="#FF107C10"
-                         Note="地震倒计时按你与震中的距离算，所以位置必须准">
-            <fl:SettingRow Title="省 / 直辖市">
-                <ComboBox x:Name="ProvinceBox" Width="200" SelectionChanged="OnProvinceChanged" />
-            </fl:SettingRow>
-            <fl:SettingRow Title="市 / 州">
-                <ComboBox x:Name="CityBox" Width="200" SelectionChanged="OnCityChanged" />
-            </fl:SettingRow>
-            <fl:SettingRow Title="区县（可选）" Hint="选得越细，坐标越准">
-                <ComboBox x:Name="DistrictBox" Width="200" SelectionChanged="OnDistrictChanged" />
-            </fl:SettingRow>
-            <fl:SettingRow Title="手动经纬度" Hint="留空则按上面的省市自动查表">
+                         Note="位置统一在「设置 → 天气」里管（自动定位 + 省/市/区 + 手填经纬度）；天气、气象预警、地震倒计时共用同一套坐标">
+            <fl:SettingRow Title="当前位置" Hint="地震倒计时按你与震中的距离算，所以位置必须准">
                 <StackPanel Orientation="Horizontal">
-                    <TextBox x:Name="LatBox" Width="90" Margin="0,0,8,0" />
-                    <TextBox x:Name="LonBox" Width="90" />
-                    <Button x:Name="ApplyCoordButton" Content="应用" Margin="8,0,0,0"
+                    <TextBlock x:Name="LocationText" MaxWidth="320" TextWrapping="Wrap"
+                               VerticalAlignment="Center" Text="—"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Button Content="去「天气」里改…" Click="OnGoWeatherLocation" Margin="10,0,0,0"
                             Style="{StaticResource SubtleButton}" Padding="10,3,10,4" />
                 </StackPanel>
             </fl:SettingRow>
             <fl:SettingRow Title="状态卡片" Hint="没有预警时也在下拉面板里显示数据源状态">
                 <fl:FluentToggle IsChecked="{Binding DisasterShowStatusCard, Mode=TwoWay}" Label="状态卡片" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="演练：地震" Icon="{StaticResource Icon.Warning}" TileColor="#FFFF9F0A"
+                         Note="震中按省/市/区查内嵌城市表；倒计时按震中到你当前位置的直线距离算 —— 选得越远，读秒越长">
+            <fl:SettingRow Title="震中" Hint="三行都留「默认」= 当前位置往西约 120 公里">
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox x:Name="DrillProvinceBox" Width="110" SelectionChanged="OnDrillEpicenterChanged" />
+                    <ComboBox x:Name="DrillCityBox" Width="120" Margin="6,0,0,0" SelectionChanged="OnDrillEpicenterChanged" />
+                    <ComboBox x:Name="DrillDistrictBox" Width="110" Margin="6,0,0,0" SelectionChanged="OnDrillEpicenterChanged" />
+                </StackPanel>
+            </fl:SettingRow>
+            <fl:SettingRow Title="震级 / 深度">
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox x:Name="DrillMagBox" Width="110">
+                        <ComboBoxItem Content="4.0" Tag="4.0" />
+                        <ComboBoxItem Content="5.0" Tag="5.0" />
+                        <ComboBoxItem Content="6.0" Tag="6.0" />
+                        <ComboBoxItem Content="6.5（默认）" Tag="6.5" />
+                        <ComboBoxItem Content="7.0" Tag="7.0" />
+                        <ComboBoxItem Content="7.5" Tag="7.5" />
+                        <ComboBoxItem Content="8.0" Tag="8.0" />
+                    </ComboBox>
+                    <fl:NumberBox x:Name="DrillDepthBox" Minimum="5" Maximum="30" Step="1" Suffix=" km"
+                                  Value="10" Width="120" Margin="8,0,0,0" Label="深度" />
+                </StackPanel>
+            </fl:SettingRow>
+            <fl:SettingRow Title="预计影响" Hint="选完震中立刻算，不用真的注入">
+                <TextBlock x:Name="DrillPreviewText" MaxWidth="430" TextWrapping="Wrap"
+                           FontSize="{DynamicResource FontSizeCaption}"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           Text="—" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="演练：气象" Icon="{StaticResource Icon.Info}" TileColor="#FF0F6CBD"
+                         Note="注入一条假预警，走和真实预警完全相同的链路：副岛被它占住、天气自动挤到作业窗口并在后面带上预警内容。上课中低于橙色的会被静默（既定规则）">
+            <fl:SettingRow Title="类型 / 等级">
+                <StackPanel Orientation="Horizontal">
+                    <ComboBox x:Name="DrillSignalBox" Width="130">
+                        <ComboBoxItem Content="暴雨" Tag="暴雨" />
+                        <ComboBoxItem Content="台风" Tag="台风" />
+                        <ComboBoxItem Content="高温" Tag="高温" />
+                        <ComboBoxItem Content="大风" Tag="大风" />
+                        <ComboBoxItem Content="寒潮" Tag="寒潮" />
+                        <ComboBoxItem Content="大雾" Tag="大雾" />
+                        <ComboBoxItem Content="雷电" Tag="雷电" />
+                        <ComboBoxItem Content="冰雹" Tag="冰雹" />
+                    </ComboBox>
+                    <ComboBox x:Name="DrillLevelBox" Width="110" Margin="8,0,0,0">
+                        <ComboBoxItem Content="橙色（默认）" Tag="orange" />
+                        <ComboBoxItem Content="红色" Tag="red" />
+                        <ComboBoxItem Content="黄色" Tag="yellow" />
+                        <ComboBoxItem Content="蓝色" Tag="blue" />
+                    </ComboBox>
+                </StackPanel>
             </fl:SettingRow>
         </fl:SettingGroup>
 
@@ -88,6 +136,8 @@
             <StackPanel Orientation="Horizontal" Margin="18,4,18,14">
                 <Button x:Name="DrillButton" Content="模拟一次地震预警"
                         Style="{StaticResource AccentButton}" Padding="12,4,12,5" />
+                <Button x:Name="DrillWeatherButton" Content="模拟一次气象预警"
+                        Style="{StaticResource SubtleButton}" Padding="12,4,12,5" Margin="8,0,0,0" />
                 <Button x:Name="ClearDrillButton" Content="清除演练"
                         Style="{StaticResource SubtleButton}" Padding="12,4,12,5" Margin="8,0,0,0" />
             </StackPanel>

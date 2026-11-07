@@ -57,7 +57,7 @@ internal sealed class PluginRuntime
 public sealed class PluginManager
 {
     /// <summary>本宿主实现的契约版本，与 <see cref="PluginManifest.HostApiVersion"/> 一致。</summary>
-    public static readonly Version ApiVersion = new(2, 0);
+    public static readonly Version ApiVersion = new(3, 0);
 
     /// <summary>
     /// 插件接口库版本（Abstractions 工程 csproj 里的 &lt;Version&gt;）。

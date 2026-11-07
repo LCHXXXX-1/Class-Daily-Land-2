@@ -22,6 +22,14 @@ using System.Windows.Threading;
 namespace ClassDailyLand2.App.Windows;
 
 /// <summary>
+/// 标题行右侧的天气胶囊内容：<see cref="Text"/> 是「17° 阴」，
+/// <see cref="Code"/> 是 WMO 天气码（决定画哪种动画），<see cref="Detail"/> 进 ToolTip，
+/// <see cref="Alert"/> 是当前生效的气象预警（有的话接在天气后面，说明"为什么天气在这儿"）。
+/// </summary>
+public sealed record WeatherChip(string Text, string Code, bool IsDay, bool Animated, string Detail,
+    string? Alert = null);
+
+/// <summary>
 /// 主窗口：无边框、贴屏幕右侧、顶部对齐。
 /// 版式对齐原版 PySide6：**无卡片背景**，纯文字列 ——
 /// 标题「班级日常」/「今日值日生：X」/「应到 N 人 · 实到 M 人」/ 作业（按学科分组，组内编号）。
@@ -41,7 +49,52 @@ public sealed class MainBoardWindow : Window
     readonly WrapPanel _titleRow = new() { Orientation = Orientation.Horizontal };
     readonly StackPanel _badgePanel = new() { Orientation = Orientation.Horizontal };
     readonly StackPanel _pluginSections = new() { Orientation = Orientation.Vertical };
+
+    /// <summary>
+    /// 天气区块：放在**作业列表上面**（不是下面那块插件区块）。
+    /// 用户要的是"弄成作业一样、显示在作业行那里"，所以排版照作业来：
+    /// 第一行 = 天气动画 + 加粗的「24° 小雨 · 体感 …」，第二行 = 缩进的风向/地名。
+    /// </summary>
+    /// <summary>
+    /// 标题行右侧的天气小胶囊：**动画 + 「17° 阴」**，就贴在「班级日常」后面那个位置。
+    /// 原来那两行详情（体感/湿度/风向）挪进 ToolTip —— 标题行放不下，删掉又可惜。
+    /// </summary>
+    readonly StackPanel _weatherChip = new()
+    {
+        Orientation = Orientation.Horizontal,
+        Visibility = Visibility.Collapsed,
+        VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(Spacing * 2, 0, 0, 0),
+    };
+
+    readonly Integrations.Weather.WeatherArt _weatherArt = new()
+    {
+        Width = 20,
+        Height = 20,
+        VerticalAlignment = VerticalAlignment.Center,
+        Margin = new Thickness(0, 0, 4, 0),
+    };
+
+    readonly TextBlock _weatherText = new() { VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>天气胶囊的内容签名（没变就不重建，否则动画每秒从头播一遍）。</summary>
+    string _weatherKey = "<init>";
     readonly StackPanel _homeworkPanel = new() { Orientation = Orientation.Vertical };
+
+    /// <summary>置顶作业（提交时段内）单独放在滚动区外面：它们固定不动，只有下面的内容滚动。</summary>
+    readonly StackPanel _homeworkPinned = new()
+    {
+        Orientation = Orientation.Vertical,
+        Visibility = Visibility.Collapsed,
+    };
+
+    /// <summary>置顶区与可滚动区之间的分隔线。</summary>
+    readonly Border _homeworkDivider = new()
+    {
+        Height = 1,
+        Margin = new Thickness(0, 4, 0, 6),
+        Visibility = Visibility.Collapsed,
+    };
     readonly ScrollViewer _homeworkScroll = new();
 
     readonly DispatcherTimer _scrollTimer = new();
@@ -72,11 +125,19 @@ public sealed class MainBoardWindow : Window
 
     // ——— 插件注入口（宿主只放 Func，窗口不认识 PluginManager） ———
     public Func<IReadOnlyList<BoardSectionRender>>? BoardSectionsProvider { get; set; }
+
+    /// <summary>
+    /// 标题行右侧的天气胶囊（动画 + 「17° 阴」）。返回 null = 这一秒不显示。
+    /// </summary>
+    public Func<WeatherChip?>? WeatherProvider { get; set; }
     public Func<BoardBadge?>? BoardBadgeProvider { get; set; }
     public Func<IReadOnlyList<BoardActionSpec>>? BoardActionsProvider { get; set; }
 
     string _badgeKey = "\u0000";
     string _sectionKey = "\u0000";
+
+    /// <summary>刚进入提交时段、等待做「变红 → 扫过 → 恢复」动画的作业（按 KeyOf 匹配）。</summary>
+    HashSet<string>? _dueFlashPending;
 
     public event Action? PrevDutyRequested;
     public event Action? NextDutyRequested;
@@ -158,6 +219,9 @@ public sealed class MainBoardWindow : Window
 
         // 标题行用 WrapPanel：窄窗口时插件徽标自动换到下一行，不会把标题挤没
         _titleRow.Children.Add(_title);
+        _weatherChip.Children.Add(_weatherArt);
+        _weatherChip.Children.Add(_weatherText);
+        _titleRow.Children.Add(_weatherChip);
         _titleRow.Children.Add(_badgePanel);
         _stack.Children.Add(_titleRow);
         _stack.Children.Add(Gap(Spacing));
@@ -165,6 +229,8 @@ public sealed class MainBoardWindow : Window
         _stack.Children.Add(Gap(Spacing));
         _stack.Children.Add(_attendanceLabel);
         _stack.Children.Add(Gap(Spacing));
+        _stack.Children.Add(_homeworkPinned);
+        _stack.Children.Add(_homeworkDivider);
         _stack.Children.Add(_homeworkScroll);
         _stack.Children.Add(_homeworkEmpty);
         _stack.Children.Add(_pluginSections);
@@ -220,38 +286,109 @@ public sealed class MainBoardWindow : Window
     /// 作业列表：按学科分组（同原版 get_grouped_homework），组标题「学科 (日期)」，
     /// 组内条目「  1. 内容」编号。
     ///
-    /// ★ 1.7.30 起分三段排（详细规则见 <see cref="HomeworkDue"/>）：
-    ///     ① 今天已到点（顶到最前，最近到点的排第一行）
-    ///     ② 正常（原文件顺序，组内也按原顺序）
-    ///     ③ 补交 / 已过点没赶上的（沉到最底下）
-    ///   分段只是**渲染顺序**，homework.json 里的顺序一点没动 —— 编辑器看到的是原顺序。
+    /// ★ 排位的单位是**整个科目板块**（详细规则见 <see cref="HomeworkDue"/>）：
+    ///     ① 提交时段内（本节下课 → 下节上课）：整块顶到最前
+    ///     ② 正常（还没到提交时间 / 没设提交时间）：原文件顺序
+    ///     ③ 补交：正常作业之后
+    ///     ④ 已过提交时间（时段结束）：整块沉到最底
+    ///   同一科目有几条作业时，只要还有一条在时段内，整块就在最前面；
+    ///   全部过完时段，整块一起沉底。分段只是**渲染顺序**，homework.json 里的顺序一点没动。
     /// </summary>
     public void RefreshHomework()
     {
         if (_homework is null) return;
         var fromFont = _dutyLabel.FontSize;
         _homeworkPanel.Children.Clear();
+        _homeworkPinned.Children.Clear();
+
         var items = _homework.Items;
-        _homeworkEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        _homeworkScroll.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
-
         var now = DateTime.Now;
-        foreach (var slot in new[] { HomeworkSlot.Due, HomeworkSlot.Normal, HomeworkSlot.Bottom })
+
+        // 先按科目归组，再给整个板块定段位 —— 这样"物理两样作业"不会拆成两段，
+        // 也不会出现一半在顶、一半在底的情况。
+        var groups = GroupBySubject(items)
+            .Select((group, index) => new
+            {
+                Group = group,
+                Index = index,
+                Slot = HomeworkDue.GroupSlot(group.Items, now),
+                // 时段内的板块：最近开始提交的排最前（只看真正在时段内那条）
+                TopDue = group.Items
+                    .Where(i => HomeworkDue.SlotOf(i, now) == HomeworkSlot.Top)
+                    .Select(i => i.DueTime ?? DateTime.MinValue)
+                    .DefaultIfEmpty(DateTime.MinValue)
+                    .Max(),
+            })
+            .OrderBy(x => (int)x.Slot)
+            .ThenByDescending(x => x.Slot == HomeworkSlot.Top ? x.TopDue : DateTime.MinValue)
+            // 不同科目同一时刻交：按科目名排序，保证每次刷新顺序一致
+            // （非 Top 段的板块这里键都是空串，仍按原文件顺序）
+            .ThenBy(x => x.Slot == HomeworkSlot.Top ? x.Group.Subject : "", StringComparer.CurrentCulture)
+            .ThenBy(x => x.Index)
+            .ToList();
+
+        var pinned = groups.Where(x => x.Slot == HomeworkSlot.Top).ToList();
+        var rest = groups.Where(x => x.Slot != HomeworkSlot.Top).ToList();
+
+        _homeworkEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        if (items.Count == 0)
         {
-            var bucket = items
-                .Where(i => !string.IsNullOrWhiteSpace(i.Content) && HomeworkDue.SlotOf(i, now) == slot)
-                .ToList();
-            if (bucket.Count == 0) continue;
+            _homeworkPinned.Visibility = Visibility.Collapsed;
+            _homeworkDivider.Visibility = Visibility.Collapsed;
+            _homeworkScroll.Visibility = Visibility.Collapsed;
+        }
+        else if (pinned.Count == 0)
+        {
+            // 没有置顶作业：全部放进滚动区
+            _homeworkPinned.Visibility = Visibility.Collapsed;
+            _homeworkDivider.Visibility = Visibility.Collapsed;
+            _homeworkScroll.Visibility = Visibility.Visible;
+            foreach (var entry in rest)
+                RenderGroup(entry.Group, fromFont, _homeworkPanel);
+        }
+        else
+        {
+            // 先把置顶区渲染出来，量一下高度
+            _homeworkPinned.Visibility = Visibility.Visible;
+            foreach (var entry in pinned)
+                RenderGroup(entry.Group, fromFont, _homeworkPinned);
 
-            // 到点那段：谁最近到点谁在最前 —— 用户要的"刚交的那个调到第一行"
-            if (slot == HomeworkSlot.Due)
-                bucket = bucket.OrderByDescending(i => i.DueFiredTime ?? DateTime.MinValue).ToList();
+            var layoutWidth = ActualWidth > 0
+                ? ActualWidth
+                : (Width > 0 ? Width : WindowUtil.WorkAreaDip().Width * _widthRatio);
+            var contentWidth = Math.Max(120, layoutWidth - PadX * 2);
+            _homeworkPinned.Measure(new Size(contentWidth, double.PositiveInfinity));
 
-            foreach (var group in GroupBySubject(bucket))
-                RenderGroup(group, fromFont);
+            // 置顶作业堆到当前机器屏幕工作区的 2/3 或更高：不再钉住，整块一起滚。
+            // 用 SystemParameters.WorkArea（DIP，已排除任务栏），换分辨率 / 缩放 / 任务栏高度都能自适应。
+            var tooTall = _homeworkPinned.DesiredSize.Height >= WindowUtil.WorkAreaDip().Height * 2.0 / 3.0;
+            if (tooTall)
+            {
+                // 把已经渲染好的置顶行整体搬到滚动区（保留行与正在跑的动画）
+                var children = _homeworkPinned.Children.Cast<UIElement>().ToList();
+                _homeworkPinned.Children.Clear();
+                foreach (var child in children) _homeworkPanel.Children.Add(child);
+
+                _homeworkPinned.Visibility = Visibility.Collapsed;
+                _homeworkDivider.Visibility = Visibility.Collapsed;
+                _homeworkScroll.Visibility = Visibility.Visible;
+
+                foreach (var entry in rest)
+                    RenderGroup(entry.Group, fromFont, _homeworkPanel);
+            }
+            else
+            {
+                _homeworkPinned.Visibility = Visibility.Visible;
+                _homeworkDivider.Visibility = rest.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+                _homeworkScroll.Visibility = rest.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+                foreach (var entry in rest)
+                    RenderGroup(entry.Group, fromFont, _homeworkPanel);
+            }
         }
 
-        _homeworkScroll.ScrollToVerticalOffset(0);
+        if (_homeworkScroll.Visibility == Visibility.Visible) _homeworkScroll.ScrollToVerticalOffset(0);
         _scrollDirection = 1;
         _stack.UpdateLayout();
 
@@ -259,6 +396,9 @@ public sealed class MainBoardWindow : Window
         //   否则新加一堆作业窗口还是原来那么高（滚动条不出现），删完又留下一大片空白。
         //   放到 Loaded 优先级，等布局跑完再量 DesiredSize。
         Dispatcher.BeginInvoke(new Action(Reposition), DispatcherPriority.Loaded);
+
+        // 本轮能匹配到的到点行已经在 RenderGroup 里开始扫色；没匹配上的不再等
+        _dueFlashPending = null;
     }
 
     /// <summary>按学科归组，保持首次出现的顺序（LinkedDictionary 语义）。</summary>
@@ -287,7 +427,7 @@ public sealed class MainBoardWindow : Window
         return groups;
     }
 
-    void RenderGroup((string Subject, string Date, List<HomeworkItem> Items) group, double fromFont)
+    void RenderGroup((string Subject, string Date, List<HomeworkItem> Items) group, double fromFont, StackPanel host)
     {
         var heading = new TextBlock
         {
@@ -298,7 +438,7 @@ public sealed class MainBoardWindow : Window
             TextWrapping = TextWrapping.Wrap,
             Margin = new Thickness(0, 0, 0, 2),
         };
-        _homeworkPanel.Children.Add(heading);
+        host.Children.Add(heading);
 
         // 只有在"字号真的变了"的时候才做动画；数据刷新时不该闪一下
         if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(heading, _fontSize, fromFont);
@@ -327,9 +467,82 @@ public sealed class MainBoardWindow : Window
                     Foreground = BoardTextDim,
                 });
 
-            _homeworkPanel.Children.Add(row);
+            host.Children.Add(row);
+            row.Tag = item;
+            if (_dueFlashPending is not null && _dueFlashPending.Remove(HomeworkDue.KeyOf(item)))
+                StartDueSweep(row);
             if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(row, _fontSize, fromFont);
         }
+    }
+
+    /// <summary>
+    /// 刚进入提交时段的作业：文字先变红，再从左边扫回正常色。
+    /// 由 <see cref="AppController.CheckHomeworkDue"/> 在到点那一刻调用。
+    ///
+    /// 这里**只登记**，不立刻开动画：到点时 <c>Homework.Save()</c> 已经排队了一次
+    /// <see cref="RefreshHomework"/>，那次重建行的时候统一触发；否则刚开动画就被重建冲掉。
+    /// </summary>
+    public void FlashHomeworkDue(IReadOnlyList<HomeworkItem> items)
+    {
+        if (items.Count == 0) return;
+        _dueFlashPending ??= new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in items) _dueFlashPending.Add(HomeworkDue.KeyOf(item));
+    }
+
+    /// <summary>
+    /// 提交时段内每 5 秒重扫一次：直接给**当前已经渲染好的**行开动画（不重建列表，
+    /// 这样置顶区的滚动位置和分隔线都不会被打断）。
+    /// </summary>
+    public void FlashHomeworkNow(IReadOnlyList<HomeworkItem> items)
+    {
+        if (items.Count == 0) return;
+        var keys = items.Select(HomeworkDue.KeyOf).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var panel in new[] { _homeworkPinned, _homeworkPanel })
+        {
+            foreach (var row in panel.Children.OfType<TextBlock>())
+            {
+                if (row.Tag is HomeworkItem item && keys.Contains(HomeworkDue.KeyOf(item)))
+                    StartDueSweep(row);
+            }
+        }
+    }
+
+    /// <summary>红字 → 从左到右扫回正常色（1.4 秒）。扫过的部分恢复成主题文字色。</summary>
+    void StartDueSweep(TextBlock row)
+    {
+        var normal = (BoardText as SolidColorBrush)?.Color
+                     ?? (Palette.IsDark ? Color.FromRgb(0xE6, 0xE6, 0xE6) : Color.FromRgb(0x1A, 0x1A, 0x1A));
+        var red = Color.FromRgb(0xD1, 0x34, 0x38);   // Fluent 的 Critical 红
+
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(1, 0),
+            MappingMode = BrushMappingMode.RelativeToBoundingBox,
+        };
+        // 0 正常 | A 正常 | B 红 | 1 红；A/B 从 0 推到 1 = 正常色从左往右吃掉红色
+        var keepStart = new GradientStop(normal, 0);
+        var edgeA = new GradientStop(normal, 0);
+        var edgeB = new GradientStop(red, 0);
+        var keepEnd = new GradientStop(red, 1);
+        brush.GradientStops.Add(keepStart);
+        brush.GradientStops.Add(edgeA);
+        brush.GradientStops.Add(edgeB);
+        brush.GradientStops.Add(keepEnd);
+
+        row.Foreground = brush;
+
+        DoubleAnimation MakeAnim() => new(0, 1, TimeSpan.FromSeconds(1.4))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
+        };
+
+        var animA = MakeAnim();
+        var animB = MakeAnim();
+        animA.Completed += (_, _) => row.Foreground = BoardText;   // 扫完恢复主题色
+        edgeA.BeginAnimation(GradientStop.OffsetProperty, animA);
+        edgeB.BeginAnimation(GradientStop.OffsetProperty, animB);
     }
 
     /// <summary>设置里改了「触屏优化」后重新落一次滑动能力（幂等，尺寸在设置窗那边处理）。</summary>
@@ -344,7 +557,53 @@ public sealed class MainBoardWindow : Window
     public void RefreshPluginContent()
     {
         RefreshPluginBadges();
+        RefreshWeatherChip();     // 标题行右侧那个带着动画的「17° 阴」
         RefreshPluginSections();
+    }
+
+    /// <summary>
+    /// 标题行右侧的天气胶囊：动画 + 「17° 阴」，详情（体感/湿度/风向）放进 ToolTip。
+    ///
+    /// <para>每秒被调一次，所以先比内容签名 —— 内容没变就不动，
+    /// 否则每重建一次动画就从第一帧重播（看起来像卡住的重影）。</para>
+    /// </summary>
+    void RefreshWeatherChip()
+    {
+        WeatherChip? chip;
+        try { chip = WeatherProvider?.Invoke(); }
+        catch { chip = null; }
+
+        var key = chip is null
+            ? "<none>"
+            : chip.Text + "|" + chip.Code + "|" + chip.IsDay + "|" + chip.Animated + "|" +
+              chip.Detail + "|" + (chip.Alert ?? "");
+        if (key == _weatherKey) return;
+        _weatherKey = key;
+
+        _weatherChip.Visibility = chip is null ? Visibility.Collapsed : Visibility.Visible;
+        if (chip is null)
+        {
+            if (IsVisible) Reposition();
+            return;
+        }
+
+        // 有气象预警时接在天气后面：这既解释了"天气为什么跑到这儿来了"，
+        // 也让扫一眼标题行就知道当前有什么警报
+        _weatherText.Text = string.IsNullOrEmpty(chip.Alert) ? chip.Text : $"{chip.Text} · {chip.Alert}";
+        _weatherText.FontSize = _fontSize;
+        _weatherText.Foreground = BoardText;
+        _weatherChip.ToolTip = string.IsNullOrWhiteSpace(chip.Detail)
+            ? chip.Alert
+            : (string.IsNullOrEmpty(chip.Alert) ? chip.Detail : chip.Alert + "\n" + chip.Detail);
+
+        var wmo = int.TryParse(chip.Code, out var code) ? code : 3;
+        _weatherArt.Kind = Integrations.Weather.WeatherCodes.Describe(wmo, chip.IsDay).Art;
+        _weatherArt.IsDay = chip.IsDay;
+        _weatherArt.Animated = chip.Animated;
+        _weatherArt.Visibility = Visibility.Visible;
+
+        // 胶囊出现 / 消失会改变标题行的高度，必须重新贴边
+        if (IsVisible) Reposition();
     }
 
     void RefreshPluginBadges()
@@ -385,7 +644,7 @@ public sealed class MainBoardWindow : Window
         catch { return; }
 
         var key = string.Join("\u0001", sections.Select(s =>
-            s.Section.Title + "\u0002" + string.Join("\u0003", s.Section.Lines)));
+            s.Section.Title + "\u0002" + string.Join("\u0003", s.Section.Lines) + "\u0004" + (s.Section.Art is null ? "" : s.Section.Art.Kind + "\u0005" + s.Section.Art.Code + "\u0006" + s.Section.Art.Value + "\u0007" + s.Section.Art.IsDay + "\u0008" + s.Section.Art.Animated)));
         if (key == _sectionKey) return;
         _sectionKey = key;
 
@@ -402,6 +661,22 @@ public sealed class MainBoardWindow : Window
                     Foreground = Palette.Text,
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, Spacing * 2, 0, 2),
+                });
+            }
+            // 图形（当前只有天气动画）：插在正文上面，尺寸跟字号走，别在小字号下顶天立地
+            if (item.Section.Art is { Kind: "weather" } art)
+            {
+                var wmo = int.TryParse(art.Code, out var code) ? code : 3;
+                var artSize = Math.Clamp(_fontSize * 2.0, 26, 56);
+                _pluginSections.Children.Add(new Integrations.Weather.WeatherArt
+                {
+                    Kind = Integrations.Weather.WeatherCodes.Describe(wmo, art.IsDay).Art,
+                    IsDay = art.IsDay,
+                    Animated = art.Animated,
+                    Width = artSize,
+                    Height = artSize,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Margin = new Thickness(0, 2, 0, 4),
                 });
             }
             foreach (var line in item.Section.Lines)
@@ -559,7 +834,8 @@ public sealed class MainBoardWindow : Window
         var oldTitle = _title.FontSize;
         var oldBody = _dutyLabel.FontSize;
         var oldEmpty = _homeworkEmpty.FontSize;
-        var oldHomework = _homeworkPanel.Children.OfType<TextBlock>().FirstOrDefault()?.FontSize ?? oldBody;
+        var oldHomework = HomeworkTexts().FirstOrDefault()?.FontSize ?? oldBody;
+        var oldWeather = _weatherText.FontSize;
         var fromHeight = ActualHeight > 0 ? ActualHeight : Height;
         var animateHeight = !double.IsNaN(fromHeight) && fromHeight > 0;
 
@@ -567,13 +843,15 @@ public sealed class MainBoardWindow : Window
         ClearFontAnimations(_dutyLabel);
         ClearFontAnimations(_attendanceLabel);
         ClearFontAnimations(_homeworkEmpty);
-        foreach (var tb in _homeworkPanel.Children.OfType<TextBlock>())
+        ClearFontAnimations(_weatherText);
+        foreach (var tb in HomeworkTexts())
             ClearFontAnimations(tb);
 
         // 目标布局：此时没有动画，Reposition 量到的是最终高度
         _title.FontSize = newFont + 4;
         _dutyLabel.FontSize = _attendanceLabel.FontSize = _homeworkEmpty.FontSize = newFont;
-        foreach (var tb in _homeworkPanel.Children.OfType<TextBlock>())
+        _weatherText.FontSize = newFont;
+        foreach (var tb in HomeworkTexts())
         {
             tb.FontSize = newFont;
             if (!double.IsNaN(tb.LineHeight)) tb.LineHeight = newFont * 1.35;
@@ -596,12 +874,18 @@ public sealed class MainBoardWindow : Window
         AnimateFont(_title, newFont + 4, oldTitle);
         AnimateFont(_dutyLabel, newFont, oldBody);
         AnimateFont(_attendanceLabel, newFont, oldBody);
+        AnimateFont(_weatherText, newFont, oldWeather);
         AnimateFont(_homeworkEmpty, newFont, oldEmpty);
-        foreach (var tb in _homeworkPanel.Children.OfType<TextBlock>())
+        foreach (var tb in HomeworkTexts())
             AnimateFont(tb, newFont, oldHomework);
 
         _stack.UpdateLayout();
     }
+
+    /// <summary>置顶区 + 滚动区里的所有作业文本行（字号/主题统一处理）。</summary>
+    IEnumerable<TextBlock> HomeworkTexts() =>
+        _homeworkPinned.Children.OfType<TextBlock>()
+            .Concat(_homeworkPanel.Children.OfType<TextBlock>());
 
     static void ClearFontAnimations(TextBlock tb)
     {
@@ -813,11 +1097,14 @@ public sealed class MainBoardWindow : Window
         _dutyLabel.Foreground = BoardText;
         _attendanceLabel.Foreground = BoardText;
         _homeworkEmpty.Foreground = BoardText;
-        foreach (var tb in _homeworkPanel.Children.OfType<TextBlock>())
+        _homeworkDivider.Background = BoardTextDim;
+        _homeworkDivider.Opacity = 0.65;
+        foreach (var tb in HomeworkTexts())
             tb.Foreground = BoardText;
         // 插件区块/徽标是按当时的色板造出来的，换主题后必须重建一次
         _badgeKey = "\u0000";
         _sectionKey = "\u0000";
+        _weatherKey = "<init>";
         RefreshPluginContent();
         foreach (var tb in new[] { _title, _dutyLabel, _attendanceLabel, _homeworkEmpty })
             tb.TextWrapping = TextWrapping.Wrap;
@@ -844,6 +1131,21 @@ public sealed class MainBoardWindow : Window
         var contentWidth = Math.Max(60, width - PadX * 2);
         _stack.Width = contentWidth;
         _stack.Measure(new Size(contentWidth, double.PositiveInfinity));
+
+        // 置顶区在滚动区外面，会占掉一块高度：滚动区的高度上限要相应减掉，
+        // 否则"置顶 + 滚动"加起来会顶出屏幕，底部插件被裁掉。
+        if (_homeworkPinned.Visibility == Visibility.Visible)
+        {
+            var pinnedHeight = _homeworkPinned.DesiredSize.Height;
+            if (_homeworkDivider.Visibility == Visibility.Visible)
+                pinnedHeight += _homeworkDivider.Height + _homeworkDivider.Margin.Top + _homeworkDivider.Margin.Bottom;
+
+            if (pinnedHeight > 0)
+            {
+                _homeworkScroll.MaxHeight = Math.Max(80, work.Height - 100 - pinnedHeight);
+                _stack.Measure(new Size(contentWidth, double.PositiveInfinity));
+            }
+        }
 
         var desired = _stack.DesiredSize.Height + PadY * 2;
         if (double.IsNaN(desired) || desired <= 0) desired = 220;

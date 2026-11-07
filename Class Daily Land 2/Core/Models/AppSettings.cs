@@ -22,6 +22,7 @@ public sealed class AppSettings
     public const string PagePlugins = "plugins";
     public const string PageMedia = "media";
     public const string PageDisaster = "disaster";
+    public const string PageWeather = "weather";
 
     /// <summary>全部设置键与默认值（与需求文档第五节对应）。</summary>
     public static readonly IReadOnlyList<SettingMeta> All = new List<SettingMeta>
@@ -88,6 +89,7 @@ public sealed class AppSettings
         // —— 作业 ——
         new("homework_show_date", ValueKind.Bool, true),
         new("homework_history_days", ValueKind.Int, 7),              // 历史快照保留天数
+        new("homework_notify_enabled", ValueKind.Bool, true),        // 提交时间到点弹通知
 
         // —— 媒体（内置集成：主岛媒体片段）——
         new("audio_enabled", ValueKind.Bool, true),
@@ -113,6 +115,17 @@ public sealed class AppSettings
         new("disaster_banner_enabled", ValueKind.Bool, true),
         new("disaster_small_hold_sec", ValueKind.Int, 5, 0, 120),
         new("disaster_show_status_card", ValueKind.Bool, true),
+
+        // —— 自动定位（IP）：天气 / 气象预警 / 地震倒计时共用一个开关 ——
+        // 开 = IP 定位（失败退回下面手选的省市区查表）；关 = 手填经纬度 > 省市区查表。
+        new("auto_locate", ValueKind.Bool, true),
+
+        // —— 天气（内置集成：实时天气 + 天气动画）——
+        new("weather_enabled", ValueKind.Bool, true),
+        new("weather_show_on", ValueKind.Str, "sub"),                  // sub / main / off
+        new("weather_refresh_sec", ValueKind.Int, 900, 300, 3600),      // 实况刷新间隔
+        new("weather_idle_collapse_sec", ValueKind.Int, 300, 0, 3600),  // 副岛多久没操作收成圆，0=不收
+        new("weather_animations", ValueKind.Bool, true),                // 关掉只画静态图形
 
         // —— 关于 ——
         new("last_update_check", ValueKind.Str, ""),
@@ -142,7 +155,7 @@ public sealed class AppSettings
             "show_sub_island", "sub_island_default_collapsed", "sub_island_auto_collapse_sec",
         },
         [PageSchedule] = new[] { "schedule_advance_minutes", "schedule_time_offset_seconds" },
-        [PageHomework] = new[] { "homework_show_date", "homework_history_days" },
+        [PageHomework] = new[] { "homework_show_date", "homework_history_days", "homework_notify_enabled" },
         // 关于页：更新通道、更新源、被跳过的版本、上次检查时间、已装资源包版本、开发者选项
         [PageAbout] = new[] { "update_channel", "update_source", "update_skipped_version", "last_update_check", "resources_version", "developer_mode" },
         // 日志页：内存里保留多少行
@@ -161,6 +174,13 @@ public sealed class AppSettings
             "disaster_quake_interval_sec", "disaster_weather_interval_sec",
             "disaster_throttle_sec", "disaster_notify_enabled", "disaster_banner_enabled",
             "disaster_small_hold_sec", "disaster_show_status_card",
+            // 位置这一组由「自动定位」总开关决定用 IP 还是手选，两页都能复原它
+            "auto_locate",
+        },
+        [PageWeather] = new[]
+        {
+            "weather_enabled", "weather_show_on", "weather_refresh_sec",
+            "weather_idle_collapse_sec", "weather_animations", "auto_locate",
         },
     };
 

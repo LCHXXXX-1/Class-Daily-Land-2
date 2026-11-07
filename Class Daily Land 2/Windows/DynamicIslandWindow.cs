@@ -777,9 +777,22 @@ public sealed partial class DynamicIslandWindow : Window
         var ratio = emergency is not null
             ? Math.Clamp(emergency.Ratio, 0, 1)
             : Math.Clamp((double)input.Status.UntilSec / Math.Max(1, input.CountdownSec), 0, 1);
-        CountdownLayer.Background = emergency is not null
-            ? Frozen(emergency.BarColor)
-            : ProgressFill;
+        // 倒计时条底色跟着预估烈度走（蓝/黄/橙/红）；黄底上白字看不清，换深色文字
+        if (emergency is not null)
+        {
+            CountdownLayer.Background = Frozen(emergency.BarColor);
+            var fg = emergency.Level == "yellow" ? Frozen(0x1b, 0x1b, 0x1b) : TextFill;
+            TextCur.Foreground = fg;
+            TextPrev.Foreground = fg;
+            TextCur2.Foreground = fg;
+        }
+        else
+        {
+            CountdownLayer.Background = ProgressFill;
+            TextCur.Foreground = TextFill;
+            TextPrev.Foreground = TextFill;
+            TextCur2.Foreground = TextFill;
+        }
         // 同样只记「基准」：蓝条每秒跳一格会像卡住，逐帧推进交给 SmoothTick
         _barStampUtc = DateTime.UtcNow;
         _barBaseRatio = Math.Clamp(ratio, 0, 1);

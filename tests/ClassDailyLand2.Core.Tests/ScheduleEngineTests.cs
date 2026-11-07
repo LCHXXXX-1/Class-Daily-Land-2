@@ -329,11 +329,68 @@ public class ScheduleEngineTests
     }
 
     [Fact]
+    public void Text_UsesSecondsInsideFinalMinute()
+    {
+        // 本节还剩 5 秒
+        var ongoing = Engine(Basic()).Compute(Monday(8, 39, 55), advanceMinutes: 0);
+        Assert.Equal("本节：语文 还剩 5秒", ScheduleText.Core(ongoing));
+
+        // 距离下节还有 5 秒
+        var upcoming = Engine(Basic()).Compute(Monday(8, 59, 55), advanceMinutes: 0);
+        Assert.Equal("下节 数学 · 5秒后", ScheduleText.Core(upcoming));
+    }
+
+    [Fact]
     public void ActiveTimetable_FallsBackToFirst()
     {
         var sf = Basic();
         sf.Active = "不存在的课表";
         Assert.NotNull(sf.ActiveTimetable);
         Assert.Equal("默认课表", sf.Active);
+    }
+
+    // ——— 秒级课表 + 重名课程编号（测试按钮依赖这两条） ———
+
+    [Fact]
+    public void DuplicateCourseNames_AreNumberedOnlyWhenRepeated()
+    {
+        var sf = new ScheduleFile { Active = "测试" };
+        var t = new Timetable
+        {
+            Periods =
+            {
+                new Period("第1节", "10:00:00", "10:00:10"),
+                new Period("第2节", "10:00:20", "10:00:30"),
+                new Period("第3节", "10:00:40", "10:00:50"),
+            }
+        };
+        t.SetRow(0, new[] { "自习", "自习", "自习", "自习", "自习", "自习", "自习" });
+        t.SetRow(1, new[] { "自习", "自习", "自习", "自习", "自习", "自习", "自习" });
+        t.SetRow(2, new[] { "数学自习", "数学自习", "数学自习", "数学自习", "数学自习", "数学自习", "数学自习" });
+        sf.Timetables["测试"] = t;
+        sf.Normalize();
+
+        var courses = Engine(sf).CoursesOfDay(Monday(10, 0, 5)).Select(c => c.Course).ToList();
+
+        // 「自习、自习、数学自习」→ 自习(1)、自习(2)、数学自习（名字不同不加序号）
+        Assert.Equal(new[] { "自习(1)", "自习(2)", "数学自习" }, courses);
+    }
+
+    [Fact]
+    public void SecondPrecisionPeriod_RunsAndEndsInTenSeconds()
+    {
+        var sf = new ScheduleFile { Active = "测试" };
+        var t = new Timetable { Periods = { new Period("第1节", "10:00:00", "10:00:10") } };
+        t.SetRow(0, new[] { "自习", "自习", "自习", "自习", "自习", "自习", "自习" });
+        sf.Timetables["测试"] = t;
+        sf.Normalize();
+
+        var engine = Engine(sf);
+        var ongoing = engine.Compute(Monday(10, 0, 5), advanceMinutes: 0);
+        Assert.Equal("ongoing", ongoing.Status);
+        Assert.Equal(5, ongoing.RemainSec);
+
+        var done = engine.Compute(Monday(10, 0, 11), advanceMinutes: 0);
+        Assert.Equal("done", done.Status);
     }
 }

@@ -71,6 +71,16 @@ public sealed class SettingsManager
         }
     }
 
+    /// <summary>
+    /// 从磁盘重新加载，并广播全部键。
+    /// 测试按钮恢复 settings.json 备份时用：只写文件不重载的话，内存里还是测试期间的值。
+    /// </summary>
+    public void Reload()
+    {
+        Load();
+        SettingsChanged?.Invoke(this, new SettingsChangedEventArgs(AppSettings.All.Select(m => m.Key).ToList()));
+    }
+
     Dictionary<string, object?>? _lastSavedSnapshot;
 
     /// <summary>保存并把"改了哪些键、旧值→新值"写进日志（排障时最想知道的一类信息）。</summary>

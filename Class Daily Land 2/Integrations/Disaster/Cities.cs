@@ -176,6 +176,32 @@ public static class Cities
         return ("", "");
     }
 
+    /// <summary>
+    ///把半截名字补成表里的标准写法（"四川"/"成都" → "四川省"/"成都市"）。
+    ///
+    /// <para>★ **必须带上省一起判断**，不能只拿市名反查：城市表里存在跨省重名 ——
+    /// 比如湖南益阳有个「<b>资阳区</b>」，而四川有个「<b>资阳市</b>」，
+    /// 反查表按省份顺序先注册先赢，只查市名会把"资阳"翻成"湖南省/益阳市"。
+    /// 这里先按给定的省锁定范围，锁不住才退到全局反查。</para>
+    /// </summary>
+    public static (string Province, string City) Canonicalize(string? province, string? city)
+    {
+        var prov = FindProvince(province);
+        if (prov is not null)
+        {
+            var match = MatchKey(prov.Cities, city);
+            if (match is not null) return (prov.Name, match.Name);
+            // 省认到了、市没认到：至少把省名补全
+            return (prov.Name, (city ?? "").Trim());
+        }
+
+        // 省名没有或认不出 → 只能按市名全局反查
+        var (p, c) = ProvinceOfCity(city);
+        if (c.Length > 0) return (p, c);
+
+        return ((province ?? "").Trim(), (city ?? "").Trim());
+    }
+
     static Province? FindProvince(string? name)
     {
         var q = (name ?? "").Trim();
@@ -224,5 +250,58 @@ public static class Cities
                 return d;
         }
         return null;
+    }
+
+    // ————————————————————— 坐标反查 —————————————————————
+
+    /// <summary>
+    /// 按经纬度找**最近的区县**（IP 定位只给坐标时，用它反推省/市/区县）。
+    ///
+    /// <para>2817 条区县全遍历一遍，微秒级；只在内存里算，不联网。
+    /// 没有下辖区县的市用市本身兜底，所以只要坐标落在国内就一定有结果。</para>
+    /// </summary>
+    public static (string Province, string City, string District, double Lat, double Lon, double DistanceKm)?
+        NearestDistrict(double lat, double lon)
+    {
+        (string Province, string City, string District, double Lat, double Lon, double DistanceKm) best
+            = ("", "", "", 0, 0, double.MaxValue);
+
+        foreach (var p in Data.Value.Provinces)
+        foreach (var c in p.Cities)
+        {
+            if (c.Districts.Count == 0)
+            {
+                var dc = QuakeCalc.HaversineKm(lat, lon, c.Lat, c.Lon);
+                if (dc < best.DistanceKm) best = (p.Name, c.Name, "", c.Lat, c.Lon, dc);
+                continue;
+            }
+
+            foreach (var d in c.Districts)
+            {
+                var dd = QuakeCalc.HaversineKm(lat, lon, d.Lat, d.Lon);
+                if (dd < best.DistanceKm) best = (p.Name, c.Name, d.Name, d.Lat, d.Lon, dd);
+            }
+        }
+
+        return best.DistanceKm == double.MaxValue ? null : best;
+    }
+
+    /// <summary>
+    /// 按经纬度找最近的地级市（区县太远时的退路：至少把市认对，坐标取市中心）。
+    /// </summary>
+    public static (string Province, string City, double Lat, double Lon, double DistanceKm)?
+        NearestCity(double lat, double lon)
+    {
+        (string Province, string City, double Lat, double Lon, double DistanceKm) best
+            = ("", "", 0, 0, double.MaxValue);
+
+        foreach (var p in Data.Value.Provinces)
+        foreach (var c in p.Cities)
+        {
+            var d = QuakeCalc.HaversineKm(lat, lon, c.Lat, c.Lon);
+            if (d < best.DistanceKm) best = (p.Name, c.Name, c.Lat, c.Lon, d);
+        }
+
+        return best.DistanceKm == double.MaxValue ? null : best;
     }
 }

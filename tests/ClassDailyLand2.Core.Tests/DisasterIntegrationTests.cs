@@ -300,4 +300,47 @@ public sealed class DisasterIntegrationTests
         Assert.Single(pruned);
         Assert.True(pruned.ContainsKey("new"));
     }
+
+    /// <summary>
+    /// 裁剪窗口必须与 <see cref="QuakeCalc"/> 的展示窗口（MaxAgeSec + ArrivedHoldSec = 240s）对齐。
+    /// 原来默认 180s，比展示窗口短 60s：横波 175 秒后才到的地震，"已到达"那 60 秒提示
+    /// 只剩 5 秒就从事件库里被删掉；倒计时超过 180s 的更会在读秒途中直接消失。
+    /// </summary>
+    [Fact]
+    public void Prune_KeepsEventsStillInsideDisplayWindow()
+    {
+        var now = 1_800_000_000d;
+        var events = new Dictionary<string, QuakeEvent>
+        {
+            ["mid"] = new("mid", "icl", "mid", 1, now - 200, now, 30, 104, 10, 5, ""),
+        };
+
+        Assert.Contains("mid", DisasterSources.PruneQuakes(events, now).Keys);
+    }
+
+    [Fact]
+    public void Prune_DropsEventsPastDisplayWindow()
+    {
+        var now = 1_800_000_000d;
+        var events = new Dictionary<string, QuakeEvent>
+        {
+            ["stale"] = new("stale", "icl", "stale", 1, now - 241, now, 30, 104, 10, 5, ""),
+        };
+
+        Assert.Empty(DisasterSources.PruneQuakes(events, now));
+    }
+
+    // ————————————————————— 上课中静默气象 —————————————————————
+
+    /// <summary>分界取橙色：黄色暴雨/大风在课上只是噪音，橙红才值得打断。</summary>
+    [Theory]
+    [InlineData(QuakeLevels.Blue, true, true)]
+    [InlineData(QuakeLevels.Yellow, true, true)]
+    [InlineData(QuakeLevels.Orange, true, false)]
+    [InlineData(QuakeLevels.Red, true, false)]
+    [InlineData(QuakeLevels.Blue, false, false)]
+    [InlineData(QuakeLevels.Yellow, false, false)]
+    [InlineData(QuakeLevels.Red, false, false)]
+    public void WeatherMutedByClass_OnlyBelowOrangeWhileInClass(string level, bool inClass, bool muted) =>
+        Assert.Equal(muted, DisasterService.WeatherMutedByClass(level, inClass));
 }

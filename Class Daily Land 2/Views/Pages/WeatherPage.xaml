@@ -1,0 +1,82 @@
+<UserControl x:Class="ClassDailyLand2.App.Views.Pages.WeatherPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls">
+    <StackPanel>
+        <TextBlock Style="{StaticResource PageTitle}" Text="天气" />
+        <TextBlock Style="{StaticResource PageLead}"
+                   Text="实时天气与天气动画：自动定位当前位置，副岛上显示带动画的当前天气" />
+
+        <fl:SettingGroup Title="总开关" Icon="{StaticResource Icon.Shield}" TileColor="#FF0F6CBD"
+                         Note="优先级：地震 &gt; 气象预警 &gt; 插件 &gt; 媒体 &gt; 实时天气 &gt; 课程；预警来时天气自动挤到作业窗口，预警过去再回来">
+            <fl:SettingRow Title="启用天气" Hint="关闭后不再定位、不再请求数据，副岛回到课程内容">
+                <fl:FluentToggle IsChecked="{Binding WeatherEnabled, Mode=TwoWay}" Label="天气" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="显示位置"
+                           Hint="副岛：默认展开、无操作到点收成圆；作业窗口：主窗插件区块（动画 + 温度）">
+                <ComboBox x:Name="ShowOnBox" Width="190" SelectionChanged="OnShowOnChanged">
+                    <ComboBoxItem Content="副岛" Tag="sub" />
+                    <ComboBoxItem Content="作业窗口" Tag="main" />
+                    <ComboBoxItem Content="不显示" Tag="off" />
+                </ComboBox>
+            </fl:SettingRow>
+            <fl:SettingRow Title="天气动画" Hint="关掉后只画静态图形（副岛与作业窗口同时生效）">
+                <fl:FluentToggle IsChecked="{Binding WeatherAnimations, Mode=TwoWay}" Label="天气动画" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="位置" Icon="{StaticResource Icon.Calendar}" TileColor="#FF107C10"
+                         Note="天气、气象预警、地震倒计时共用这一套位置。IP 只能定到市/区，还不准时就直接手选到区县">
+            <fl:SettingRow Title="自动定位（IP）"
+                           Hint="开：IP 定位，失败退回下面手选的省市区；关：手填经纬度 &gt; 省市区查表">
+                <fl:FluentToggle x:Name="AutoLocateBox" IsChecked="{Binding AutoLocate, Mode=TwoWay}"
+                                 Checked="OnAutoLocateChanged" Unchecked="OnAutoLocateChanged"
+                                 Label="自动定位" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="省 / 直辖市" Hint="自动定位开着时，下面这几行只读、显示 IP 解析结果">
+                <ComboBox x:Name="ProvinceBox" Width="200" SelectionChanged="OnProvinceChanged" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="市 / 州">
+                <ComboBox x:Name="CityBox" Width="200" SelectionChanged="OnCityChanged" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="区县（可选）" Hint="选得越细，坐标越准；自动定位时由 IP 结果填">
+                <ComboBox x:Name="DistrictBox" Width="200" SelectionChanged="OnDistrictChanged" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="手动经纬度" Hint="留空则按上面的省市区查表；自动定位开着时这一行是禁用的">
+                <StackPanel Orientation="Horizontal">
+                    <TextBox x:Name="LatBox" Width="90" Margin="0,0,8,0" />
+                    <TextBox x:Name="LonBox" Width="90" />
+                    <Button x:Name="ApplyCoordButton" Content="应用" Margin="8,0,0,0"
+                            Style="{StaticResource SubtleButton}" Padding="10,3,10,4" />
+                </StackPanel>
+            </fl:SettingRow>
+            <TextBlock x:Name="StatusText" Margin="18,12,18,4" TextWrapping="Wrap"
+                       FontFamily="{DynamicResource FontFamilyMono}"
+                       FontSize="{DynamicResource FontSizeCaption}"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="正在检测…" />
+            <StackPanel Orientation="Horizontal" Margin="18,4,18,14">
+                <Button Content="重新定位" Click="OnRelocate"
+                        Style="{StaticResource AccentButton}" Padding="12,4,12,5" />
+                <Button Content="立即刷新天气" Click="OnRefresh"
+                        Style="{StaticResource SubtleButton}" Padding="12,4,12,5" Margin="8,0,0,0" />
+            </StackPanel>
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="刷新与收起" Icon="{StaticResource Icon.Clock}" TileColor="#FF8661C5">
+            <fl:SettingRow Title="刷新间隔" Hint="天气变化很慢，太密只是白费流量">
+                <fl:NumberBox Minimum="300" Maximum="3600" Step="60" Suffix=" 秒"
+                              Value="{Binding WeatherRefreshSec, Mode=TwoWay}" Label="刷新间隔" />
+            </fl:SettingRow>
+            <fl:SettingRow Title="无操作自动收起"
+                           Hint="副岛上多久没点就收成 40×40 的圆、只留天气动画；0 = 永不收起">
+                <fl:NumberBox Minimum="0" Maximum="3600" Step="30" Suffix=" 秒"
+                              Value="{Binding WeatherIdleCollapseSec, Mode=TwoWay}" Label="无操作收起" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <fl:SettingGroup Title="动画预览" Icon="{StaticResource Icon.Island}" TileColor="#FFC42B1C">
+            <WrapPanel x:Name="PreviewPanel" Margin="18,8,18,18" />
+        </fl:SettingGroup>
+    </StackPanel>
+</UserControl>

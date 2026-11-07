@@ -290,12 +290,15 @@ dotnet build -c Release
 
 ### 3.4 apiVersion 语义
 
-| 宿主的 `ApiVersion` | 插件写 `apiVersion: 1` | 插件写 `apiVersion: 2` |
-| --- | --- | --- |
-| `1.x` | ✅ 正常加载 | ❌ 拒绝："插件需要更新的宿主" |
+| 宿主的 `ApiVersion` | 插件写 `apiVersion: 1` | 插件写 `apiVersion: 2` | 插件写 `apiVersion: 3` |
+| --- | --- | --- | --- |
+| `1.x` | ✅ 正常加载 | ❌ 拒绝："插件需要更新的宿主" | ❌ 拒绝 |
+| `2.x` | ✅ 正常加载 | ✅ 正常加载 | ❌ 拒绝 |
+| `3.x` | ✅ 正常加载 | ✅ 正常加载 | ✅ 正常加载 |
 
-宿主只在**破坏性变更**时提升主版本（改接口签名、删显示位、改 Spec 字段语义）。
-加新成员不提升主版本，所以老插件在新宿主上永远能跑。
+宿主**新增能力**时提升主版本（v2 = 插件自己的设置页，v3 = 主窗区块图形 `BoardArt`），
+破坏性变更同样提升。每次提升都是**纯增量**：插件写的 apiVersion 只要不大于宿主版本就照旧加载，
+所以老插件在新宿主上永远能跑。
 
 ### 3.5 常见写法错误
 
@@ -501,10 +504,24 @@ host.RegisterPanel(new PanelSpec("作业", 220, () =>
 ```csharp
 host.RegisterBoardSection(new BoardSectionSpec(Func<BoardSection?> Section, int Priority = 0));
 
-public sealed record BoardSection(string Title, IReadOnlyList<string> Lines);
+public sealed record BoardSection(string Title, IReadOnlyList<string> Lines)
+{
+    // 契约 v3 新增（纯增量）：2 参主构造**保持不变**，老插件的二进制照旧可用
+    public BoardSection(string Title, IReadOnlyList<string> Lines, BoardArt? art);
+    public BoardArt? Art { get; init; }
+}
+
+/// Kind 为 "weather" 时：Code = WMO 天气码，Value = 温度℃，IsDay 决定晴天画太阳还是月牙。
+/// 宿主不认识的 Kind 直接忽略、只画正文。
+public sealed record BoardArt(string Kind, string Code = "", double Value = double.NaN,
+                              bool IsDay = true, bool Animated = true);
 ```
 
 追加在「班级日常」主窗的作业列表下面，等比作业那套排版（标题加粗 + 缩进正文）。
+
+**区块里可以带图形（v3）**：给 `Art` 传一个 `BoardArt`，宿主会在正文上面画一块动画。
+与 `SettingsPageSpec` 同一套思路 —— **插件只描述、宿主负责画**，插件永远不碰 WPF 类型。
+当前只有 `"weather"` 一种 kind（内置天气组件用的就是它），新增 kind 属于纯增量。
 
 ```csharp
 host.RegisterBoardSection(new BoardSectionSpec(() =>
@@ -714,7 +731,7 @@ public enum BadgeTone { Default, Accent, Success, Warning, Danger }
 
 | 成员 | 签名 | 备注 |
 | --- | --- | --- |
-| `Toast` | `void Toast(string title, string message)` | 托盘气泡，线程安全 |
+| `Toast` | `void Toast(string title, string message)` | 系统通知（进通知中心、带应用名；环境不支持时退回托盘气泡），线程安全 |
 | `OpenSettings` | `void OpenSettings(string? pageKey = null)` | 页键见下 |
 | `OpenUrl` | `void OpenUrl(string url)` | **只放行 http/https**，其它协议被拒并记日志 |
 | `OpenFolder` | `void OpenFolder(string path)` | **只允许程序目录与插件目录内部** |
@@ -1281,16 +1298,16 @@ if (host.Now.Hour >= 22) return "该睡觉了";
 
 | 变更类型 | 是否提升 `apiVersion` |
 | --- | --- |
-| 新增显示位 / 新增 `IPluginHost` 成员 | 否（老插件照跑） |
-| 新增 Spec 的可选参数（带默认值） | 否 |
-| 改 Spec 字段语义 / 删成员 / 改接口签名 | **是** |
+| 新增显示位 / 新增 `IPluginHost` 成员 | 是（纯增量，老插件照跑） |
+| 新增 Spec 的可选字段（带默认值，如 `BoardSection.Art`） | 是（纯增量） |
+| 改 Spec 字段语义 / 删成员 / 改已有签名 | **是**（并且老插件会坏 —— 不要做） |
 
-所以插件只要写 `apiVersion: 1`，在 `1.x` 的宿主上**永远能跑**。
+所以插件只要写 `apiVersion: 1`，在 `3.x` 的宿主上**永远能跑**（宿主保证不删不改已有契约）。
 
 ### 13.2 插件侧的做法
 
 ```csharp
-if (host.ApiVersion.Major > 1)
+if (host.ApiVersion.Major > 3)
     host.Warn($"宿主契约版本 {host.ApiVersion} 比插件预期的新，可能有不兼容");
 ```
 
@@ -1336,7 +1353,7 @@ if (host.ApiVersion >= new Version(1, 1))
 | 界面每隔一秒抖一下 | 回调里做了重活（IO/网络/大对象） | 见 [11.2](#112-反模式对照) |
 | 作业列表滚动条每秒跳回顶部 | 主窗区块内容每秒都在变（比如带秒数） | 内容不变就别变字符串 |
 | 卸载插件后目录还在 | 卸载时文件被占用（日志/句柄） | 关掉应用再删，或先「禁用」再「卸载」 |
-| `Toast` 没弹出来 | 系统通知被关 | 检查 Windows 通知设置（宿主用托盘气泡） |
+| `Toast` 没弹出来 | 系统通知被关 | 检查 Windows 设置 → 通知里本应用的权限；宿主会退回托盘气泡（那层也关了才会真丢） |
 | 插件列表里有一条红色的失败项 | 清单校验/加载/`Initialize` 抛异常 | 看「运行日志」里的具体原因 |
 
 ---

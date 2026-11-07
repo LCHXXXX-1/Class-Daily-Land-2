@@ -15,9 +15,10 @@ public sealed partial class PluginManifest
     /// <summary>
     /// 宿主实现的契约大版本。清单里 apiVersion 大于它的插件拒绝加载。
     /// v2 相对 v1 只**新增**了「插件设置页」（RegisterSettings / SettingChanged），
-    /// 老插件（apiVersion = 1）照旧能跑。
+    /// v3 相对 v2 只**新增**了「主窗区块图形」（BoardSection.Art / BoardArt），
+    /// 老插件（apiVersion = 1 / 2）照旧能跑。
     /// </summary>
-    public const int HostApiVersion = 2;
+    public const int HostApiVersion = 3;
 
     public string Id { get; init; } = "";
     public string Name { get; init; } = "";

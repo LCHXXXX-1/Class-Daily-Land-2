@@ -5,11 +5,17 @@ namespace ClassDailyLand2.Core.Engine;
 /// <summary>灵动岛 / 主窗文案（格式与 Python 版一致，见需求文档第三节）。</summary>
 public static class ScheduleText
 {
-    /// <summary>下节 语文 · 3分钟后</summary>
-    public static string Upcoming(ScheduleStatus s) => $"下节 {s.Course} · {s.UntilMin}分钟后";
+    /// <summary>下节 语文 · 3分钟后；最后一分钟显示秒：下节 语文 · 42秒后</summary>
+    public static string Upcoming(ScheduleStatus s) =>
+        s.UntilSec > 0 && s.UntilSec < 60
+            ? $"下节 {s.Course} · {s.UntilSec}秒后"
+            : $"下节 {s.Course} · {s.UntilMin}分钟后";
 
-    /// <summary>本节：语文 还剩 12分钟</summary>
-    public static string Ongoing(ScheduleStatus s) => $"本节：{s.Course} 还剩 {s.RemainMin}分钟";
+    /// <summary>本节：语文 还剩 12分钟；最后一分钟显示秒：本节：语文 还剩 42秒</summary>
+    public static string Ongoing(ScheduleStatus s) =>
+        s.RemainSec > 0 && s.RemainSec < 60
+            ? $"本节：{s.Course} 还剩 {s.RemainSec}秒"
+            : $"本节：{s.Course} 还剩 {s.RemainMin}分钟";
 
     public static string Holiday(ScheduleStatus s) =>
         string.IsNullOrWhiteSpace(s.Name) ? "假期中" : $"假期中 · {s.Name}";

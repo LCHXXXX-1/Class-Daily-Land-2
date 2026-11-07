@@ -1,3 +1,4 @@
+using ClassDailyLand2.App.Integrations.Weather;
 using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Managers;
 using System.Windows.Media;
@@ -29,6 +30,12 @@ public sealed class DisasterService : IDisposable
     readonly Func<bool> _isInClass;
     readonly Action<string, string> _notify;
 
+    /// <summary>
+    /// 自动定位的坐标来源（由天气模块提供，惰性取 —— IP 定位是异步的，
+    /// 构造时可能还没有结果）。null 表示天气模块没接上或开关是关的。
+    /// </summary>
+    readonly Func<WeatherLocation?>? _autoLocation;
+
     // ————————————————————— 配置 —————————————————————
     public bool Enabled { get; private set; } = true;
     public bool QuakeEnabled { get; private set; } = true;
@@ -38,6 +45,15 @@ public sealed class DisasterService : IDisposable
     public string District { get; private set; } = "";
     public double? Lat { get; private set; }
     public double? Lon { get; private set; }
+
+    /// <summary>
+    /// 当前坐标是哪来的：IP 定位 / 手选省市查表 / 手动经纬度。
+    /// IP 是市级精度，拿它算地震倒计时会偏 —— 状态卡片必须一直把这个标出来。
+    /// </summary>
+    public string LocationSource { get; private set; } = "";
+
+    /// <summary>是否走自动定位（与天气共用同一个开关 <c>auto_locate</c>）。</summary>
+    public bool AutoLocate { get; private set; } = true;
     public double Threshold { get; private set; } = 2.0;
     public int QuakeIntervalSec { get; private set; } = 5;
     public int WeatherIntervalSec { get; private set; } = 60;
@@ -56,14 +72,25 @@ public sealed class DisasterService : IDisposable
     readonly Dictionary<string, (double Ts, string Level)> _notified = new(StringComparer.Ordinal);
     readonly Dictionary<string, double> _firstSeen = new(StringComparer.Ordinal);
 
+    /// <summary>已经补过一次 ICL 详情的 uid。详情接口对老事件常返回空 counties，
+    /// 不记下来的话每轮轮询都会为同一条事件重发请求。</summary>
+    readonly HashSet<string> _detailTried = new(StringComparer.Ordinal);
+
+    /// <summary>"坐标没设置"只喊一次的记号（这个分支每秒都会走到）。</summary>
+    bool _warnedNoCoords;
+
     readonly SourceStatus _icl = new("icl", "ICL 地震");
     readonly SourceStatus _wolfx = new("wolfx", "Wolfx 地震");
     readonly SourceStatus _nmc = new("nmc", "中央气象台");
 
     bool _iclInFlight, _wolfxInFlight, _nmcInFlight;
+    double _iclStartedAt, _wolfxStartedAt, _nmcStartedAt;
     double _lastIclPoll, _lastWeatherPoll, _lastCacheSave;
     int _wolfxFailStreak;
     bool _cacheDirty;
+
+    /// <summary>in-flight 超过这么久还没回来就判死（请求本身 10 秒必然超时返回）。</summary>
+    const double StuckInFlightSec = 30;
 
     public QuakeEvaluation? Focus { get; private set; }
     public IReadOnlyList<object> Others { get; private set; } = Array.Empty<object>();
@@ -75,7 +102,8 @@ public sealed class DisasterService : IDisposable
         Logger log,
         string cachePath,
         Func<bool> isInClass,
-        Action<string, string> notify)
+        Action<string, string> notify,
+        Func<WeatherLocation?>? autoLocation = null)
     {
         _dispatcher = dispatcher;
         _settings = settings;
@@ -83,6 +111,7 @@ public sealed class DisasterService : IDisposable
         _cachePath = cachePath;
         _isInClass = isInClass;
         _notify = notify;
+        _autoLocation = autoLocation;
         LoadCache();
     }
 
@@ -106,17 +135,37 @@ public sealed class DisasterService : IDisposable
         WeatherIntervalSec = Math.Clamp(_settings.Int("disaster_weather_interval_sec"), 30, 3600);
         SmallHoldSec = Math.Clamp(_settings.Int("disaster_small_hold_sec"), 0, 120);
 
-        // 坐标：显式填了就用显式的，否则按 省/市/区县 查表
-        var latText = _settings.Str("disaster_lat");
-        var lonText = _settings.Str("disaster_lon");
-        if (double.TryParse(latText, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var la) &&
-            double.TryParse(lonText, System.Globalization.NumberStyles.Float,
-                System.Globalization.CultureInfo.InvariantCulture, out var lo) &&
-            la is >= -90 and <= 90 && lo is >= -180 and <= 180)
+        // —— 位置：自动定位（IP）优先；开关关掉或还没定位出来时走下面原来那套 ——
+        AutoLocate = _settings.Bool("auto_locate");
+        var auto = AutoLocate ? _autoLocation?.Invoke() : null;
+        if (auto is not null)
+        {
+            Lat = auto.Lat;
+            Lon = auto.Lon;
+            // 省名只做一道保险：英文省名没法用来过滤中央气象台，退回手选省
+            Province = Cities.Provinces.Contains(auto.Province)
+                ? auto.Province
+                : _settings.Str("disaster_province");
+            // 市/区县：定位器（WeatherLocator）已经把名字归一成城市表里的标准写法了，
+            // 这里**不再按表校验** —— 只要差一个字就把市清空，用户看到的就是"连市都没有"。
+            // 这道 Contains 只留着挡 ipapi.co 那种英文市名。
+            City = string.IsNullOrEmpty(auto.City) || Cities.CitiesOf(Province).Contains(auto.City)
+                ? auto.City
+                : "";
+            District = auto.District;
+            LocationSource = auto.Source == "city-table"
+                ? "手选省市查表"
+                : $"IP 定位（{auto.Source}）";
+        }
+        else if (double.TryParse(_settings.Str("disaster_lat"), System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out var la) &&
+                 double.TryParse(_settings.Str("disaster_lon"), System.Globalization.NumberStyles.Float,
+                     System.Globalization.CultureInfo.InvariantCulture, out var lo) &&
+                 la is >= -90 and <= 90 && lo is >= -180 and <= 180)
         {
             Lat = la;
             Lon = lo;
+            LocationSource = "手动经纬度";
         }
         else
         {
@@ -130,15 +179,28 @@ public sealed class DisasterService : IDisposable
             }
             Lat = coord?.Lat;
             Lon = coord?.Lon;
+            LocationSource = "手选省市查表";
         }
 
         _icl.Enabled = QuakeEnabled;
         _wolfx.Enabled = QuakeEnabled;
         _nmc.Enabled = WeatherEnabled && !string.IsNullOrEmpty(Province) && Province != Cities.NoWeather;
 
+        // ★ 总开关关掉时必须当场清掉红条与焦点：Tick() 第一行是 if (!Enabled) return，
+        //   之后再也不会跑到 UpdateEmergency 里那句 Emergency = null —— 不在这里清，
+        //   正在显示的红色倒计时条会一直挂在主岛上直到重启（关红条/关地震分项都没这问题）。
+        if (!Enabled)
+        {
+            Emergency = null;
+            Focus = null;
+            Others = Array.Empty<object>();
+            _weatherFocus = null;
+        }
+
         _log.Trace($"[灾害] 应用设置：总开关={Enabled}，地震={QuakeEnabled}（{QuakeIntervalSec}s），气象={WeatherEnabled}（{WeatherIntervalSec}s），" +
-                   $"位置={Province}/{City}/{District}，坐标={(Lat is null ? "未设置" : $"{Lat:0.####},{Lon:0.####}")}，" +
-                   $"阈值={Threshold:0.#}，红条={BannerEnabled}，提醒={NotifyEnabled}");
+                   $"位置={Province}/{City}/{District}，" +
+                   $"坐标={(Lat is null ? "未设置" : $"{Lat:0.####},{Lon:0.####}（{LocationSource}）")}，" +
+                   $"自动定位={AutoLocate}，阈值={Threshold:0.#}，红条={BannerEnabled}，提醒={NotifyEnabled}");
     }
 
     // ————————————————————— 每秒 tick —————————————————————
@@ -159,13 +221,34 @@ public sealed class DisasterService : IDisposable
 
     // ————————————————————— 轮询 —————————————————————
 
+    /// <summary>
+    /// in-flight 卡死兜底，返回 true 表示"可以继续往下走"（本来就没在飞，或已强制复位）。
+    ///
+    /// <para>请求本身 10 秒必然超时返回，所以 30 秒还挂着只可能是异常从 Task 里逃出去了
+    /// （<see cref="DisasterSources.FetchJsonAsync"/> 只接了 HttpRequest / Json / IO / 取消几类）。
+    /// 那种情况下 <c>_xxxInFlight</c> 永远停在 true，**该数据源再也不会被轮询，直到重启** ——
+    /// 对预警应用来说，静默停摆比报错严重得多。</para>
+    /// </summary>
+    bool ReclaimStuck(ref bool flag, ref double startedAt, double now, SourceStatus status)
+    {
+        if (!flag) return true;
+        if (now - startedAt < StuckInFlightSec) return false;
+
+        _log.Warn($"[灾害] {status.Label} 上一次请求未返回（超过 {StuckInFlightSec:0}s），强制复位继续轮询");
+        status.OnFail("上一次请求未返回", now);
+        flag = false;
+        return true;
+    }
+
     void PollIclIfDue(double now)
     {
-        if (!QuakeEnabled || _iclInFlight) return;
+        if (!QuakeEnabled) return;
+        if (!ReclaimStuck(ref _iclInFlight, ref _iclStartedAt, now, _icl)) return;
         if (now - _lastIclPoll < QuakeIntervalSec || !_icl.Ready(now)) return;
 
         _lastIclPoll = now;
         _iclInFlight = true;
+        _iclStartedAt = now;
         var startMs = (long)((now - 7200) * 1000);
         var url = string.Format(DisasterSources.IclListUrl, startMs);
         _log.Trace($"[灾害] 轮询 ICL 主源（间隔 {QuakeIntervalSec}s）：{url}");
@@ -187,10 +270,9 @@ public sealed class DisasterService : IDisposable
             using (doc)
             {
                 var events = DisasterSources.ParseIclEvents(doc.RootElement);
-                foreach (var ev in events)
-                    _log.Trace($"[灾害] ICL 事件：{ev.Epicenter} M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，" +
-                               $"震中 {ev.Lat:0.####},{ev.Lon:0.####}，发震 {QuakeCalc.FmtClock(ev.OriginTs)}，" +
-                               $"uid={ev.Uid}，revision {ev.Revision}（上报数 {ev.ReportCount?.ToString() ?? "-"}，最大烈度 {ev.MaxIntensity?.ToString("0.#") ?? "-"}）");
+                // 明细不在这儿打：每轮轮询都会把同一批事件原样推过来，5 秒一行足以把 app.log 冲爆。
+                // 真正新增 / 更新的那几条由 IngestQuakes 用 MergeQuakes 已经算好却一直被丢掉的
+                // changed 列表来记 —— 没变化时一个字都不写。
                 _log.Trace($"[灾害] ICL 本轮解析出 {events.Count} 条事件");
                 Post(() =>
                 {
@@ -205,13 +287,18 @@ public sealed class DisasterService : IDisposable
 
     void PollWolfxIfDue(double now)
     {
-        // ICL 连续失败两次后，改用 Wolfx 顶上（与 Python 版一致的降级策略）
-        if (!QuakeEnabled || _wolfxInFlight) return;
+        // ICL 最近一次失败（_icl.Ok == false）就改用 Wolfx 顶上，与 Python 版一致的降级策略。
+        // 注：_wolfxFailStreak 那半句实际是冗余的 —— 它 ≥2 时 ICL 必然还没成功过
+        // （ICL 成功会把它清 0），此时 _icl.Ok 一定是 false。留着只为读起来顺，别当成
+        // "Wolfx 失败两次也要继续查"来改。
+        if (!QuakeEnabled) return;
+        if (!ReclaimStuck(ref _wolfxInFlight, ref _wolfxStartedAt, now, _wolfx)) return;
         if (_wolfxFailStreak < 2 && _icl.Ok != false) return;
         if (now - _lastIclPoll < QuakeIntervalSec || !_wolfx.Ready(now)) return;
 
         _lastIclPoll = now;
         _wolfxInFlight = true;
+        _wolfxStartedAt = now;
         _log.Trace($"[灾害] ICL 连续失败，改轮询 Wolfx 备源（{DisasterSources.WolfxEewUrls.Count} 个端点）");
 
         _ = Task.Run(async () =>
@@ -244,9 +331,6 @@ public sealed class DisasterService : IDisposable
                 return;
             }
 
-            foreach (var ev in all)
-                _log.Trace($"[灾害] Wolfx({ev.Source}) 事件：{ev.Epicenter} M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，" +
-                           $"发震 {QuakeCalc.FmtClock(ev.OriginTs)}，uid={ev.Uid}，revision {ev.Revision}");
             Post(() =>
             {
                 _wolfx.OnOk(Now);
@@ -260,12 +344,14 @@ public sealed class DisasterService : IDisposable
 
     void PollWeatherIfDue(double now)
     {
-        if (!WeatherEnabled || _nmcInFlight) return;
+        if (!WeatherEnabled) return;
         if (string.IsNullOrEmpty(Province) || Province == Cities.NoWeather) return;
+        if (!ReclaimStuck(ref _nmcInFlight, ref _nmcStartedAt, now, _nmc)) return;
         if (now - _lastWeatherPoll < WeatherIntervalSec || !_nmc.Ready(now)) return;
 
         _lastWeatherPoll = now;
         _nmcInFlight = true;
+        _nmcStartedAt = now;
         var url = DisasterSources.NmcUrl(Province);
         _log.Trace($"[灾害] 轮询中央气象台（{Province}，间隔 {WeatherIntervalSec}s）");
 
@@ -312,12 +398,27 @@ public sealed class DisasterService : IDisposable
         lock (_gate)
         {
             var before = _quakes.Count;
-            var (merged, _) = DisasterSources.MergeQuakes(_quakes, list);
+            var (merged, changed) = DisasterSources.MergeQuakes(_quakes, list);
             _quakes = DisasterSources.PruneQuakes(merged, Now);
             _cacheDirty = true;
-            if (list.Count > 0)
-                _log.Trace($"[灾害] 合并地震事件：本次 {list.Count} 条（其中 {list.Count(u => !_quakes.ContainsKey(u.Uid))} 条全新），" +
+
+            // 事件被裁掉，"详情已试过"的记号跟着丢，否则字典只增不减
+            foreach (var key in _detailTried.Where(k => !_quakes.ContainsKey(k)).ToList())
+                _detailTried.Remove(key);
+
+            // 没有任何变化就一个字都不写：ICL 每 5 秒把同一批事件原样推过来，
+            // 上一版在这里统计"其中 N 条全新"用的是合并**之后**的字典，恒等于 0。
+            // 再按 _quakes 过一道：MergeQuakes 的 changed 里可能有刚加进去就被
+            // maxItems 截掉的，日志不该记一条库里根本没有的事件。
+            var changedLive = changed.Where(c => _quakes.ContainsKey(c.Uid)).ToList();
+            if (changedLive.Count > 0 || _quakes.Count != before)
+                _log.Trace($"[灾害] 合并地震事件：本次 {list.Count} 条（新增/更新 {changedLive.Count} 条），" +
                            $"事件库 {before} → {_quakes.Count} 条（超时 / 无修订的旧事件已被裁剪）");
+
+            foreach (var ev in changedLive)
+                _log.Trace($"[灾害] 事件更新：{ev.Source} {ev.Epicenter} M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，" +
+                           $"震中 {ev.Lat:0.####},{ev.Lon:0.####}，发震 {QuakeCalc.FmtClock(ev.OriginTs)}，" +
+                           $"uid={ev.Uid}，revision {ev.Revision}");
         }
         FetchDetailsIfNeeded();
     }
@@ -328,10 +429,13 @@ public sealed class DisasterService : IDisposable
         List<QuakeEvent> need;
         lock (_gate)
         {
+            // 每条只试一次：详情接口对老事件常常返回空 counties，原条件 Counties is null
+            // 会让它每轮轮询都重发，直到事件过期（默认 5 秒一轮 × 180 秒 ≈ 72 次无用请求）。
             need = _quakes.Values
-                .Where(q => q.Source == "icl" && q.Counties is null && q.Revision >= 1)
+                .Where(q => q.Source == "icl" && q.Counties is null && !_detailTried.Contains(q.Uid))
                 .Take(2)
                 .ToList();
+            foreach (var ev in need) _detailTried.Add(ev.Uid);
         }
         if (need.Count == 0) return;
         _log.Trace($"[灾害] 为 {need.Count} 条 ICL 事件补逐县详情：{string.Join("、", need.Select(n => n.Epicenter))}");
@@ -405,13 +509,17 @@ public sealed class DisasterService : IDisposable
         {
             if (Focus is { } f)
                 _log.Trace($"[灾害] 主焦点：{f.Event.Epicenter} M{f.Event.Magnitude:0.#}（烈度 {f.LocalIntensity:0.#}，" +
-                           $"revision {f.Event.Revision}，另有 {Others.Count} 条次要事件）");
+                           $"距 {f.DistanceKm:0.#}km，" +
+                           (f.Incoming ? $"横波 {Math.Max(0, f.ArriveTs - now):0} 秒后到达" : "横波已到达") +
+                           $"，revision {f.Event.Revision}，另有 {Others.Count} 条次要事件）");
             else if (previousFocus is not null)
                 _log.Trace("[灾害] 主焦点清空（事件已到达 / 过期 / 用户清除）");
         }
 
         UpdateEmergency(now);
         MaybeNotify(now);
+        MaybeNotifyWeather(now);
+        PruneNotified();
     }
 
     WeatherEvent? _weatherFocus;
@@ -421,27 +529,30 @@ public sealed class DisasterService : IDisposable
         if (!QuakeEnabled) return new List<QuakeEvaluation>();
         if (Lat is null || Lon is null)
         {
+            // 这个分支每秒都会走到：坐标缺失的告警只喊一次（坐标补上后才会再喊）
             lock (_gate)
-                if (_quakes.Count > 0)
+            {
+                if (!_warnedNoCoords && _quakes.Count > 0)
+                {
+                    _warnedNoCoords = true;
                     _log.Trace($"[灾害计算] 坐标未设置，跳过 {_quakes.Count} 条地震事件的评估（请在设置 → 灾害预警选位置）");
+                }
+            }
             return new List<QuakeEvaluation>();
         }
+        _warnedNoCoords = false;
 
         List<QuakeEvent> events;
         lock (_gate) events = _quakes.Values.ToList();
 
+        // ★ 这里原本每秒给每条可显示事件打一行 Trace（距离/烈度/倒计时）——
+        //   一次地震 180 秒 × N 条 = 几百行，把 2000 行的内存环形日志冲得只剩灾害日志，
+        //   插件、设置、报错全被挤掉。明细挪到 RefreshFocus 的"主焦点变了"那条里了。
         var list = new List<QuakeEvaluation>();
         foreach (var ev in events)
         {
             var r = QuakeCalc.Evaluate(ev, Lat, Lon, now, Threshold);
-            if (r is { Displayable: true })
-            {
-                _log.Trace($"[灾害计算] {ev.Epicenter} M{ev.Magnitude:0.#}：距离 {r.DistanceKm:0.#}km，" +
-                           $"本地烈度 {r.LocalIntensity:0.#}（阈值 {Threshold:0.#}），" +
-                           (r.Incoming ? $"横波 {Math.Max(0, r.ArriveTs - now):0} 秒后到达" : "横波已到达") +
-                           $"，等级 {r.Level}");
-                list.Add(r);
-            }
+            if (r is { Displayable: true }) list.Add(r);
         }
 
         return list
@@ -451,23 +562,37 @@ public sealed class DisasterService : IDisposable
             .ToList();
     }
 
-    /// <summary>气象：设了城市只显示本市；否则显示全省。</summary>
-    WeatherEvent? WeatherForIsland()
+    /// <summary>
+    /// 上课中把低等级气象预警静默掉（显示与提醒一并处理）。
+    /// 分界取橙色：黄色暴雨/大风在课上只是噪音，橙红才值得打断。
+    /// </summary>
+    public static bool WeatherMutedByClass(string level, bool inClass) =>
+        inClass && QuakeCalc.Rank(level) < QuakeCalc.Rank(QuakeLevels.Orange);
+
+    /// <summary>
+    /// 本市（没选市则全省）≥ 黄色的气象预警，只做候选，不判断该不该显示。
+    /// 拆出来是因为"面板里那句已静默"需要看到**被压掉的那几条**，否则永远不知道有没有东西被静默。
+    /// </summary>
+    List<WeatherEvent> LocalWeather()
     {
-        if (!WeatherEnabled) return null;
-        if (string.IsNullOrEmpty(Province) || Province == Cities.NoWeather) return null;
+        if (!WeatherEnabled) return new List<WeatherEvent>();
+        if (string.IsNullOrEmpty(Province) || Province == Cities.NoWeather) return new List<WeatherEvent>();
 
         List<WeatherEvent> all;
         lock (_gate) all = _weather.Values.ToList();
 
         var key = Cities.ShortName(City);
-        var local = all.Where(w => QuakeCalc.LevelAtLeast(w.Level, "yellow") &&
-                                   (key.Length > 0 ? w.Title.Contains(key, StringComparison.Ordinal) : true))
+        return all.Where(w => QuakeCalc.LevelAtLeast(w.Level, "yellow") &&
+                              (key.Length == 0 || w.Title.Contains(key, StringComparison.Ordinal)))
             .ToList();
+    }
 
-        if (key.Length > 0 && local.Count == 0) return null;
-
-        return local
+    /// <summary>气象：设了城市只显示本市；否则显示全省。上课中低等级静默。</summary>
+    WeatherEvent? WeatherForIsland()
+    {
+        var inClass = _isInClass();
+        return LocalWeather()
+            .Where(w => !WeatherMutedByClass(w.Level, inClass))
             .OrderByDescending(w => QuakeCalc.Rank(w.Level))
             .ThenByDescending(w => w.IssuedTs ?? 0)
             .FirstOrDefault();
@@ -486,6 +611,10 @@ public sealed class DisasterService : IDisposable
         var focus = Focus;
         if (focus is null) return;
         if (!focus.Displayable) return;
+
+        // ★ 蓝色（预估烈度低于「有震感」）**不接管主岛** —— 只发一条系统通知。
+        //   红条是用来读秒的，蓝色既没有破坏性也没有紧迫感，弹上去只是打扰。
+        if (QuakeCalc.Rank(focus.Level) <= QuakeCalc.Rank(QuakeLevels.Blue)) return;
 
         // 用户点过确认的事件不再弹（升级 revision 后会重新出现）
         if (_dismissed is { } d && d.Uid == focus.Uid && focus.Event.Revision <= d.Revision) return;
@@ -507,7 +636,7 @@ public sealed class DisasterService : IDisposable
         Emergency = new IslandEmergency(
             Text: EmergencyText(focus),
             Ratio: ratio,
-            BarColor: Color.FromRgb(0xFF, 0x45, 0x3A),   // 地震预警固定红条
+            BarColor: LevelBarColor(focus.Level),   // 底色跟着预估烈度：蓝/黄/橙/红
             Level: focus.Level);
         if (_lastEmergencyText != Emergency.Text)
         {
@@ -556,13 +685,29 @@ public sealed class DisasterService : IDisposable
     {
         var ev = focus.Event;
         var place = string.IsNullOrWhiteSpace(ev.Epicenter) ? "未知震中" : ev.Epicenter.Trim();
-        var mag = ev.Magnitude;
+
         if (focus.Incoming)
         {
             var sec = Math.Max(0, (int)Math.Round(focus.ArriveTs - Now));
-            return $"灾害预警 · {place} M{mag:0.#} · 横波还有 {sec} 秒";
+            return $"{place} · 距地震波到达还有 {sec} 秒";
         }
-        return $"灾害预警 · {place} M{mag:0.#} · 横波已到达";
+        return $"{place} · 地震波已到达";
+    }
+
+    /// <summary>
+    /// 倒计时条的底色跟着**预估烈度**走：蓝 / 黄 / 橙 / 红，
+    /// 与 <see cref="QuakeLevels.Colors"/> 同一套色值（也就是面板里那个等级色）。
+    /// </summary>
+    static Color LevelBarColor(string level)
+    {
+        try
+        {
+            return (Color)ColorConverter.ConvertFromString(QuakeCalc.LevelColor(level));
+        }
+        catch
+        {
+            return Color.FromRgb(0xFF, 0x45, 0x3A);   // 解析不了就退回红
+        }
     }
 
     public void DismissEmergency()
@@ -575,32 +720,45 @@ public sealed class DisasterService : IDisposable
 
     // ————————————————————— 副岛 / 面板 —————————————————————
 
-    /// <summary>副岛显示（地震优先，其次气象）。</summary>
-    public (string Title, string Value, double Progress)? SubIsland
+    /// <summary>
+    /// 副岛上的**地震**部分（横波倒计时 / 已到达）。拆出来是因为
+    /// 实时天气要能判断"副岛这一秒是不是被灾害占着"，好决定自己要不要让位到作业窗口。
+    /// </summary>
+    public (string Title, string Value, double Progress)? QuakeSubIsland
     {
         get
         {
             if (!Enabled) return null;
             var focus = Focus;
-            if (focus is not null)
-            {
-                var sec = Math.Max(0, (int)Math.Round(focus.ArriveTs - Now));
-                var title = focus.Incoming ? "地震预警" : "地震";
-                var value = focus.Incoming
-                    ? $"{sec} 秒 · 烈度{focus.LocalIntensity:0.#}"
-                    : $"已到达 · 烈度{focus.LocalIntensity:0.#}";
-                var window = Math.Max(1, focus.CountdownSec);
-                var ratio = focus.Incoming ? Math.Clamp((focus.ArriveTs - Now) / window, 0, 1) : 0;
-                return (title, value, ratio);
-            }
+            if (focus is null) return null;
 
-            var weather = _weatherFocus;
-            if (weather is not null)
-                return ("气象", $"{weather.Signal}{QuakeCalc.LevelWord(weather.Level)}", 0);
-
-            return null;
+            var sec = Math.Max(0, (int)Math.Round(focus.ArriveTs - Now));
+            var title = focus.Incoming ? "地震预警" : "地震";
+            var value = focus.Incoming
+                ? $"{sec} 秒 · 烈度{focus.LocalIntensity:0.#}"
+                : $"已到达 · 烈度{focus.LocalIntensity:0.#}";
+            var window = Math.Max(1, focus.CountdownSec);
+            var ratio = focus.Incoming ? Math.Clamp((focus.ArriveTs - Now) / window, 0, 1) : 0;
+            return (title, value, ratio);
         }
     }
+
+    /// <summary>
+    /// 副岛上的**气象预警**部分。有它的时候实时天气必须让位到作业窗口去（用户定的规则）。
+    /// </summary>
+    public (string Title, string Value, double Progress)? WeatherSubIsland
+    {
+        get
+        {
+            if (!Enabled) return null;
+            var weather = _weatherFocus;
+            if (weather is null) return null;
+            return ("气象", $"{weather.Signal}{QuakeCalc.LevelWord(weather.Level)}", 0);
+        }
+    }
+
+    /// <summary>副岛显示（地震优先，其次气象）。</summary>
+    public (string Title, string Value, double Progress)? SubIsland => QuakeSubIsland ?? WeatherSubIsland;
 
     /// <summary>下拉面板（和插件面板并排显示）。</summary>
     public (string Title, IReadOnlyList<string> Lines)? Panel
@@ -653,15 +811,21 @@ public sealed class DisasterService : IDisposable
         }
 
         lines.Add(_icl.Describe(Now));
+        // 备源的健康状况也得看得见：ICL 挂了、Wolfx 顶着的时候，
+        // 面板上只有一行"ICL 地震 失败×3"，用户会以为整条链路都断了
+        if (QuakeEnabled) lines.Add(_wolfx.Describe(Now));
         if (WeatherEnabled && !string.IsNullOrEmpty(Province) && Province != Cities.NoWeather)
             lines.Add(_nmc.Describe(Now));
 
         if (Lat is null || Lon is null)
             lines.Add("未设置坐标 · 无法计算地震倒计时");
         else
-            lines.Add($"坐标 {Lat:0.##}, {Lon:0.##} · 阈值 {Threshold:0.#}");
+            lines.Add($"坐标 {Lat:0.##}, {Lon:0.##} · 阈值 {Threshold:0.#} · {LocationSource}");
 
-        if (_isInClass()) lines.Add("上课中 · 气象低等级已静默");
+        // 只有真的有东西被压掉时才这么说：原来只要在上课就无条件写"已静默"，
+        // 而静默逻辑当时并不存在（_isInClass 全项目只有这一处引用）—— 比不写更误导
+        if (_isInClass() && LocalWeather().Any(w => WeatherMutedByClass(w.Level, true)))
+            lines.Add("上课中 · 气象低等级已静默");
         return lines;
     }
 
@@ -669,7 +833,7 @@ public sealed class DisasterService : IDisposable
 
     void MaybeNotify(double now)
     {
-        if (!NotifyEnabled || Focus is null) return;
+        if (!Enabled || !NotifyEnabled || Focus is null) return;
 
         var focus = Focus!;
         var ev = focus.Event;
@@ -678,31 +842,89 @@ public sealed class DisasterService : IDisposable
         var throttle = Math.Max(5, _settings.Int("disaster_throttle_sec"));
         if (_notified.TryGetValue(ev.Uid, out var last))
         {
-            var upgraded = QuakeCalc.Rank(focus.Level) > QuakeCalc.Rank(last.Level);
-            if (!upgraded && now - last.Ts < throttle) return;
+            // ★ 同一事件同一等级只提醒一次。原实现是"过 throttle 就再弹一次"，
+            //   一个 120 秒的倒计时窗口会连弹 5 条气泡，而设置页写的是
+            //   「同一事件按 uid 去重，等级升级会再提醒一次」—— 与文案对不上。
+            if (QuakeCalc.Rank(focus.Level) <= QuakeCalc.Rank(last.Level)) return;
+            if (now - last.Ts < throttle) return;   // 连续升级也别一秒钟弹好几条
         }
 
-        var sec = Math.Max(0, (int)Math.Round(focus.ArriveTs - now));
-        _notify("灾害预警",
-            $"{ev.Epicenter} M{ev.Magnitude:0.#} · 横波还有 {sec} 秒 · 预估烈度{focus.LocalIntensity:0.#}");
+        // ★ 通知里**不写秒数**：Windows Toast 是静态快照，文本不会自己走秒。
+        //   写上一个"还有 32 秒"，10 秒后还显示 32，比不写更误导。
+        //   实时倒计时在主岛那条红条上（它本来就逐秒刷）。
+        _notify("地震预警",
+            $"{ev.Epicenter} M{ev.Magnitude:0.#} · 预估烈度 {focus.LocalIntensity:0.#} · 倒计时见主岛");
         _notified[ev.Uid] = (now, focus.Level);
+    }
 
-        var live = _quakes.Keys.ToHashSet(StringComparer.Ordinal);
-        foreach (var key in _notified.Keys.ToList())
-            if (!live.Contains(key)) _notified.Remove(key);
+    /// <summary>
+    /// 气象：**展示出来的那条**预警弹一次系统提醒，去重规则与地震共用
+    /// （uid 不同前缀，互不干扰）。原来只有地震会弹，而「弹系统提醒」开关摆在总开关组里，
+    /// 用户会以为暴雨橙警也会弹 —— 这里补齐。
+    /// </summary>
+    void MaybeNotifyWeather(double now)
+    {
+        if (!Enabled || !NotifyEnabled) return;
+
+        var w = WeatherForIsland();   // 与副岛/面板同源：上课中被静默的自然也不会弹
+        if (w is null) return;
+
+        var throttle = Math.Max(5, _settings.Int("disaster_throttle_sec"));
+        if (_notified.TryGetValue(w.Uid, out var last))
+        {
+            if (QuakeCalc.Rank(w.Level) <= QuakeCalc.Rank(last.Level)) return;
+            if (now - last.Ts < throttle) return;
+        }
+
+        var where = string.IsNullOrWhiteSpace(w.County) ? Province : w.County;
+        _notify("气象预警", $"{where} {w.Signal}{QuakeCalc.LevelWord(w.Level)}");
+        _notified[w.Uid] = (now, w.Level);
+    }
+
+    /// <summary>
+    /// 事件过期后把它的提醒记号一起丢掉。原来这段清理写在 MaybeNotify 里、
+    /// 且只拿 <c>_quakes</c> 比对 —— 气象的 uid 永远不在地震表里，
+    /// 一旦有地震提醒就会把气象的记号误删，下一秒同一条预警会重复弹。
+    /// </summary>
+    void PruneNotified()
+    {
+        if (_notified.Count == 0) return;
+
+        HashSet<string> live;
+        lock (_gate)
+        {
+            live = _quakes.Keys.ToHashSet(StringComparer.Ordinal);
+            foreach (var key in _weather.Keys) live.Add(key);
+        }
+
+        foreach (var key in _notified.Keys.Where(k => !live.Contains(k)).ToList())
+            _notified.Remove(key);
     }
 
     // ————————————————————— 演练 / 状态 —————————————————————
 
     /// <summary>
-    /// 注入一次演练地震（设置页的「模拟一次」用它）。
-    /// 震中默认取当前配置的坐标往西 120km，这样倒计时是个像样的十几秒。
+    /// 注入一次演练地震（设置页的「模拟一次地震预警」用它）。
+    ///
+    /// <para>震中：传了坐标就用传的（设置页可以选省/市/区当震中）；
+    /// 没传就沿用"当前位置往西约 120km" —— 这样不选也能看到一个像样的十几秒倒计时。
+    /// 倒计时由 <see cref="QuakeCalc"/> 按震中到你位置的直线距离算，选得越远读秒越长。</para>
     /// </summary>
-    public string StartDrill(double? magnitude = 6.4, double? depth = 10)
+    public string StartDrill(double? magnitude = 6.4, double? depth = 10,
+        double? epicenterLat = null, double? epicenterLon = null, string? epicenterName = null)
     {
+        // 总开关关着时注入了也不显示（UpdateEmergency / SubIsland / Panel 都会挡掉），
+        // 只会白白弹一条系统提醒 —— 直接说清楚，别让用户以为按钮坏了
+        if (!Enabled)
+            return "灾害预警总开关是关闭的，未注入演练（先把上面的「启用灾害预警」打开）";
+
         var lat = Lat ?? 30.6595;   // 成都
         var lon = Lon ?? 104.0658;
         var now = Now;
+
+        var evLat = epicenterLat ?? lat + 0.6;
+        var evLon = epicenterLon ?? lon - 1.1;
+        var place = string.IsNullOrWhiteSpace(epicenterName) ? "演练震中" : epicenterName.Trim();
 
         var ev = new QuakeEvent(
             Uid: "drill:" + (long)now,
@@ -711,20 +933,80 @@ public sealed class DisasterService : IDisposable
             Revision: 1,
             OriginTs: now - 3,
             UpdatedTs: now,
-            Lat: lat + 0.6,
-            Lon: lon - 1.1,
+            Lat: evLat,
+            Lon: evLon,
             Depth: depth ?? 10,
             Magnitude: magnitude ?? 6.4,
-            Epicenter: "演练震中");
+            Epicenter: place);
 
         lock (_gate)
         {
             _quakes[ev.Uid] = ev;
         }
         RefreshFocus(now);
-        _log.Warn($"[灾害] 注入演练地震：M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，震中坐标 {ev.Lat:0.####},{ev.Lon:0.####}");
-        return $"已注入演练地震 M{ev.Magnitude:0.#}（震中 演练震中），当前倒计时 " +
-               $"{(Focus is null ? "未达显示条件" : Math.Max(0, (int)Math.Round(Focus.ArriveTs - now)) + " 秒")}";
+
+        var dist = Lat is null || Lon is null
+            ? 0
+            : QuakeCalc.HaversineKm(Lat.Value, Lon.Value, evLat, evLon);
+
+        _log.Warn($"[灾害] 注入演练地震：M{ev.Magnitude:0.#}，深度 {ev.Depth:0}km，" +
+                  $"震中 {place} {evLat:0.####},{evLon:0.####}" +
+                  $"{(Lat is null || Lon is null ? "" : $"（距你 {dist:0}km）")}");
+
+        if (Lat is null || Lon is null)
+            return $"已注入演练地震 M{ev.Magnitude:0.#}（{place}），但你的位置没有坐标，倒计时算不出来 —— " +
+                   "请先在上面「位置」里选省市";
+
+        return Focus is null
+            ? $"已注入演练地震 M{ev.Magnitude:0.#}（{place}，距你 {dist:0}km），但未达显示条件（预估烈度低于阈值）"
+            : $"已注入演练地震 M{ev.Magnitude:0.#}（{place}，距你 {dist:0}km），" +
+              $"横波还有 {Math.Max(0, (int)Math.Round(Focus.ArriveTs - now))} 秒";
+    }
+
+    /// <summary>
+    /// 注入一次演练气象预警（设置页的「模拟一次气象预警」用它）。
+    ///
+    /// <para>事件塞进 <c>_weather</c>，走和真实预警**完全相同**的显示与提醒链路：
+    /// 副岛被它占住 → 天气自动挤到作业窗口、并在天气后面写上预警内容。
+    /// 这是验证位移规则最省事的办法，不用等真的下雨。</para>
+    /// </summary>
+    public string StartWeatherDrill(string signal = "暴雨", string level = QuakeLevels.Orange)
+    {
+        if (!Enabled)
+            return "灾害预警总开关是关闭的，未注入演练（先把上面的「启用灾害预警」打开）";
+        if (!WeatherEnabled)
+            return "气象预警是关着的，未注入演练（先打开「启用气象预警」）";
+
+        var now = Now;
+        var county = string.IsNullOrWhiteSpace(City)
+            ? (string.IsNullOrWhiteSpace(Province) ? "本地" : Province)
+            : City;
+
+        var ev = new WeatherEvent(
+            Uid: "drill-weather:" + (long)now,
+            AlertId: "drill",
+            IssuedTs: now,
+            // 标题里要带上当前市名：WeatherForIsland 就是靠它做"只看本市"的过滤
+            Title: $"{county}气象台发布{signal}{QuakeCalc.LevelWord(level)}预警信号",
+            Signal: signal,
+            Level: level,
+            Province: Province,
+            County: county,
+            Url: "");
+
+        lock (_gate)
+        {
+            _weather[ev.Uid] = ev;
+        }
+        RefreshFocus(now);
+
+        _log.Warn($"[灾害] 注入演练气象预警：{ev.Title}（uid={ev.Uid}，等级 {level}）");
+
+        // 上课中「低于橙色」会被静默（WeatherMutedByClass）—— 这不是坏了，要说清楚
+        return WeatherMutedByClass(level, _isInClass())
+            ? $"已注入「{signal}{QuakeCalc.LevelWord(level)}预警」，但当前在上课中，低于橙色的气象预警会被静默 —— " +
+              "换成橙色/红色才看得到"
+            : $"已注入「{signal}{QuakeCalc.LevelWord(level)}预警」：副岛已被它占住，天气应该已经挤到作业窗口、并在后面带上预警内容了";
     }
 
     public void ClearDrill()
@@ -733,14 +1015,23 @@ public sealed class DisasterService : IDisposable
         {
             foreach (var key in _quakes.Keys.Where(k => k.StartsWith("drill:", StringComparison.Ordinal)).ToList())
                 _quakes.Remove(key);
+            foreach (var key in _weather.Keys.Where(k => k.StartsWith("drill-weather:", StringComparison.Ordinal)).ToList())
+                _weather.Remove(key);
         }
-        _firstSeen.Clear();
-        Focus = null;
-        Emergency = null;
-        _dismissed = null;
-        _lastEmergencyText = null;
-        _log.Trace("[灾害] 演练已清除，事件与提醒状态复位");
+        // 只删演练事件，再按剩下的真实事件重算。
+        // 原来这里把 _firstSeen / _dismissed / Focus / Emergency 一并清零 ——
+        // 清一次演练会顺手把同时在发生的真实地震的"已到达 5 秒"计时和用户已确认状态也复位，
+        // 结果是刚被点掉的红条又自己弹回来。剩余记号由 RefreshFocus / PruneNotified 自己收敛。
+        RefreshFocus(Now);
+        _log.Trace("[灾害] 演练已清除（地震 + 气象），焦点交还真实事件");
     }
+
+    /// <summary>
+    /// 当前生效中的气象预警文案（如「暴雨橙色预警」）；没有就 null。
+    /// 主窗的天气胶囊会把它接在天气后面 —— 有预警时天气被挤到作业窗口，得让人知道为什么。
+    /// </summary>
+    public string? WeatherWarningText =>
+        Enabled && _weatherFocus is { } w ? $"{w.Signal}{QuakeCalc.LevelWord(w.Level)}预警" : null;
 
     /// <summary>设置页的状态说明（多行）。</summary>
     public string StatusText
@@ -751,9 +1042,13 @@ public sealed class DisasterService : IDisposable
             var lines = new List<string>
             {
                 Lat is null || Lon is null
-                    ? "坐标未设置：请在下面的「位置」里选省市（或手填经纬度）。"
-                    : $"当前坐标 {Lat:0.##}, {Lon:0.##} · 烈度阈值 {Threshold:0.#}",
+                    ? (AutoLocate
+                        ? "坐标未设置：自动定位还没拿到结果（会每分钟重试）。检查网络，" +
+                          "或关掉「自动定位」后在下面手选省市。"
+                        : "坐标未设置：请在下面的「位置」里选省市（或手填经纬度）。")
+                    : $"{Province}/{City}/{District} · 坐标 {Lat:0.##}, {Lon:0.##} · {LocationSource} · 烈度阈值 {Threshold:0.#}",
                 _icl.Describe(now),
+                _wolfx.Describe(now),
                 _nmc.Describe(now),
             };
             if (Focus is not null)

@@ -13,7 +13,7 @@ public sealed class Period
     public Period() { }
     public Period(string name, string start, string end) { Name = name; Start = start; End = end; }
 
-    [JsonIgnore] public bool IsValid => TimeUtil.TryParse(Start, out _) && TimeUtil.TryParse(End, out _);
+    [JsonIgnore] public bool IsValid => TimeUtil.TryParseSeconds(Start, out _) && TimeUtil.TryParseSeconds(End, out _);
 }
 
 /// <summary>
@@ -159,15 +159,32 @@ internal static class TimeUtil
     /// <summary>解析 "H:mm" / "HH:mm"（也接受 "HH:mm:ss"），返回从 0 点起的分钟数。</summary>
     public static bool TryParse(string? text, out int minutes)
     {
-        minutes = 0;
+        if (!TryParseSeconds(text, out var seconds))
+        {
+            minutes = 0;
+            return false;
+        }
+        minutes = seconds / 60;
+        return true;
+    }
+
+    /// <summary>解析 "H:mm" / "HH:mm" / "HH:mm:ss"，返回从 0 点起的秒数。</summary>
+    public static bool TryParseSeconds(string? text, out int secondsOfDay)
+    {
+        secondsOfDay = 0;
         if (string.IsNullOrWhiteSpace(text)) return false;
-        var s = text.Trim();
-        var parts = s.Split(':');
+        var parts = text.Trim().Split(':');
         if (parts.Length < 2) return false;
         if (!int.TryParse(parts[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out var h)) return false;
         if (!int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var m)) return false;
-        if (h < 0 || h > 47 || m < 0 || m > 59) return false;
-        minutes = h * 60 + m;
+
+        var s = 0;
+        if (parts.Length >= 3 &&
+            !int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out s))
+            return false;
+
+        if (h < 0 || h > 47 || m < 0 || m > 59 || s < 0 || s > 59) return false;
+        secondsOfDay = h * 3600 + m * 60 + s;
         return true;
     }
 
@@ -175,5 +192,15 @@ internal static class TimeUtil
     {
         var m = ((minutesOfDay % 1440) + 1440) % 1440;
         return $"{m / 60:D2}:{m % 60:D2}";
+    }
+
+    /// <summary>秒数 → "HH:mm"（整分时）或 "HH:mm:ss"（带秒时）。</summary>
+    public static string FormatSeconds(int secondsOfDay)
+    {
+        var s = ((secondsOfDay % 86400) + 86400) % 86400;
+        var h = s / 3600;
+        var m = s % 3600 / 60;
+        var sec = s % 60;
+        return sec == 0 ? $"{h:D2}:{m:D2}" : $"{h:D2}:{m:D2}:{sec:D2}";
     }
 }

@@ -12,6 +12,7 @@
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <TextBlock Grid.Row="0" Style="{StaticResource PageTitle}" Text="课表编辑" />
@@ -265,8 +266,60 @@
             </Grid>
         </Border>
 
+        <!-- 测试课表：先备份原课表，再插入 40 分钟上课 + 10 分钟课间的测试表 -->
+        <Border Grid.Row="5"
+                Margin="0,12,0,0"
+                Padding="14,12"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                    <TextBlock Text="插入测试课表"
+                               FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <TextBlock Text="先备份当前课表，再把它整份替换成测试表：40 分钟上课 + 10 分钟课间，课程只写「自习」，编号由系统自动生成。测试完点「结束测试并恢复」。"
+                               Margin="0,2,0,0"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <TextBlock x:Name="TimetableTestStatus"
+                               Margin="0,4,0,0"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               Visibility="Collapsed"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="TestClassStartButton"
+                            Content="测试上课状态"
+                            Height="32" MinWidth="110"
+                            Style="{StaticResource SubtleButton}"
+                            Click="TestClassStart_Click" />
+                    <Button x:Name="TestClassEndButton"
+                            Content="测试下课状态"
+                            Height="32" MinWidth="110" Margin="8,0,0,0"
+                            Style="{StaticResource SubtleButton}"
+                            Click="TestClassEnd_Click" />
+                    <Button x:Name="TestClassRestoreButton"
+                            Content="结束测试并恢复"
+                            Height="32" MinWidth="130" Margin="8,0,0,0"
+                            Style="{StaticResource AccentButton}"
+                            Visibility="Collapsed"
+                            Click="TestClassRestore_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
         <!-- 底部工具栏：左（操作）/ 中（计数 + 状态）/ 右（取消、保存） -->
-        <Grid Grid.Row="5" Margin="0,14,0,0">
+        <Grid Grid.Row="6" Margin="0,14,0,0">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" />

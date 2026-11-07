@@ -1,7 +1,9 @@
 using ClassDailyLand2.App.ViewModels;
+using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Models;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Windows;
@@ -71,6 +73,11 @@ public partial class TimetableEditorPage : UserControl
     string _activeName = "";
     bool _loadedOnce;
     bool _loadingWeekend;
+
+    /// <summary>测试课表的原始备份（JSON）与磁盘文件；有值 = 当前有未恢复的测试课表。</summary>
+    string? _testScheduleBackup;
+    string? _testScheduleBackupFile;
+    const string TestScheduleBackupName = "schedule.timetable-backup.json";
 
     public TimetableEditorPage()
     {
@@ -188,6 +195,8 @@ public partial class TimetableEditorPage : UserControl
         LoadWeekend();
         SubtitleText.Text = $"课表：{_activeName} · 双击格子改课程；时间用开始时 / 开始分 / 结束时 / 结束分 选择";
         UpdateCount();
+        LoadTestBackupState();
+        UpdateTestUi();
     }
 
     void LoadWeekend()
@@ -415,8 +424,20 @@ public partial class TimetableEditorPage : UserControl
 
     void Save_Click(object sender, RoutedEventArgs e)
     {
+        if (!PersistEditor()) return;
+
+        Reload();
+        StatusText.Text = WeekendToggle.IsChecked == true ? "已保存（含周末课表）。" : "已保存。";
+    }
+
+    /// <summary>
+    /// 把编辑器里的课表写回 schedule.json（不负责 Reload / 提示）。
+    /// 测试课表插入前也先调它：保证备份的是用户当前正在编辑的版本，而不是上一次保存的版本。
+    /// </summary>
+    bool PersistEditor()
+    {
         var schedule = Schedule;
-        if (schedule is null) return;
+        if (schedule is null) return false;
 
         CommitEdits();
         CommitWeekendEdits();
@@ -432,7 +453,7 @@ public partial class TimetableEditorPage : UserControl
         if (string.IsNullOrWhiteSpace(_activeName) || !schedule.File.Timetables.ContainsKey(_activeName))
         {
             StatusText.Text = "找不到正在编辑的课表，已取消保存。";
-            return;
+            return false;
         }
 
         schedule.File.Timetables[_activeName] = table;
@@ -454,9 +475,172 @@ public partial class TimetableEditorPage : UserControl
         }
 
         schedule.Save();
+        return true;
+    }
+
+    // ————————————————————— 测试课表 —————————————————————
+
+    void TestClassStart_Click(object sender, RoutedEventArgs e) => InsertTestTimetable(startNow: true);
+    void TestClassEnd_Click(object sender, RoutedEventArgs e) => InsertTestTimetable(startNow: false);
+    void TestClassRestore_Click(object sender, RoutedEventArgs e) => RestoreTestTimetable();
+
+    /// <summary>
+    /// 插入测试课表（先备份原课表）：
+    ///   上课状态：现在 = 第 1 节上课，40 分钟后下课，课间 10 分钟，再 40 分钟……
+    ///   下课状态：现在 - 40 分钟 = 第 1 节上课，现在 = 第 1 节下课，+10 分钟后第 2 节……
+    /// 课程一律只写「自习」，重名编号交给引擎（自习(1)、自习(2)…）。
+    ///
+    /// ★ 直接把**当前正在用的课表**顶掉（不另建一张测试表），
+    ///   测试期间课表编辑器/灵动岛读到的都是这套测试数据；点「恢复原课表」才整份写回。
+    /// </summary>
+    void InsertTestTimetable(bool startNow)
+    {
+        var schedule = Schedule;
+        if (schedule is null || Vm is null) return;
+
+        // 先把编辑器里正在改的内容落盘，再备份 —— 否则备份的是上一次保存的旧课表
+        if (!PersistEditor()) return;
+
+        if (_testScheduleBackup is null)
+        {
+            _testScheduleBackup = schedule.ExportJson();
+            _testScheduleBackupFile = WriteTestBackup(Vm.ConfigPath, _testScheduleBackup);
+        }
+
+        var targetName = schedule.File.Active;
+        if (string.IsNullOrWhiteSpace(targetName) || !schedule.File.Timetables.ContainsKey(targetName))
+        {
+            StatusText.Text = "找不到当前课表，无法插入测试课表。";
+            return;
+        }
+
+        var now = DateTime.Now;
+        var table = BuildTestTable(now, startNow);
+
+        // 实打实顶掉原来的课表：名字还是原来的名字，内容整份换成测试课表
+        schedule.File.Timetables[targetName] = table;
+        schedule.File.Active = targetName;
+
+        // 周末 / 假期 / 临时调课都会影响"今天到底上不上这套课"，测试期间先绕开（恢复时整份写回）
+        schedule.File.Weekend ??= new WeekendConfig();
+        schedule.File.Weekend.MorningSplit = "23:59";
+        schedule.File.Weekend.AfternoonPeriods.Clear();
+        schedule.File.Weekend.Courses.Clear();
+        schedule.File.Holidays.Clear();
+        schedule.File.TempAdjust = new TempAdjust();
+
+        schedule.SetAdvance(0);
+        schedule.SetOffset(0);
+        schedule.Save();     // 写 schedule.json，灵动岛立刻按新表算
 
         Reload();
-        StatusText.Text = WeekendToggle.IsChecked == true ? "已保存（含周末课表）。" : "已保存。";
+        StatusText.Text = startNow
+            ? $"已把「{targetName}」整份替换成测试课表：现在开始上第 1 节，40 分钟后下课。"
+            : $"已把「{targetName}」整份替换成测试课表：第 1 节现在下课，10 分钟后上第 2 节。";
+    }
+
+    /// <summary>按 40 分钟上课 + 10 分钟课间，从指定起点一直排到当天 23:59。</summary>
+    static Timetable BuildTestTable(DateTime now, bool startNow)
+    {
+        var table = new Timetable();
+        var dayEnd = now.Date.AddHours(23).AddMinutes(59).AddSeconds(59);
+
+        // 下课状态：把"现在"当成第 1 节的下课时刻；留 2 秒余量，让灵动岛先看到
+        // "上课中 → 下课"这次跳变，才会弹「下课了！」。
+        var anchor = startNow ? now : now.AddSeconds(2);
+
+        // 下课状态要往前推 40 分钟：刚过零点时会跨天，这里夹到当天 00:00
+        var t = startNow ? anchor : anchor.AddMinutes(-40);
+        if (t < now.Date) t = now.Date;
+
+        var index = 0;
+        while (t < dayEnd && index < 60)
+        {
+            var start = t;
+            var end = start.AddMinutes(40);
+            if (end > dayEnd) end = dayEnd;
+            if (end <= start) break;
+
+            table.Periods.Add(new Period($"第{index + 1}节", FormatClock(start), FormatClock(end)));
+            // 只写「自习」两个字；重复编号由 ScheduleEngine 读取时统一处理
+            for (var day = 0; day < 7; day++) table.SetCourse(index, day, "自习");
+
+            index++;
+            t = end.AddMinutes(10);
+        }
+        return table;
+    }
+
+    static string FormatClock(DateTime t) =>
+        t.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+
+    void RestoreTestTimetable()
+    {
+        var schedule = Schedule;
+        if (schedule is null || _testScheduleBackup is null) return;
+
+        if (!schedule.ImportJson(_testScheduleBackup))
+        {
+            StatusText.Text = "恢复失败：备份内容无法读取。";
+            return;
+        }
+
+        DeleteTestBackup();
+        _testScheduleBackup = null;
+        Reload();
+        StatusText.Text = "已恢复测试前的课表。";
+    }
+
+    /// <summary>页面重新打开 / 切回来时，如果数据目录里还有测试备份，把「恢复原课表」按钮找回来。</summary>
+    void LoadTestBackupState()
+    {
+        if (_testScheduleBackup is not null || Vm is null) return;
+
+        var path = Path.Combine(Vm.ConfigPath, TestScheduleBackupName);
+        if (!File.Exists(path)) return;
+
+        try
+        {
+            _testScheduleBackup = File.ReadAllText(path);
+            _testScheduleBackupFile = path;
+        }
+        catch (Exception ex)
+        {
+            Logger.Current?.Warn("[测试] 读取测试课表备份失败：" + ex.Message);
+        }
+    }
+
+    void UpdateTestUi()
+    {
+        var hasBackup = _testScheduleBackup is not null;
+
+        TestClassRestoreButton.Visibility = hasBackup ? Visibility.Visible : Visibility.Collapsed;
+        TimetableTestStatus.Visibility = hasBackup ? Visibility.Visible : Visibility.Collapsed;
+        TimetableTestStatus.Text = hasBackup
+            ? $"当前课表「{_activeName}」已被测试课表整份替换（课程只写「自习」，编号由系统生成）；点「结束测试并恢复」还原。"
+            : "";
+    }
+
+    string? WriteTestBackup(string folder, string json)
+    {
+        try
+        {
+            var path = Path.Combine(folder, TestScheduleBackupName);
+            File.WriteAllText(path, json, new UTF8Encoding(false));
+            return path;
+        }
+        catch (Exception ex)
+        {
+            Logger.Current?.Warn("[测试] 写课表备份失败：" + ex.Message);
+            return null;
+        }
+    }
+
+    void DeleteTestBackup()
+    {
+        if (_testScheduleBackupFile is null) return;
+        try { File.Delete(_testScheduleBackupFile); } catch { }
+        _testScheduleBackupFile = null;
     }
 
     void Cancel_Click(object sender, RoutedEventArgs e)

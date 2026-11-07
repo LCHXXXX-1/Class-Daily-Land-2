@@ -1,25 +1,28 @@
 using ClassDailyLand2.Core;
+using ClassDailyLand2.Core.Engine;
 using ClassDailyLand2.Core.Models;
 using Xunit;
 
 namespace ClassDailyLand2.Core.Tests;
 
 /// <summary>
-/// 作业「提交时间」的三段排位 + 到点触发。
+/// 作业「提交时段」的排位 + 到点触发。
 ///
 /// 规则（用户原话的落点）：
-///   · 今天到点且程序在场 → 顶到第一行（due_fired 有值）
-///   · 补交、已经过点但没赶上 → 沉到最底下
-///   · 没设 / 还没到点     → 按原顺序
+///   · 提交时段 = [本节下课, 下一节上课)
+///   · 时段内         → 整个科目板块顶到最前
+///   · 还没到 / 没设  → 按原顺序
+///   · 补交           → 正常作业之后
+///   · 时段结束       → 整块沉到最底（已过提交时间）
 /// </summary>
 public class HomeworkDueTests
 {
     static readonly DateTime Now = new(2026, 11, 7, 10, 41, 0);   // 本地时间：周六 10:41
 
-    static HomeworkItem Item(string due, string kind = HomeworkDueKinds.Period, string fired = "") =>
-        new() { Subject = "数学", Content = "习题", Due = due, DueKind = kind, DueFired = fired };
+    static HomeworkItem Item(string due, string kind = HomeworkDueKinds.Period, string fired = "", string dueEnd = "") =>
+        new() { Subject = "数学", Content = "习题", Due = due, DueEnd = dueEnd, DueKind = kind, DueFired = fired };
 
-    // ——— 排位 ———
+    // ——— 排位：没有时段的旧数据 / 自定义时间 ———
 
     [Fact]
     public void NoDue_StaysNormal()
@@ -34,30 +37,107 @@ public class HomeworkDueTests
     }
 
     [Fact]
-    public void DueButNotFired_SinksToBottom()
+    public void DueButNotFired_WithNoWindow_SinksToBottom()
     {
-        // 建的时候时间就已经过去（或程序当时不在场）
-        Assert.Equal(HomeworkSlot.Bottom, HomeworkDue.SlotOf(Item("2026-11-07 10:00"), Now));
+        // 没有时段终点（老数据 / 自定义时间）：过了点就是「已过提交时间」
+        Assert.Equal(HomeworkSlot.Expired, HomeworkDue.SlotOf(Item("2026-11-07 10:00"), Now));
     }
 
     [Fact]
-    public void DueAndFired_MovesToTop()
+    public void DueAndFired_WithNoWindow_MovesToTop()
     {
-        Assert.Equal(HomeworkSlot.Due, HomeworkDue.SlotOf(Item("2026-11-07 10:40", fired: "2026-11-07 10:40"), Now));
+        // 自定义时间仍沿用旧规则：程序看着它到点就置顶
+        Assert.Equal(HomeworkSlot.Top,
+            HomeworkDue.SlotOf(Item("2026-11-07 10:40", fired: "2026-11-07 10:40"), Now));
     }
 
     [Fact]
     public void FiredYesterday_SinksToday()
     {
-        Assert.Equal(HomeworkSlot.Bottom,
+        Assert.Equal(HomeworkSlot.Expired,
             HomeworkDue.SlotOf(Item("2026-11-06 15:00", fired: "2026-11-06 15:00"), Now));
     }
 
     [Fact]
-    public void Late_AlwaysBottom()
+    public void Late_RanksAboveExpired_ButBelowNormal()
     {
-        Assert.Equal(HomeworkSlot.Bottom, HomeworkDue.SlotOf(Item("", HomeworkDueKinds.Late), Now));
-        Assert.Equal(HomeworkSlot.Bottom, HomeworkDue.SlotOf(Item("2026-11-09 09:00", HomeworkDueKinds.Late), Now));
+        Assert.Equal(HomeworkSlot.Late, HomeworkDue.SlotOf(Item("", HomeworkDueKinds.Late), Now));
+        Assert.Equal(HomeworkSlot.Late, HomeworkDue.SlotOf(Item("2026-11-09 09:00", HomeworkDueKinds.Late), Now));
+
+        // 排序值：Normal < Late < Expired
+        Assert.True(HomeworkSlot.Normal < HomeworkSlot.Late);
+        Assert.True(HomeworkSlot.Late < HomeworkSlot.Expired);
+    }
+
+    // ——— 排位：提交时段 [due, dueEnd) ———
+
+    [Fact]
+    public void BeforeWindow_StaysNormal()
+    {
+        Assert.Equal(HomeworkSlot.Normal,
+            HomeworkDue.SlotOf(Item("2026-11-07 10:41", dueEnd: "2026-11-07 10:55"), Now.AddMinutes(-1)));
+    }
+
+    [Fact]
+    public void InsideWindow_MovesToTop()
+    {
+        var item = Item("2026-11-07 10:41", dueEnd: "2026-11-07 10:55");
+        Assert.Equal(HomeworkSlot.Top, HomeworkDue.SlotOf(item, Now));
+        Assert.Equal(HomeworkSlot.Top, HomeworkDue.SlotOf(item, Now.AddMinutes(13)));
+    }
+
+    [Fact]
+    public void WindowEnd_SinksToBottom()
+    {
+        var item = Item("2026-11-07 10:41", dueEnd: "2026-11-07 10:55");
+        Assert.Equal(HomeworkSlot.Expired, HomeworkDue.SlotOf(item, Now.AddMinutes(14)));
+    }
+
+    // ——— 板块排位：取组内最靠上的一条 ———
+
+    [Fact]
+    public void GroupSlot_AnyItemInWindow_PutsWholeBlockOnTop()
+    {
+        var items = new List<HomeworkItem>
+        {
+            Item("2026-11-07 10:41", dueEnd: "2026-11-07 10:55"),   // 时段内
+            Item("2026-11-07 11:30", dueEnd: "2026-11-07 11:40"),   // 还没到
+        };
+        Assert.Equal(HomeworkSlot.Top, HomeworkDue.GroupSlot(items, Now));
+    }
+
+    [Fact]
+    public void GroupSlot_FirstExpiredSecondPending_ReturnsToNormal()
+    {
+        // 用户描述：第 1 样过完、第 2 样还没到 → 整个物理板块回原位
+        var items = new List<HomeworkItem>
+        {
+            Item("2026-11-07 10:35", dueEnd: "2026-11-07 10:40"),   // 已过
+            Item("2026-11-07 10:45", dueEnd: "2026-11-07 10:50"),   // 还没到
+        };
+        Assert.Equal(HomeworkSlot.Normal, HomeworkDue.GroupSlot(items, Now));
+    }
+
+    [Fact]
+    public void GroupSlot_AllExpired_SinksWholeBlock()
+    {
+        var items = new List<HomeworkItem>
+        {
+            Item("2026-11-07 10:35", dueEnd: "2026-11-07 10:40"),
+            Item("2026-11-07 10:38", dueEnd: "2026-11-07 10:39"),
+        };
+        Assert.Equal(HomeworkSlot.Expired, HomeworkDue.GroupSlot(items, Now));
+    }
+
+    [Fact]
+    public void GroupSlot_LateAndExpired_UsesLate()
+    {
+        var items = new List<HomeworkItem>
+        {
+            Item("", HomeworkDueKinds.Late),
+            Item("2026-11-07 10:35", dueEnd: "2026-11-07 10:40"),
+        };
+        Assert.Equal(HomeworkSlot.Late, HomeworkDue.GroupSlot(items, Now));
     }
 
     // ——— 到点触发 ———
@@ -90,25 +170,25 @@ public class HomeworkDueTests
     public void Watcher_ReportsLayoutChange_WhenSlotFlips()
     {
         var watcher = new HomeworkDueWatcher();
-        var items = new List<HomeworkItem> { Item("2026-11-07 11:30") };
+        var items = new List<HomeworkItem> { Item("2026-11-07 11:30", dueEnd: "2026-11-07 11:40") };
 
         watcher.Tick(items, Now);
         Assert.False(watcher.LayoutChanged);       // 第一拍只是建立基线
 
         watcher.Tick(items, new DateTime(2026, 11, 7, 11, 31, 0));
-        Assert.True(watcher.LayoutChanged);        // 过点未触发 → 掉到最底下，排位变了
+        Assert.True(watcher.LayoutChanged);        // 进入提交时段 → 排位变了
     }
 
     // ——— 小字提示 ———
 
     [Fact]
-    public void Hint_CoversTheThreeStates()
+    public void Hint_CoversTheStates()
     {
         Assert.Equal("补交 · 排最后", HomeworkDue.Hint(Item("", HomeworkDueKinds.Late), Now));
         Assert.Equal("11:30 截止", HomeworkDue.Hint(Item("2026-11-07 11:30"), Now));
-        Assert.Equal("已过点 · 排最后", HomeworkDue.Hint(Item("2026-11-07 10:00"), Now));
-        Assert.Equal("10:40 到点 · 已置顶",
-            HomeworkDue.Hint(Item("2026-11-07 10:40", fired: "2026-11-07 10:40"), Now));
+        Assert.Equal("已过提交时间", HomeworkDue.Hint(Item("2026-11-07 10:00"), Now));
+        Assert.Equal("已过提交时间",
+            HomeworkDue.Hint(Item("2026-11-07 10:41", dueEnd: "2026-11-07 10:55"), Now));
     }
 
     // ——— 解析 ———
@@ -136,6 +216,7 @@ public class HomeworkDueTests
     {
         var legacy = new HomeworkItem { Subject = "语文", Content = "抄写", Date = "" };
         Assert.Null(legacy.DueTime);
+        Assert.Null(legacy.DueEndTime);
         Assert.False(legacy.IsLate);
         Assert.Equal(HomeworkSlot.Normal, HomeworkDue.SlotOf(legacy, Now));
         Assert.Equal("", HomeworkDue.Hint(legacy, Now));
@@ -151,7 +232,7 @@ public class HomeworkDueTests
             HomeworkDue.TimeOnDate(Now, "乱写"));
     }
 
-    // ——— 下拉框文案：晚自习 / 重名 ———
+    // ——— 下拉框文案：晚自习 / 重名 / 时段 ———
 
     static List<(int Index, Period Period, string Course)> Slots(params (string Name, string Start, string End, string Course)[] rows)
     {
@@ -173,6 +254,19 @@ public class HomeworkDueTests
         Assert.Equal("第10节 · 21:40 下课", options[0].Text);
         Assert.Equal("晚自习 · 22:40 下课", options[1].Text);
         Assert.Equal(new DateTime(2026, 11, 7, 22, 40, 0), options[1].Due);
+    }
+
+    [Fact]
+    public void PeriodOptions_WindowRunsUntilNextPeriodStart()
+    {
+        var options = HomeworkDue.PeriodOptions(Slots(
+            ("第3节", "10:00", "10:40", "数学"),
+            ("第4节", "10:50", "11:30", "语文")), Now);
+
+        Assert.Equal(new DateTime(2026, 11, 7, 10, 40, 0), options[0].Due);
+        Assert.Equal(new DateTime(2026, 11, 7, 10, 50, 0), options[0].End);   // 下一节上课
+        Assert.Equal(new DateTime(2026, 11, 7, 11, 30, 0), options[1].Due);
+        Assert.Equal(new DateTime(2026, 11, 7, 23, 59, 0), options[1].End);   // 最后一节到当天结束
     }
 
     [Fact]
@@ -208,6 +302,76 @@ public class HomeworkDueTests
         Assert.Empty(HomeworkDue.PeriodOptions(new List<(int, Period, string)>(), Now));
     }
 
+    [Fact]
+    public void PeriodOptions_ReturnsPeriodIndexes()
+    {
+        var options = HomeworkDue.PeriodOptions(Slots(
+            ("第1节", "10:00", "10:40", "数学"),
+            ("第2节", "10:50", "11:30", "语文")), Now);
+
+        Assert.Equal(0, options[0].Index);
+        Assert.Equal(1, options[1].Index);
+    }
+
+    // ——— 课表改了，按节次选的提交时间要跟着走 ———
+
+    static ScheduleEngine EngineWith(params (string Name, string Start, string End, string Course)[] rows)
+    {
+        var sf = new ScheduleFile { Active = "测试" };
+        var t = new Timetable();
+        for (var i = 0; i < rows.Length; i++)
+        {
+            t.Periods.Add(new Period(rows[i].Name, rows[i].Start, rows[i].End));
+            t.SetRow(i, Enumerable.Repeat(rows[i].Course, 7).ToArray());
+        }
+        sf.Timetables["测试"] = t;
+        sf.Normalize();
+        return new ScheduleEngine(sf);
+    }
+
+    [Fact]
+    public void RefreshPeriodDue_FollowsPeriodTimeChange()
+    {
+        var date = new DateTime(2026, 11, 9);   // 周一
+        var item = new HomeworkItem
+        {
+            Subject = "数学",
+            Content = "习题",
+            DueKind = HomeworkDueKinds.Period,
+            DuePeriod = 0,
+            Due = "2026-11-09 10:40",
+            DueEnd = "2026-11-09 10:50",
+            DueName = "数学",
+            DueLabel = "第1节 数学 · 10:40 下课",
+        };
+
+        var before = EngineWith(("第1节", "10:00", "10:40", "数学"),
+                                ("第2节", "10:50", "11:30", "语文"));
+        Assert.False(HomeworkDue.RefreshPeriodDue(item, before, date.AddHours(10)));
+
+        // 第一节改成 10:05 ~ 10:45，第二节不变
+        var after = EngineWith(("第1节", "10:05", "10:45", "数学"),
+                               ("第2节", "10:50", "11:30", "语文"));
+        Assert.True(HomeworkDue.RefreshPeriodDue(item, after, date.AddHours(10)));
+
+        Assert.Equal("2026-11-09 10:45", item.Due);
+        Assert.Equal("2026-11-09 10:50", item.DueEnd);
+        Assert.Equal("数学", item.DueName);
+    }
+
+    [Fact]
+    public void RefreshPeriodDue_IgnoresCustomAndOldItems()
+    {
+        var engine = EngineWith(("第1节", "10:00", "10:40", "数学"));
+        var now = new DateTime(2026, 11, 9, 10, 0, 0);
+
+        var custom = new HomeworkItem { DueKind = HomeworkDueKinds.Custom, Due = "2026-11-09 10:40" };
+        Assert.False(HomeworkDue.RefreshPeriodDue(custom, engine, now));
+
+        var legacy = new HomeworkItem { DueKind = HomeworkDueKinds.Period, DuePeriod = -1, Due = "2026-11-09 10:40" };
+        Assert.False(HomeworkDue.RefreshPeriodDue(legacy, engine, now));
+    }
+
     // ——— 作业区行尾小字 ———
 
     [Fact]
@@ -217,24 +381,42 @@ public class HomeworkDueTests
         var a = HomeworkDue.BoardHint(Item("2026-11-07 19:50"), Now);
         var b = HomeworkDue.BoardHint(Item("2026-11-07 20:50"), Now);
 
-        Assert.Equal("19:50 交", a);
-        Assert.Equal("20:50 交", b);
+        Assert.Equal("（19:50 交）", a);
+        Assert.Equal("（20:50 交）", b);
         Assert.NotEqual(a, b);
     }
 
     [Fact]
-    public void BoardHint_CoversLatePastAndNoDue()
+    public void BoardHint_MarksPastDueAsExpired()
     {
-        Assert.Equal("补交", HomeworkDue.BoardHint(Item("", HomeworkDueKinds.Late), Now));
-        Assert.Equal("已过点", HomeworkDue.BoardHint(Item("2026-11-07 09:00"), Now));
-        Assert.Equal("已过期", HomeworkDue.BoardHint(Item("2026-11-06 09:00", fired: "2026-11-06 09:00"), Now));
-        Assert.Equal("10:40 到点", HomeworkDue.BoardHint(Item("2026-11-07 10:40", fired: "2026-11-07 10:40"), Now));
+        Assert.Equal("（补交）", HomeworkDue.BoardHint(Item("", HomeworkDueKinds.Late), Now));
+        Assert.Equal("（09:00 交 · 已过提交时间）", HomeworkDue.BoardHint(Item("2026-11-07 09:00"), Now));
+        Assert.Equal("（11-06 交 · 已过提交时间）",
+            HomeworkDue.BoardHint(Item("2026-11-06 09:00", fired: "2026-11-06 09:00"), Now));
+        Assert.Equal("（10:41 交 · 已过提交时间）",
+            HomeworkDue.BoardHint(Item("2026-11-07 10:41", dueEnd: "2026-11-07 10:55"), Now));
         Assert.Equal("", HomeworkDue.BoardHint(Item("", HomeworkDueKinds.None), Now));
+    }
+
+    [Fact]
+    public void BoardHint_ShowsTimeAndCourseName()
+    {
+        var item = new HomeworkItem
+        {
+            Subject = "自习",
+            Content = "自习(1)",
+            Due = "2026-11-07 11:30",
+            DueName = "自习(1)",
+        };
+        Assert.Equal("（11:30 自习(1)）", HomeworkDue.BoardHint(item, Now));
+
+        item.Due = "2026-11-07 10:41";
+        Assert.Equal("（10:41 自习(1) · 已过提交时间）", HomeworkDue.BoardHint(item, Now));
     }
 
     [Fact]
     public void BoardHint_FutureOtherDay_ShowsDate()
     {
-        Assert.Equal("11-09 交", HomeworkDue.BoardHint(Item("2026-11-09 15:00"), Now));
+        Assert.Equal("（11-09 交）", HomeworkDue.BoardHint(Item("2026-11-09 15:00"), Now));
     }
 }

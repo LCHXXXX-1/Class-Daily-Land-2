@@ -1,6 +1,7 @@
 <Window x:Class="ClassDailyLand2.App.Windows.SubIslandWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:w="clr-namespace:ClassDailyLand2.App.Integrations.Weather"
         Title="SubIsland"
         Height="40" Width="40"
         WindowStyle="None"
@@ -14,8 +15,9 @@
 
     <!--
       副岛（原生化）：窗口本身就是胶囊，Border 铺满 + CornerRadius=20 得到 pill。
-      收起态 = 圆环 + 进度点；展开态 = 文字。窗口宽度 / 位置由代码里的 WPF 动画驱动
-      （见 SubIslandWindow.cs 的 FollowTo），不再有 OnRender 手绘。
+      收起态 = 圆环 + 进度点；**天气内容时收起态改放天气动画**；展开态 = 动画(可选) + 文字。
+      窗口宽度 / 位置由代码里的 WPF 动画驱动（见 SubIslandWindow.cs 的 TargetFollow）。
+      Art 的水平位置与 Label 的左边距由代码按"收起/展开"切换，这里只给初值。
     -->
     <Grid x:Name="Root">
         <Border x:Name="Capsule" CornerRadius="20" SnapsToDevicePixels="True" />
@@ -28,6 +30,13 @@
         <Ellipse x:Name="ProgressDot"
                  Width="0" Height="0"
                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+        <!-- 天气动画：收起态居中占满圆，展开态挪到文字左边 -->
+        <w:WeatherArt x:Name="Art"
+                      Width="26" Height="26"
+                      HorizontalAlignment="Center"
+                      VerticalAlignment="Center"
+                      Visibility="Collapsed" />
 
         <!-- 展开态：文字 -->
         <TextBlock x:Name="Label"

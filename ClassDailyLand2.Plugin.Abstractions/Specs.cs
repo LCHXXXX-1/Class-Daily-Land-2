@@ -78,8 +78,36 @@ public sealed record PanelSpec(
 
 // ————————————————————— 班级日常（主窗） —————————————————————
 
+/// <summary>
+/// 主窗区块里的图形内容：**插件只描述，宿主负责画**（与 <see cref="SettingsPageSpec"/> 同一套思路，
+/// 插件永远不碰 WPF 类型）。
+///
+/// <para>★ 向后兼容约定（改这里之前先读）：</para>
+/// <list type="bullet">
+///   <item>老插件继续写 <c>new BoardSection(title, lines)</c>，<see cref="BoardSection.Art"/> 为 null ——
+///         <see cref="BoardSection"/> 的 2 参主构造**不能删也不能改签名**，否则已发布插件的二进制会 MissingMethod；
+///         新增图形一律走 3 参重载 + <c>init</c> 属性。</item>
+///   <item>宿主不认识的 <see cref="Kind"/> 直接忽略、只画正文 —— 这样旧宿主装了新插件也不会炸。</item>
+/// </list>
+/// </summary>
+/// <param name="Kind">画什么。当前只有 <c>"weather"</c>（天气动画）；新增 kind 属于纯增量。</param>
+/// <param name="Code">Kind 为 weather 时的 WMO 天气码（<c>"0"</c>~<c>"99"</c>），未知填空串。</param>
+/// <param name="Value">Kind 为 weather 时的温度（℃）；未知填 <see cref="double.NaN"/>。</param>
+/// <param name="IsDay">Kind 为 weather 时画太阳还是月牙（只影响晴天）。</param>
+/// <param name="Animated">false 表示只画静态图形（宿主还会再 AND 上自己的"关动画"设置）。</param>
+public sealed record BoardArt(string Kind, string Code = "", double Value = double.NaN,
+    bool IsDay = true, bool Animated = true);
+
 /// <summary>主窗追加区块：一个标题 + 若干行正文（等比作业那套排版，纯文字）。</summary>
-public sealed record BoardSection(string Title, IReadOnlyList<string> Lines);
+public sealed record BoardSection(string Title, IReadOnlyList<string> Lines)
+{
+    /// <summary>带图形的重载。保留 2 参主构造是为了让已发布插件的二进制继续可用。</summary>
+    public BoardSection(string Title, IReadOnlyList<string> Lines, BoardArt? art)
+        : this(Title, Lines) => Art = art;
+
+    /// <summary>可选图形；null 表示纯文字区块。</summary>
+    public BoardArt? Art { get; init; }
+}
 
 /// <summary>主窗区块位：追加在作业列表下面。</summary>
 public sealed record BoardSectionSpec(Func<BoardSection?> Section, int Priority = 0);
