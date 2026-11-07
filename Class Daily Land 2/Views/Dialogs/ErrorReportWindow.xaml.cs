@@ -44,6 +44,8 @@ public partial class ErrorReportWindow : Window
     ErrorReportWindow(string kind, string module, string detail, string? snapshot, ErrorCode? code, ErrorPayload? payload = null)
     {
         InitializeComponent();
+        // 提示框统一入场：从下往上滑上来 + 淡入
+        Loaded += (_, _) => UiMotion.SlideUpIn(Content as FrameworkElement ?? this, maxDistance: 180);   // 时长走设置里的动画时长
 
         _kind = kind;
         _module = module;

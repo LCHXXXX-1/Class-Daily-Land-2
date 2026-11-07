@@ -2,12 +2,14 @@ using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Win32;
 using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Models;
 using ClassDailyLand2.Core.Plugins;
 using ClassDailyLand2.Plugin;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -217,8 +219,14 @@ public sealed class MainBoardWindow : Window
     /// <summary>
     /// 作业列表：按学科分组（同原版 get_grouped_homework），组标题「学科 (日期)」，
     /// 组内条目「  1. 内容」编号。
+    ///
+    /// ★ 1.7.30 起分三段排（详细规则见 <see cref="HomeworkDue"/>）：
+    ///     ① 今天已到点（顶到最前，最近到点的排第一行）
+    ///     ② 正常（原文件顺序，组内也按原顺序）
+    ///     ③ 补交 / 已过点没赶上的（沉到最底下）
+    ///   分段只是**渲染顺序**，homework.json 里的顺序一点没动 —— 编辑器看到的是原顺序。
     /// </summary>
-    void RefreshHomework()
+    public void RefreshHomework()
     {
         if (_homework is null) return;
         var fromFont = _dutyLabel.FontSize;
@@ -227,57 +235,20 @@ public sealed class MainBoardWindow : Window
         _homeworkEmpty.Visibility = items.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         _homeworkScroll.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
 
-        // 按学科归组，保持首次出现的顺序（LinkedDictionary 语义）
-        var groups = new List<(string Subject, string Date, List<string> Contents)>();
-        foreach (var item in items)
+        var now = DateTime.Now;
+        foreach (var slot in new[] { HomeworkSlot.Due, HomeworkSlot.Normal, HomeworkSlot.Bottom })
         {
-            var subject = (item.Subject ?? "").Trim();
-            var content = (item.Content ?? "").Trim();
-            if (content.Length == 0) continue;
-            var date = string.IsNullOrEmpty(item.Date) ? "" : item.Date.Trim();
-            var idx = groups.FindIndex(g => string.Equals(g.Subject, subject, StringComparison.Ordinal));
-            if (idx < 0)
-            {
-                groups.Add((subject, date, new List<string> { content }));
-            }
-            else
-            {
-                var g = groups[idx];
-                g.Contents.Add(content);
-                if (string.IsNullOrEmpty(g.Date) && date.Length > 0)
-                    groups[idx] = (g.Subject, date, g.Contents);
-            }
-        }
+            var bucket = items
+                .Where(i => !string.IsNullOrWhiteSpace(i.Content) && HomeworkDue.SlotOf(i, now) == slot)
+                .ToList();
+            if (bucket.Count == 0) continue;
 
-        foreach (var g in groups)
-        {
-            var heading = new TextBlock
-            {
-                Text = string.IsNullOrEmpty(g.Date) ? g.Subject : $"{g.Subject} ({g.Date})",
-                FontSize = _fontSize,          // 新行一律按"当前"字号建，别沿用可能还在动画中的旧值
-                FontWeight = FontWeights.Bold,
-                Foreground = BoardText,
-                TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 0, 0, 2),
-            };
-            _homeworkPanel.Children.Add(heading);
+            // 到点那段：谁最近到点谁在最前 —— 用户要的"刚交的那个调到第一行"
+            if (slot == HomeworkSlot.Due)
+                bucket = bucket.OrderByDescending(i => i.DueFiredTime ?? DateTime.MinValue).ToList();
 
-            // 只有在"字号真的变了"的时候才做动画；数据刷新时不该闪一下
-            if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(heading, _fontSize, fromFont);
-
-            for (var i = 0; i < g.Contents.Count; i++)
-            {
-                var row = new TextBlock
-                {
-                    Text = $"  {i + 1}. {g.Contents[i]}",
-                    FontSize = _fontSize,
-                    Foreground = BoardText,
-                    TextWrapping = TextWrapping.Wrap,
-                    LineHeight = _fontSize * 1.35,
-                };
-                _homeworkPanel.Children.Add(row);
-                if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(row, _fontSize, fromFont);
-            }
+            foreach (var group in GroupBySubject(bucket))
+                RenderGroup(group, fromFont);
         }
 
         _homeworkScroll.ScrollToVerticalOffset(0);
@@ -288,6 +259,77 @@ public sealed class MainBoardWindow : Window
         //   否则新加一堆作业窗口还是原来那么高（滚动条不出现），删完又留下一大片空白。
         //   放到 Loaded 优先级，等布局跑完再量 DesiredSize。
         Dispatcher.BeginInvoke(new Action(Reposition), DispatcherPriority.Loaded);
+    }
+
+    /// <summary>按学科归组，保持首次出现的顺序（LinkedDictionary 语义）。</summary>
+    static List<(string Subject, string Date, List<HomeworkItem> Items)> GroupBySubject(List<HomeworkItem> items)
+    {
+        var groups = new List<(string Subject, string Date, List<HomeworkItem> Items)>();
+        foreach (var item in items)
+        {
+            var subject = (item.Subject ?? "").Trim();
+            var content = (item.Content ?? "").Trim();
+            if (content.Length == 0) continue;
+            var date = string.IsNullOrEmpty(item.Date) ? "" : item.Date.Trim();
+            var idx = groups.FindIndex(g => string.Equals(g.Subject, subject, StringComparison.Ordinal));
+            if (idx < 0)
+            {
+                groups.Add((subject, date, new List<HomeworkItem> { item }));
+            }
+            else
+            {
+                var g = groups[idx];
+                g.Items.Add(item);
+                if (string.IsNullOrEmpty(g.Date) && date.Length > 0)
+                    groups[idx] = (g.Subject, date, g.Items);
+            }
+        }
+        return groups;
+    }
+
+    void RenderGroup((string Subject, string Date, List<HomeworkItem> Items) group, double fromFont)
+    {
+        var heading = new TextBlock
+        {
+            Text = string.IsNullOrEmpty(group.Date) ? group.Subject : $"{group.Subject} ({group.Date})",
+            FontSize = _fontSize,          // 新行一律按"当前"字号建，别沿用可能还在动画中的旧值
+            FontWeight = FontWeights.Bold,
+            Foreground = BoardText,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 0, 0, 2),
+        };
+        _homeworkPanel.Children.Add(heading);
+
+        // 只有在"字号真的变了"的时候才做动画；数据刷新时不该闪一下
+        if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(heading, _fontSize, fromFont);
+
+        var now = DateTime.Now;
+        for (var i = 0; i < group.Items.Count; i++)
+        {
+            var item = group.Items[i];
+            var row = new TextBlock
+            {
+                FontSize = _fontSize,
+                Foreground = BoardText,
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = _fontSize * 1.35,
+            };
+
+            row.Inlines.Add(new Run($"  {i + 1}. {(item.Content ?? "").Trim()}"));
+
+            // 同科目可能有两条（语文：晚自习交 / 第二节晚自习交）—— 每条后面挂上自己的提交时间，
+            // 否则两行都叫「语文」，分不出哪条是哪条。
+            var hint = HomeworkDue.BoardHint(item, now);
+            if (hint.Length > 0)
+                row.Inlines.Add(new Run("  " + hint)
+                {
+                    FontSize = _fontSize * 0.72,
+                    Foreground = BoardTextDim,
+                });
+
+            _homeworkPanel.Children.Add(row);
+            if (Math.Abs(fromFont - _fontSize) >= 0.01) AnimateFont(row, _fontSize, fromFont);
+        }
     }
 
     /// <summary>设置里改了「触屏优化」后重新落一次滑动能力（幂等，尺寸在设置窗那边处理）。</summary>
@@ -636,6 +678,16 @@ public sealed class MainBoardWindow : Window
     /// <summary>整窗文字色：默认跟随主题，自定义深色底时用浅色。</summary>
     Brush BoardText => _boardText ?? Palette.Text;
 
+    /// <summary>同色但更淡：作业行末尾的提交时间用它，不抢正文的注意力。</summary>
+    Brush BoardTextDim => Dim(BoardText);
+
+    static Brush Dim(Brush source)
+    {
+        if (source is not SolidColorBrush solid) return source;
+        var c = solid.Color;
+        return Frozen(Color.FromArgb((byte)(c.A * 0.62), c.R, c.G, c.B));
+    }
+
     bool HasCustomBackground =>
         !string.Equals(_boardBgMode, "inherit", StringComparison.OrdinalIgnoreCase);
 
@@ -943,17 +995,23 @@ public sealed class MainBoardWindow : Window
 
     void OnGlobalMouseDown(int screenX, int screenY)
     {
-        var menu = _openMenu;
-        if (menu is null || !menu.IsOpen) return;
-
         // 宽限期：刚弹出时（还在布局、或触摸序列的尾巴事件）不要判点外面，
         // 否则菜单会一闪就没。
         if ((DateTime.UtcNow - _menuOpenedAt).TotalMilliseconds < 250) return;
 
-        if (IsPointInsideMenu(menu, screenX, screenY)) return;
+        var menu = _openMenu;
+        if (menu is not null && menu.IsOpen)
+        {
+            if (IsPointInsideMenu(menu, screenX, screenY)) return;
+            menu.IsOpen = false;        // 点在菜单外面（任何窗口 / 桌面都算）：关掉
+            return;
+        }
 
-        // 点在菜单外面（任何窗口 / 桌面都算）：关掉
-        menu.IsOpen = false;
+        // 触屏侧边菜单同样"点外面就关"
+        var card = _touchMenuCard;
+        if (card is null || _touchMenu is not { IsOpen: true }) return;
+        if (IsPointInsideTouchMenu(card, screenX, screenY)) return;
+        CloseTouchMenu();
     }
 
     static bool IsPointInsideMenu(ContextMenu menu, int screenX, int screenY)
@@ -978,7 +1036,62 @@ public sealed class MainBoardWindow : Window
         }
     }
 
-    /// <summary>右键与长按共用的菜单（screenPoint 为空 = 按鼠标位置弹）。</summary>
+    /// <summary>菜单项清单：右键菜单与触屏侧边菜单共用，保证两边永远一样。</summary>
+    sealed record MenuEntry(string Text, Action Action, bool IsSeparator = false)
+    {
+        public static MenuEntry Sep => new("", null!, IsSeparator: true);
+    }
+
+    List<MenuEntry> GetMenuEntries()
+    {
+        var list = new List<MenuEntry>();
+
+        MenuEntry Item(string text, Action action) => new(text, () =>
+        {
+            Logger.Current?.Action("班级日常", "菜单：" + text);
+            action();
+        });
+
+        // 顺序对齐原版 gui.py::_show_menu
+        list.Add(Item("上一位值日生", () => PrevDutyRequested?.Invoke()));
+        list.Add(Item("下一位值日生", () => NextDutyRequested?.Invoke()));
+        list.Add(MenuEntry.Sep);
+        list.Add(Item("出勤人数", () => AttendanceRequested?.Invoke()));
+        list.Add(MenuEntry.Sep);
+        list.Add(Item("编辑作业", () => EditHomeworkRequested?.Invoke()));
+        list.Add(MenuEntry.Sep);
+        list.Add(Item("临时调课", () => TempAdjustRequested?.Invoke()));
+        list.Add(MenuEntry.Sep);
+        list.Add(Item("假期与调休", () => HolidayRequested?.Invoke()));
+        list.Add(Item("编辑课表…", () => TimetableRequested?.Invoke()));
+
+        // 插件菜单项：排在「设置」前面，各自夹一层 try（插件回调不能拖垮菜单）
+        IReadOnlyList<BoardActionSpec> pluginActions = Array.Empty<BoardActionSpec>();
+        try { pluginActions = BoardActionsProvider?.Invoke() ?? Array.Empty<BoardActionSpec>(); }
+        catch { /* 拿不到就当没有 */ }
+        if (pluginActions.Count > 0)
+        {
+            list.Add(MenuEntry.Sep);
+            foreach (var spec in pluginActions)
+            {
+                var action = spec.Invoke;
+                list.Add(Item(spec.Text, () =>
+                {
+                    try { action(); }
+                    catch (Exception ex) { Console.Error.WriteLine($"插件菜单「{spec.Text}」异常: {ex.Message}"); }
+                }));
+            }
+        }
+
+        list.Add(Item("设置", () => SettingsRequested?.Invoke()));
+        list.Add(MenuEntry.Sep);
+        list.Add(Item("随机点名", () => RollCallRequested?.Invoke()));
+        list.Add(MenuEntry.Sep);
+        list.Add(Item("退出", () => ExitRequested?.Invoke()));
+        return list;
+    }
+
+    /// <summary>鼠标右键菜单（老样子：系统 ContextMenu，按光标位置弹）。</summary>
     private ContextMenu BuildContextMenu(Point? screenPoint = null)
     {
         var menu = new ContextMenu { PlacementTarget = this };
@@ -995,55 +1108,199 @@ public sealed class MainBoardWindow : Window
             menu.Placement = PlacementMode.MousePoint;
         }
 
-        void Item(string text, Action action)
+        foreach (var entry in GetMenuEntries())
         {
-            var mi = new MenuItem { Header = text };
-            mi.Click += (_, _) =>
+            if (entry.IsSeparator)
             {
-                Logger.Current?.Action("班级日常", "菜单：" + text);
-                action();
-            };
+                menu.Items.Add(new Separator());
+                continue;
+            }
+
+            var mi = new MenuItem { Header = entry.Text };
+            var action = entry.Action;
+            mi.Click += (_, _) => action();
             menu.Items.Add(mi);
         }
 
-        // 菜单项与顺序对齐原版 gui.py::_show_menu
-        Item("上一位值日生", () => PrevDutyRequested?.Invoke());
-        Item("下一位值日生", () => NextDutyRequested?.Invoke());
-        menu.Items.Add(new Separator());
-        Item("出勤人数", () => AttendanceRequested?.Invoke());
-        menu.Items.Add(new Separator());
-        Item("编辑作业", () => EditHomeworkRequested?.Invoke());
-        menu.Items.Add(new Separator());
-        Item("临时调课", () => TempAdjustRequested?.Invoke());
-        menu.Items.Add(new Separator());
-        Item("假期与调休", () => HolidayRequested?.Invoke());
-        Item("编辑课表…", () => TimetableRequested?.Invoke());
-        menu.Items.Add(new Separator());
-        // 插件菜单项：排在「设置」前面，各自夹一层 try（插件回调不能拖垮菜单）
-        IReadOnlyList<BoardActionSpec> pluginActions = Array.Empty<BoardActionSpec>();
-        try { pluginActions = BoardActionsProvider?.Invoke() ?? Array.Empty<BoardActionSpec>(); }
-        catch { /* 拿不到就当没有 */ }
-        if (pluginActions.Count > 0)
-        {
-            menu.Items.Add(new Separator());
-            foreach (var spec in pluginActions)
-            {
-                var action = spec.Invoke;
-                Item(spec.Text, () =>
-                {
-                    try { action(); }
-                    catch (Exception ex) { Console.Error.WriteLine($"插件菜单「{spec.Text}」异常: {ex.Message}"); }
-                });
-            }
-        }
-
-        Item("设置", () => SettingsRequested?.Invoke());
-        menu.Items.Add(new Separator());
-        Item("随机点名", () => RollCallRequested?.Invoke());
-        menu.Items.Add(new Separator());
-        Item("退出", () => ExitRequested?.Invoke());
-
         return menu;
+    }
+
+    // ————————————————————— 触屏侧边菜单：从板子左边伸出来 —————————————————————
+
+    Popup? _touchMenu;
+    Border? _touchMenuCard;
+
+    /// <summary>侧边菜单卡片宽度（也是每项"伸出来"的行程）。</summary>
+    const double TouchMenuWidth = 216;
+
+    /// <summary>每一项依次伸出来的间隔（毫秒）。</summary>
+    const int TouchMenuStaggerMs = 32;
+
+    /// <summary>
+    /// 触屏长按专用：贴在「班级日常」**左边**、向外张开的菜单，
+    /// 每一项从板子边缘**依次伸出来**（右键仍然是普通 ContextMenu）。
+    /// </summary>
+    void ShowTouchMenu()
+    {
+        CloseTouchMenu();
+        _menuOpenedAt = DateTime.UtcNow;
+
+        var stack = new StackPanel { Orientation = Orientation.Vertical };
+
+        foreach (var entry in GetMenuEntries())
+            stack.Children.Add(entry.IsSeparator ? TouchSeparator() : TouchMenuRow(entry));
+
+        var card = new Border
+        {
+            Width = TouchMenuWidth,
+            CornerRadius = new CornerRadius(10),
+            Padding = new Thickness(6),
+            BorderThickness = new Thickness(1),
+            // ★ 项从右边缘"伸出来"，还没进场的部分要挡住，不然会先糊在板子上
+            ClipToBounds = true,
+            Child = stack,
+        };
+        card.SetResourceReference(Border.BackgroundProperty, "SolidBackgroundFillColorBaseBrush");
+        card.SetResourceReference(Border.BorderBrushProperty, "CardStrokeColorDefaultBrush");
+
+        var popup = new Popup
+        {
+            PlacementTarget = this,
+            Placement = PlacementMode.Left,     // 右边缘贴住窗口左边
+            HorizontalOffset = 8,               // 往右压一点，像长在板子边上
+            VerticalOffset = 12,
+            AllowsTransparency = true,
+            StaysOpen = true,                   // 关闭自己管（全局钩子判"点外面"）
+            Child = card,
+        };
+
+        _touchMenu = popup;
+        _touchMenuCard = card;
+
+        popup.Opened += (_, _) => StartMenuOutsideHook();
+        popup.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(_touchMenu, popup)) return;
+            _touchMenu = null;
+            _touchMenuCard = null;
+            StopMenuOutsideHook();
+        };
+
+        popup.IsOpen = true;
+        AnimateTouchMenuRows(stack);
+    }
+
+    FrameworkElement TouchMenuRow(MenuEntry entry)
+    {
+        var text = new TextBlock
+        {
+            Text = entry.Text,
+            FontSize = 13,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(12, 0, 12, 0),
+        };
+        text.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorPrimaryBrush");
+
+        var row = new Border
+        {
+            Height = 36,
+            CornerRadius = new CornerRadius(6),
+            Margin = new Thickness(0, 1, 0, 1),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = text,
+        };
+
+        var action = entry.Action;
+        row.MouseLeftButtonDown += (_, e) =>
+        {
+            e.Handled = true;
+            CloseTouchMenu();
+            try { action(); }
+            catch (Exception ex) { Logger.Current?.Warn("侧边菜单动作异常：" + ex.Message); }
+        };
+
+        // 悬停高亮（触屏开出来之后也允许用鼠标点）
+        row.MouseEnter += (_, _) => row.SetResourceReference(Border.BackgroundProperty, "SubtleFillColorSecondaryBrush");
+        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+
+        return row;
+    }
+
+    FrameworkElement TouchSeparator()
+    {
+        var line = new Border
+        {
+            Height = 1,
+            Margin = new Thickness(10, 5, 10, 5),
+        };
+        line.SetResourceReference(Border.BackgroundProperty, "DividerStrokeColorDefaultBrush");
+        return line;
+    }
+
+    /// <summary>
+    /// 每一项**依次伸出来**：从卡片右边缘（贴着板子那侧）滑到自己的位置，
+    /// 加速出来、到头轻轻收住，和提示框是同一套手感。
+    /// </summary>
+    void AnimateTouchMenuRows(Panel stack)
+    {
+        var index = 0;
+        foreach (var child in stack.Children)
+        {
+            if (child is not FrameworkElement row) continue;
+
+            var delay = TimeSpan.FromMilliseconds(index * TouchMenuStaggerMs);
+            index++;
+
+            var transform = new TranslateTransform(TouchMenuWidth, 0);
+            row.RenderTransform = transform;
+            row.Opacity = 0;
+
+            transform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation
+            {
+                From = TouchMenuWidth,
+                To = 0,
+                BeginTime = delay,
+                Duration = TimeSpan.FromMilliseconds(240),
+                AccelerationRatio = 0.65,
+                DecelerationRatio = 0.35,
+            });
+
+            row.BeginAnimation(UIElement.OpacityProperty, new DoubleAnimation
+            {
+                From = 0,
+                To = 1,
+                BeginTime = delay,
+                Duration = TimeSpan.FromMilliseconds(140),
+            });
+        }
+    }
+
+    void CloseTouchMenu()
+    {
+        if (_touchMenu is null) return;
+        try { _touchMenu.IsOpen = false; } catch { /* 已经关了 */ }
+    }
+
+    static bool IsPointInsideTouchMenu(Border card, int screenX, int screenY)
+    {
+        try
+        {
+            if (card.ActualWidth <= 1 || card.ActualHeight <= 1) return true;   // 还没量完，别误关
+
+            var topLeft = card.PointToScreen(new Point(0, 0));
+            var dpi = VisualTreeHelper.GetDpi(card);
+            var width = card.ActualWidth * dpi.DpiScaleX;
+            var height = card.ActualHeight * dpi.DpiScaleY;
+
+            const double pad = 2;
+            return screenX >= topLeft.X - pad && screenX <= topLeft.X + width + pad &&
+                   screenY >= topLeft.Y - pad && screenY <= topLeft.Y + height + pad;
+        }
+        catch
+        {
+            return true;
+        }
     }
 
     // ————————————————————— 触屏长按 = 右键菜单 —————————————————————
@@ -1053,9 +1310,6 @@ public sealed class MainBoardWindow : Window
 
     /// <summary>按住期间允许的手指抖动（像素），超过即视为拖动/滚动。</summary>
     const double TouchHoldSlop = 14;
-
-    /// <summary>触屏菜单相对手指的垂直偏移（像素）：避开指尖覆盖区域。</summary>
-    const double TouchMenuOffsetY = 56;
 
     DispatcherTimer? _holdTimer;
     Point _holdStart;
@@ -1127,11 +1381,10 @@ public sealed class MainBoardWindow : Window
 
             // 等这一串触摸事件（含被提升的鼠标事件）都处理完再弹，
             // 否则菜单刚出现就被紧跟的抬起事件当成点到外面关掉（用户看到的闪现）。
-            // 菜单从手指下方一点开始弹：手指压着菜单会被判成点了菜单项，
-            // 轻则误触关掉，重则点错条目。
-            var point = PointToScreen(_holdStart);
-            var below = new Point(point.X, point.Y + TouchMenuOffsetY);
-            Dispatcher.BeginInvoke(new Action(() => ShowContextMenu(below)), DispatcherPriority.Input);
+            //
+            // ★ 触屏不走右键菜单：弹"从班级日常左边伸出来"的侧边菜单（每一项依次伸出）。
+            //   鼠标右键仍然是老样子的 ContextMenu（见 OnMouseRightButtonUp）。
+            Dispatcher.BeginInvoke(new Action(ShowTouchMenu), DispatcherPriority.Input);
         }
     }
 

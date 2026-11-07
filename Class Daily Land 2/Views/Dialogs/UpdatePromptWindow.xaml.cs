@@ -21,6 +21,8 @@ public partial class UpdatePromptWindow : Window
         _offer = offer ?? throw new ArgumentNullException(nameof(offer));
 
         InitializeComponent();
+        // 提示框统一入场：从下往上滑上来 + 淡入（只动内容，不挪窗口）
+        Loaded += (_, _) => UiMotion.SlideUpIn(Content as FrameworkElement ?? this, maxDistance: 180);   // 时长走设置里的动画时长
 
         TitleText.Text = _offer.IsMandatory
             ? $"发现新版本 {_offer.Version}（强制更新）"

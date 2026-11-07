@@ -709,7 +709,8 @@ public partial class SettingsWindow : Window
         _confirmOnOk = onOk;
         _confirmOnCancel = onCancel;
 
-        Slide(card, 0, 12, 0, 0, 180);
+        // 提示框统一入场：从底边加速升上来（与独立弹窗同一套）
+        UiMotion.SlideUpIn(card, maxDistance: 260);
         ok.Focus();
     }
 

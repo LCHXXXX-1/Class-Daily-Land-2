@@ -102,16 +102,28 @@
                      Style="{StaticResource EditorInput}" />
 
             <TextBlock Grid.Row="1" Grid.Column="0"
-                       Text="提交日期（可以自己填）："
+                       Text="提交时间："
                        VerticalAlignment="Center"
                        Margin="0,10,10,0" />
-            <TextBox x:Name="DateInput"
-                     Grid.Row="1" Grid.Column="1"
-                     Width="280"
-                     HorizontalAlignment="Left"
-                     Margin="0,10,0,0"
-                     ToolTip="留空表示没有明确截止时间"
-                     Style="{StaticResource EditorInput}" />
+            <!--
+              提交时间下拉框：今天有课的节次（以该节**下课**为提交时间）+ 自定义 / 补交 / 不交。
+              选完之后 DueHint 会立刻说明「这条作业会排在哪」，省得用户猜。
+            -->
+            <StackPanel Grid.Row="1" Grid.Column="1"
+                        Orientation="Horizontal"
+                        Margin="0,10,0,0">
+                <ComboBox x:Name="DueBox"
+                          Width="360"
+                          HorizontalAlignment="Left"
+                          ToolTip="选今天某一节的下课时间作为提交时间；也可以自定义，或者选补交 / 不交"
+                          SelectionChanged="Due_SelectionChanged" />
+                <TextBlock x:Name="DueHint"
+                           Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="11.5"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+            </StackPanel>
 
             <TextBlock Grid.Row="2" Grid.Column="0"
                        Text="作业内容："
@@ -186,6 +198,7 @@
                                                         <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
 
                                                     <TextBlock Grid.Column="0"
@@ -199,7 +212,15 @@
                                                                VerticalAlignment="Center"
                                                                TextWrapping="Wrap" />
 
-                                                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                    <!-- 提交时间/排位提示（没有就自动 0 宽） -->
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{Binding Hint}"
+                                                               FontSize="11.5"
+                                                               Margin="0,0,12,0"
+                                                               VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+
+                                                    <StackPanel Grid.Column="3" Orientation="Horizontal">
                                                         <Button Content="删除"
                                                                 Tag="{Binding}"
                                                                 Width="104"

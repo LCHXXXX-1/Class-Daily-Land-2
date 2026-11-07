@@ -85,6 +85,9 @@ public sealed class AppController
 
     readonly DispatcherTimer _tick = new() { Interval = TimeSpan.FromSeconds(1) };
 
+    /// <summary>作业提交时间看门狗：每秒扫一遍，到点就通知 + 重排作业区。</summary>
+    readonly HomeworkDueWatcher _homeworkDue = new();
+
     // ————— 状态演示：在**真实灵动岛**上按倍速跑一遍 —————
     // 演示期间 Tick 的状态来源改成模拟时钟，其它（副岛、主窗、插件）照旧跟随，
     // 这样用户看到的就是岛上真实的表现，而不是对话框里另画的预览。
@@ -268,6 +271,10 @@ public sealed class AppController
         SyncRemindersIntoSchedule();
         ThemeService.Apply(Settings.Str("theme"));
         ThemeService.ApplyColorTheme(Settings.Str("color_theme"));
+
+        // 提示框入场动画的时长跟着设置走（关掉动画就直接落位）
+        Views.UiMotion.DurationProvider = () =>
+            Settings.Bool("fade_animation") ? Math.Clamp(Settings.Int("animation_duration_ms"), 0, 2000) : 0;
 
         // 插件宿主：先建出来（注册表要能被窗口取数），窗口与托盘都接好后再真正加载，
         // 这样插件的 Initialize 里调 ShowMainWindow / OpenSettings 时窗口已经存在。
@@ -700,12 +707,51 @@ public sealed class AppController
         // RefreshPluginContent 内部比内容签名，没变就直接返回。
         Main.RefreshPluginContent();
 
+        // 作业提交时间：到点弹 Windows 通知，并把作业区重排（顶置 / 沉底）
+        CheckHomeworkDue(now);
+
         // 每秒把快照推给插件（插件在自己的回调里读，不再各自去摸 Manager）
         Plugins.RaiseTick(BuildSnapshot(status, text));
 
         DetectEdges(status);
         _last = status;
         _firstTick = false;
+    }
+
+    /// <summary>
+    /// 作业提交时间看门狗（每秒）。
+    ///   · 刚到点 → 写 due_fired（重启后不会重复提醒）+ 弹一条 Windows 通知；
+    ///   · 排位变了（顶置 / 沉底 / 跨天）→ 重画作业区。
+    /// 判断与排位规则全在 <see cref="HomeworkDue"/>，这里只负责"落地"。
+    /// </summary>
+    void CheckHomeworkDue(DateTime now)
+    {
+        var justDue = _homeworkDue.Tick(Homework.Items, now);
+
+        if (justDue.Count > 0)
+        {
+            var stamp = HomeworkDue.ToText(now);
+            foreach (var item in justDue) item.DueFired = stamp;
+
+            // 一次落盘：Changed 会顺带刷新主窗与当天的历史快照
+            Homework.Save();
+            _homeworkDue.Tick(Homework.Items, now);   // 标记落盘后重算一次签名，下一拍不再判成"变了"
+        }
+
+        if (_homeworkDue.LayoutChanged) Main?.RefreshHomework();
+
+        foreach (var item in justDue) NotifyHomeworkDue(item);
+    }
+
+    void NotifyHomeworkDue(HomeworkItem item)
+    {
+        var subject = string.IsNullOrWhiteSpace(item.Subject) ? "作业" : item.Subject.Trim();
+        var content = (item.Content ?? "").Trim().Replace('\r', ' ').Replace('\n', ' ');
+        if (content.Length > 42) content = content[..42] + "…";
+
+        var detail = string.IsNullOrWhiteSpace(item.DueLabel) ? "" : $"（{item.DueLabel}）";
+        Log?.Info($"[作业到点] {subject}：{content}{detail} → 已顶到作业区第一位");
+        Tray?.Balloon("作业提交时间到了", $"{subject}：{content}\n已移到作业区第一位，记得交作业", 6);
     }
 
     /// <summary>上课瞬间弹「上课了！」（绿字），下课瞬间弹「下课了！」（白字）。</summary>
@@ -1059,7 +1105,7 @@ public sealed class AppController
             return;
         }
 
-        var window = new Views.HomeworkEditorWindow(Homework, HomeworkHistory)
+        var window = new Views.HomeworkEditorWindow(Homework, HomeworkHistory, Schedule)
         {
             Owner = Main?.IsVisible == true ? Main : null,
         };

@@ -142,6 +142,29 @@ public sealed class ScheduleEngine
         return list;
     }
 
+    /// <summary>
+    /// 某天**全部**节次（含没排课的那些，课程名为空串），临时调课同样生效。
+    ///
+    /// 作业的「提交时间」用它而不是 <see cref="CoursesOfDay"/>：
+    /// 晚自习这类节次通常不排课程名，但「晚自习结束交」是很常见的截止点，
+    /// 过滤掉空课就等于把它们从下拉框里删掉了。
+    /// </summary>
+    public List<(int Index, Period Period, string Course)> DaySlots(DateTime date)
+    {
+        var periods = PeriodsFor(date);
+        var courses = _file.TempAdjust.Matches(date.Date)
+            ? Pad(_file.TempAdjust.Courses ?? new List<string>(), periods.Count)
+            : CoursesFor(date);
+
+        var list = new List<(int, Period, string)>(periods.Count);
+        for (var i = 0; i < periods.Count; i++)
+        {
+            var course = i < courses.Count ? (courses[i] ?? "").Trim() : "";
+            list.Add((i, periods[i], course));
+        }
+        return list;
+    }
+
     // ————————————————————— 状态计算 —————————————————————
 
     /// <summary>
