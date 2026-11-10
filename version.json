@@ -1,26 +1,19 @@
 {
   "stable": {
-    "version": "1.7.117",
-    "release_date": "2026-11-07",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.7.117.zip",
-    "sha256": "d12f7443eef7ff4f62f98b4f92e9370fdd7db43fc891214ad57951d108e35607",
+    "version": "1.8",
+    "release_date": "2026-11-10",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.zip",
+    "sha256": "8e31fe73e2730251248a32061730bb42a4e8a4b7e59ee34f4096dbf0a278155c",
     "changelog": [
-      "新增：实时天气——副岛 / 作业窗口显示实况与 11 种天气动画（晴天分昼夜），IP 自动定位，5 分钟无操作收成圆",
-      "新增：作业「提交时间」升级为提交时段——选一节课即以「下课 → 下节课上课」为交作业时间，时段内整个科目顶到作业区最前、到点弹系统通知，过点沉底；补交 / 不交 / 自定义文本分层排序",
-      "新增：系统通知升级为 Windows Toast——进通知中心、带应用名与图标，灾害类可穿透专注助手，失败自动退回托盘气泡",
-      "新增：设置 → 天气页（显示位置 / 自动定位 / 刷新间隔 / 动画开关）与全天气动画预览网格；作业页新增「到点通知」开关",
-      "优化：课表支持秒级时间（HH:mm:ss），倒计时最后一分钟显示秒（42秒后）",
-      "优化：灾害预警与天气共用自动定位，状态卡片标注坐标来源；ICL 详情去重、请求卡死兜底",
-      "修复：插件 IDE 更新器工程多引用主工程导致整个解决方案循环依赖、编译失败",
-      "其它：MIT 许可证独立成 LICENSE.md；README / 路线图 / 插件文档补全"
+      "优化已知问题"
     ],
     "is_mandatory": false
   },
   "developer_tool": {
-    "version": "1.0.1",
-    "release_date": "2026-11-02",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/DeveloperTool/DeveloperTool-1.0.zip",
-    "sha256": "265E37FB3E5BAFDD320041821A3FEDA8D2A472BEE5D45377DA4D1E5307160F6A",
+    "version": "1.0.2",
+    "release_date": "2026-11-10",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/DeveloperTool/DeveloperTool-1.0.2.zip",
+    "sha256": "0d69b93d44f683641ac4039ea79b01381b1ec9f32ba61bf4f9c04905f3f3d550",
     "changelog": [
       "插件 IDE 初始化版本"
     ],
