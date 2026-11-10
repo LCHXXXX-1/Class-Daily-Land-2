@@ -1,6 +1,6 @@
+using ClassDailyLand2.UpdateContract;
 using System.Diagnostics;
 using System.Security.Principal;
-using ClassDailyLand2.UpdateContract;
 
 namespace ClassDailyLand2.App.Updates;
 
@@ -85,14 +85,6 @@ public static class UpdateEnvironment
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, NewUpdaterDir, UpdaterExeName);
 
     /// <summary>
-    /// 1.1.0 及以前的旧布局：更新器在 <c>updater\</c> 子目录里、叫另一个名字。仅做兼容回退。
-    /// ★ 这个文件名必须保持旧值（ClassDailyLand.Updater.exe）：它指的是**老安装里真实存在的文件**，
-    ///   跟着改名就等于关掉这条回退。
-    /// </summary>
-    public const string LegacyUpdaterDir = "updater";
-    public const string LegacyUpdaterExeName = "ClassDailyLand.Updater.exe";
-
-    /// <summary>
     /// 找到更新器并把它复制到 temp，返回复制后的 exe 路径。
     ///
     /// ★ **必须**复制出来跑：更新器自己也在安装目录里，直接跑的话
@@ -101,66 +93,36 @@ public static class UpdateEnvironment
     ///
     /// ★ 框架依赖的更新器是"exe + 一堆 dll + deps.json + runtimeconfig.json"，
     ///   所以**整目录**搬；只搬 exe 会得到一个"找不到依赖"的坏更新器。
-    ///
-    /// 查找顺序（新版在前）：<c>Update\</c> → 安装目录根（上一版单文件）→ 配置目录 → <c>updater\</c> 旧目录。
     /// </summary>
-    public static string? StageUpdater(string installDir, string? updaterDirName, string workDir, out string? error)
+    public static string? StageUpdater(string installDir, string workDir, out string? error)
     {
         error = null;
 
-        // 常规安装只有这一个位置：命中就直接用，不再逐个探测（启动更快，也不会被别处的旧文件抢走）
-        var sourceExe = File.Exists(PrimaryUpdaterPath)
-            ? PrimaryUpdaterPath
-            : FindUpdaterExe(installDir, updaterDirName);
-
-        if (sourceExe is null)
+        var sourceExe = PrimaryUpdaterPath;
+        if (!File.Exists(sourceExe))
         {
-            error = $"没有找到更新器：{PrimaryUpdaterPath}（可能被杀软删了，或这个安装不带更新能力）";
+            error = $"没有找到更新器：{sourceExe}（可能被杀软删了，或这个安装不带更新能力）";
             return null;
         }
 
         var sourceDir = Path.GetDirectoryName(sourceExe)!;
         var exeName = Path.GetFileName(sourceExe);
-        var stem = Path.GetFileNameWithoutExtension(sourceExe);
 
         try
         {
             var target = Path.Combine(workDir, "bin");
             Directory.CreateDirectory(target);
 
-            var inInstallRoot = string.Equals(
-                Path.GetFullPath(sourceDir).TrimEnd(Path.DirectorySeparatorChar),
-                Path.GetFullPath(installDir).TrimEnd(Path.DirectorySeparatorChar),
-                StringComparison.OrdinalIgnoreCase);
-
-            if (inInstallRoot)
+            // 整个 Update\ 文件夹一起搬（含所有依赖 dll）
+            foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
             {
-                // 旧布局：单文件就躺在安装目录根上 —— 绝不能把整个程序目录拷进 temp
-                foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.TopDirectoryOnly))
-                {
-                    var name = Path.GetFileName(file);
-                    if (!name.Equals(exeName, StringComparison.OrdinalIgnoreCase) &&
-                        !name.StartsWith(stem + ".", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
+                var relative = Path.GetRelativePath(sourceDir, file);
+                var destination = Path.Combine(target, relative);
 
-                    File.Copy(file, Path.Combine(target, name), overwrite: true);
-                }
-            }
-            else
-            {
-                // 新布局：整个 Update\ 文件夹一起搬（含所有依赖 dll）
-                foreach (var file in Directory.EnumerateFiles(sourceDir, "*", SearchOption.AllDirectories))
-                {
-                    var relative = Path.GetRelativePath(sourceDir, file);
-                    var destination = Path.Combine(target, relative);
+                var parent = Path.GetDirectoryName(destination);
+                if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
 
-                    var parent = Path.GetDirectoryName(destination);
-                    if (!string.IsNullOrEmpty(parent)) Directory.CreateDirectory(parent);
-
-                    File.Copy(file, destination, overwrite: true);
-                }
+                File.Copy(file, destination, overwrite: true);
             }
 
             var staged = Path.Combine(target, exeName);
@@ -171,39 +133,6 @@ public static class UpdateEnvironment
             error = $"复制更新器失败：{ex.Message}";
             return null;
         }
-    }
-
-    /// <summary>按「Update\ → 安装目录根 → 配置目录 → updater\」的顺序找更新器 exe。</summary>
-    private static string? FindUpdaterExe(string installDir, string? updaterDirName)
-    {
-        var roots = new List<string>();
-
-        void AddRoot(string? dir)
-        {
-            if (string.IsNullOrWhiteSpace(dir)) return;
-            if (!roots.Contains(dir, StringComparer.OrdinalIgnoreCase)) roots.Add(dir);
-        }
-
-        AddRoot(Path.Combine(installDir, NewUpdaterDir));
-        AddRoot(installDir);
-
-        if (!string.IsNullOrWhiteSpace(updaterDirName))
-            AddRoot(Path.Combine(installDir, updaterDirName!.Trim()));
-
-        AddRoot(Path.Combine(installDir, LegacyUpdaterDir));
-
-        foreach (var root in roots)
-        {
-            if (!Directory.Exists(root)) continue;
-
-            foreach (var name in new[] { UpdaterExeName, LegacyUpdaterExeName })
-            {
-                var path = Path.Combine(root, name);
-                if (File.Exists(path)) return path;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

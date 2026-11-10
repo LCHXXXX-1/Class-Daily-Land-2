@@ -1,0 +1,82 @@
+<Window x:Class="ClassDailyLand2.App.Views.Dialogs.DeveloperToolSetupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="下载插件开发工具"
+        Width="480"
+        Height="236"
+        WindowStartupLocation="CenterScreen"
+        Topmost="True"
+        ResizeMode="NoResize"
+        ShowInTaskbar="True"
+        UseLayoutRounding="True"
+        Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        FontFamily="{DynamicResource FontFamilyText}"
+        FontSize="{DynamicResource FontSizeBody}">
+
+    <Grid Margin="22">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0"
+                   FontSize="18"
+                   FontWeight="SemiBold"
+                   Text="下载 DeveloperTool 在线安装器" />
+
+        <ProgressBar x:Name="Progress"
+                     Grid.Row="1"
+                     Margin="0,16,0,0"
+                     Height="6"
+                     Minimum="0"
+                     Maximum="100"
+                     Value="0"
+                     Foreground="{DynamicResource AccentFillColorDefaultBrush}" />
+
+        <Grid Grid.Row="2" Margin="0,6,0,0">
+            <TextBlock x:Name="SizeText"
+                       HorizontalAlignment="Left"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="0.0 MB" />
+
+            <TextBlock x:Name="SpeedText"
+                       HorizontalAlignment="Right"
+                       FontSize="12"
+                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                       Text="0.0 MB/s" />
+        </Grid>
+
+        <TextBlock x:Name="StatusText"
+                   Grid.Row="3"
+                   Margin="0,10,0,0"
+                   VerticalAlignment="Top"
+                   TextWrapping="Wrap"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                   Text="准备就绪。" />
+
+        <StackPanel Grid.Row="4"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    Margin="0,12,0,0">
+            <Button x:Name="RetryButton"
+                    Content="重试"
+                    Width="112"
+                    Height="36"
+                    Visibility="Collapsed"
+                    Click="Retry_Click" />
+
+            <Button x:Name="CloseButton"
+                    Content="取消"
+                    Width="112"
+                    Height="36"
+                    Margin="10,0,0,0"
+                    Style="{StaticResource AccentButton}"
+                    Click="Close_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

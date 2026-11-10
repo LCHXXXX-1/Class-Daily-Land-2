@@ -30,9 +30,11 @@ public sealed class SettingsManager
         Logger.Current?.Trace("[设置] 开始加载 settings.json");
         var raw = AtomicJson.ReadFlat(_paths.Settings);
 
-        // 一次性迁移：更新源默认已改为 gitee、插件源默认已改为 github。
+        // 一次性迁移：更新源默认是 gitee，插件源默认也已改回 gitee。
         // 老用户 settings.json 里存的还是历史默认值（update_source: auto / github，
         // market_source: auto），不迁移的话改默认值对存量用户就是空操作。
+        // 插件源只迁 "auto"（历史默认）：存量 "github" 可能是 1.3.3 里用户明确选的，
+        // 与当时写盘下发的默认值无法区分，不动它。
         var migratedSource = false;
         foreach (var key in new[] { "update_source", "market_source" })
         {
@@ -41,10 +43,10 @@ public sealed class SettingsManager
 
             var shouldMigrate = key == "update_source"
                 ? current is "auto" or "github"      // 更新源 → gitee
-                : current == "auto";                 // 插件源 → github
+                : current == "auto";                 // 插件源：只迁历史默认 auto → gitee
             if (!shouldMigrate) continue;
 
-            raw[key] = key == "update_source" ? "gitee" : "github";
+            raw[key] = "gitee";
             migratedSource = true;
             Logger.Current?.Info($"[设置] 迁移：{key} 由 {current} 改为 {raw[key]}（默认源切换）");
         }

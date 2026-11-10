@@ -299,7 +299,6 @@ public sealed class UpdateService
 
         if (!File.Exists(sourceExe))
         {
-            // 老安装可能只有 updater\ 或根目录单文件：交给 StageUpdater 那条慢路径兜底
             _log?.Invoke(@"没有找到 Update\Updater.exe，跳过预复制");
             return null;
         }
@@ -492,7 +491,7 @@ public sealed class UpdateService
 
         // 1) 更新器复制到 temp（避开"替换时锁住自己"）
         var updaterExe = UpdateEnvironment.StageUpdater(
-            UpdateEnvironment.InstallDir, VersionInfo.UpdaterDir, workDir, out var stageError);
+            UpdateEnvironment.InstallDir, workDir, out var stageError);
         if (updaterExe is null)
             return UpdateLaunchResult.Fail(stageError ?? "更新器准备失败");
 

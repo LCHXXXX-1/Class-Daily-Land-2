@@ -1,23 +1,24 @@
 using ClassDailyLand2.App.Controls;
+using ClassDailyLand2.App.DeveloperTool;
 using ClassDailyLand2.App.Integrations.Audio;
 using ClassDailyLand2.App.Integrations.Disaster;
 using ClassDailyLand2.App.Market;
 using ClassDailyLand2.App.Plugins;
-using ClassDailyLand2.App.Updates;
 using ClassDailyLand2.App.Theme;
+using ClassDailyLand2.App.Updates;
 using ClassDailyLand2.App.ViewModels;
 using ClassDailyLand2.App.Views.Dialogs;
 using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Engine;
-using ClassDailyLand2.Core.Market;
 using ClassDailyLand2.Core.Managers;
+using ClassDailyLand2.Core.Market;
 using ClassDailyLand2.Core.Models;
 using ClassDailyLand2.Core.Storage;
+using Microsoft.Win32;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
-using Microsoft.Win32;
 using System.Windows.Media;
 using System.Windows.Threading;
 
@@ -1836,13 +1837,30 @@ public partial class AboutPage : UserControl
     {
         if (_vm is null) return;
 
-        if (_vm.Ctx.OpenPluginDeveloperTool(out var message))
+        var result = _vm.Ctx.OpenPluginDeveloperTool(out var message);
+        if (result == DeveloperToolOpenResult.Launched)
         {
             DialogLauncher.Toast(this, InfoBarSeverity.Success, "插件开发工具已打开", message);
             return;
         }
 
-        DialogLauncher.Toast(this, InfoBarSeverity.Warning, "无法打开插件开发工具", message);
+        if (result == DeveloperToolOpenResult.Failed)
+        {
+            DialogLauncher.Toast(this, InfoBarSeverity.Warning, "无法打开插件开发工具", message);
+            return;
+        }
+
+        // NotInstalled：DeveloperTool 已独立分发，问一句要不要现在下载在线安装器
+        DialogLauncher.Confirm(this, "需要安装插件开发工具",
+            "未检测到已安装的插件开发工具（DeveloperTool 已从主程序分离，需单独安装）。" +
+            "是否下载在线安装器？下载完成后会自动启动安装向导。",
+            () =>
+            {
+                var window = new DeveloperToolSetupWindow();
+                if (Window.GetWindow(this) is Window owner) window.Owner = owner;
+                window.Show();
+            },
+            okText: "下载", cancelText: "以后再说");
     }
 
     /// <summary>

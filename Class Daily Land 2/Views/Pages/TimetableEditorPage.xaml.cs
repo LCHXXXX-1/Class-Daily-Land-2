@@ -4,11 +4,9 @@ using ClassDailyLand2.Core.Models;
 using Microsoft.Win32;
 using System.Collections.ObjectModel;
 using System.Globalization;
-using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 
 namespace ClassDailyLand2.App.Views.Pages;

@@ -1,10 +1,10 @@
-using System.Reflection;
-using System.Windows;
 using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Plugins;
 using ClassDailyLand2.Core.Storage;
 using ClassDailyLand2.Plugin;
 using ClassDailyLand2.UpdateContract;
+using System.Reflection;
+using System.Windows;
 
 namespace ClassDailyLand2.App.Plugins;
 

@@ -1,5 +1,5 @@
-using ClassDailyLand2.UpdateContract;
 using ClassDailyLand2.Core;
+using ClassDailyLand2.UpdateContract;
 using System.Net;
 using System.Net.Http;
 using System.Text;

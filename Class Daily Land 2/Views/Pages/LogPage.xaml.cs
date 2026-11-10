@@ -2,7 +2,6 @@ using ClassDailyLand2.App.Controls;
 using ClassDailyLand2.App.ViewModels;
 using ClassDailyLand2.Core;
 using System.Collections.ObjectModel;
-using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 

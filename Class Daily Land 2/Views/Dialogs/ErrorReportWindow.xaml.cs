@@ -2,7 +2,6 @@ using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Diagnostics;
 using Microsoft.Win32;
 using System.Diagnostics;
-using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;

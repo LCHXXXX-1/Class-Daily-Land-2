@@ -191,7 +191,14 @@ public sealed class TrayIcon : IDisposable
         try
         {
             var path = System.IO.Path.Combine(AppContext.BaseDirectory, "icon.ico");
-            if (System.IO.File.Exists(path)) return new Icon(path);
+            if (System.IO.File.Exists(path))
+            {
+                // 显式要小尺寸：托盘只有 16~32px。不带尺寸时 GDI+ 自己挑帧，挑中 256 的 PNG 帧
+                // 托盘就可能整个空白（"没有托盘图标"的病根：图标注册了，但画不出来）。
+                // 现在 icon.ico 自带 16/24/32/48 的 BMP 帧 + 256 PNG 帧，32 在 100%/200% 缩放下都清晰。
+                try { return new Icon(path, 32, 32); }
+                catch { return new Icon(path); }
+            }
         }
         catch { /* 回退系统图标 */ }
         return System.Drawing.SystemIcons.Application;

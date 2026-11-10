@@ -1,6 +1,7 @@
 using ClassDailyLand2.App.Integrations.Audio;
 using ClassDailyLand2.App.Integrations.Disaster;
 using ClassDailyLand2.App.Integrations.Weather;
+using ClassDailyLand2.App.DeveloperTool;
 using ClassDailyLand2.App.Market;
 using ClassDailyLand2.App.Plugins;
 using ClassDailyLand2.App.Theme;
@@ -1276,20 +1277,22 @@ public sealed class AppController
     }
 
     /// <summary>
-    /// 打开随主程序部署的插件开发工具。开发工具与主程序分进程，避免 Roslyn / WebView2 等开发依赖
-    /// 增加主程序常驻进程的体积与启动负担。
+    /// 打开插件开发工具。DeveloperTool 已从主程序分离：不再内置，先查已安装的位置
+    /// （注册表 InstallLocation → %LocalAppData%\DeveloperTool → 旧版随主程序部署的目录），
+    /// 找到就启动；没找到返回 NotInstalled，由界面引导下载在线安装器。
+    /// 开发工具始终与主程序分进程，避免 Roslyn / WebView2 等开发依赖增加常驻进程负担。
     /// </summary>
-    public bool OpenPluginDeveloperTool(out string message)
+    public DeveloperToolOpenResult OpenPluginDeveloperTool(out string message)
     {
-        var toolDirectory = Path.Combine(AppContext.BaseDirectory, "DeveloperTool");
-        var executable = Path.Combine(toolDirectory, "DeveloperTool.exe");
-        if (!File.Exists(executable))
+        var executable = DeveloperToolService.FindInstalledExe();
+        if (executable is null)
         {
-            message = "未找到 DeveloperTool\\DeveloperTool.exe。请重新安装或修复 Class Daily Land。";
-            Log.Warn("[插件开发工具] 启动失败：" + message);
-            return false;
+            message = "未检测到已安装的插件开发工具。";
+            Log.Info("[插件开发工具] 未找到已安装的 DeveloperTool，转入下载引导");
+            return DeveloperToolOpenResult.NotInstalled;
         }
 
+        var toolDirectory = Path.GetDirectoryName(executable)!;
         try
         {
             Process.Start(new ProcessStartInfo
@@ -1300,13 +1303,13 @@ public sealed class AppController
             })?.Dispose();
             message = "你现在可以新建、编译并测试插件。";
             Log.Info("[插件开发工具] 已启动：" + executable);
-            return true;
+            return DeveloperToolOpenResult.Launched;
         }
         catch (Exception ex)
         {
             message = ex.Message;
             Log.Warn("[插件开发工具] 启动失败：" + ex.Message);
-            return false;
+            return DeveloperToolOpenResult.Failed;
         }
     }
 

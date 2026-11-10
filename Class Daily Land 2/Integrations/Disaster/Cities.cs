@@ -267,21 +267,21 @@ public static class Cities
             = ("", "", "", 0, 0, double.MaxValue);
 
         foreach (var p in Data.Value.Provinces)
-        foreach (var c in p.Cities)
-        {
-            if (c.Districts.Count == 0)
+            foreach (var c in p.Cities)
             {
-                var dc = QuakeCalc.HaversineKm(lat, lon, c.Lat, c.Lon);
-                if (dc < best.DistanceKm) best = (p.Name, c.Name, "", c.Lat, c.Lon, dc);
-                continue;
-            }
+                if (c.Districts.Count == 0)
+                {
+                    var dc = QuakeCalc.HaversineKm(lat, lon, c.Lat, c.Lon);
+                    if (dc < best.DistanceKm) best = (p.Name, c.Name, "", c.Lat, c.Lon, dc);
+                    continue;
+                }
 
-            foreach (var d in c.Districts)
-            {
-                var dd = QuakeCalc.HaversineKm(lat, lon, d.Lat, d.Lon);
-                if (dd < best.DistanceKm) best = (p.Name, c.Name, d.Name, d.Lat, d.Lon, dd);
+                foreach (var d in c.Districts)
+                {
+                    var dd = QuakeCalc.HaversineKm(lat, lon, d.Lat, d.Lon);
+                    if (dd < best.DistanceKm) best = (p.Name, c.Name, d.Name, d.Lat, d.Lon, dd);
+                }
             }
-        }
 
         return best.DistanceKm == double.MaxValue ? null : best;
     }
@@ -296,11 +296,11 @@ public static class Cities
             = ("", "", 0, 0, double.MaxValue);
 
         foreach (var p in Data.Value.Provinces)
-        foreach (var c in p.Cities)
-        {
-            var d = QuakeCalc.HaversineKm(lat, lon, c.Lat, c.Lon);
-            if (d < best.DistanceKm) best = (p.Name, c.Name, c.Lat, c.Lon, d);
-        }
+            foreach (var c in p.Cities)
+            {
+                var d = QuakeCalc.HaversineKm(lat, lon, c.Lat, c.Lon);
+                if (d < best.DistanceKm) best = (p.Name, c.Name, c.Lat, c.Lon, d);
+            }
 
         return best.DistanceKm == double.MaxValue ? null : best;
     }

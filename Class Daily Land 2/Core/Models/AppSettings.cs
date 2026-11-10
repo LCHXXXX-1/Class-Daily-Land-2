@@ -47,7 +47,7 @@ public sealed class AppSettings
         new("update_source", ValueKind.Str, "gitee"),                  // gitee / github / auto（GitHub 优先→Gitee）；默认 gitee（国内更新走 Gitee 更稳）
 
         // —— 插件市场（插件页）——
-        new("market_source", ValueKind.Str, "github"),                 // github / gitee / auto（GitHub 优先→Gitee）；默认 github
+        new("market_source", ValueKind.Str, "gitee"),                  // github / gitee / auto（GitHub 优先→Gitee）；默认 gitee（国内走 Gitee 更稳）
 
         // —— 日志与诊断 ——
         new("log_max_lines", ValueKind.Int, 2000, 500, 3000),         // 内存里保留的日志行数（500~3000）

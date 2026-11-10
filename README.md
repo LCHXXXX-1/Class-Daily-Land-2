@@ -6,9 +6,15 @@ C# / WPF / .NET 桌面版班级日常管理应用（原 PySide6 版重写）。
 另带三个**内置集成**：天气（实时天气 + 天气动画）、媒体（Windows SMTC）
 与灾害预警（地震倒计时 + 气象预警），以及一个**插件系统**（插件可往四处显示位挂内容）。
 
+仓库里是**两个独立产品**，各带一套完整的安装 / 更新 / 卸载链路：
+
+- **主程序** Class Daily Land 2（课堂端）；
+- **插件 IDE** DeveloperTool（作者端）——已从主程序分离，独立安装、独立更新、独立卸载，
+  主程序只负责"找到它 / 没有就引导下载"。
+
 ## 结构
 
-单解决方案，四个工程 + 文档：
+单解决方案，10 个工程 + 共享源码 + 发版工具：
 
 ```
 Class Daily Land 2/                     主工程（WinExe）
@@ -16,6 +22,7 @@ Class Daily Land 2/                     主工程（WinExe）
   AppController.cs                      装配中心：1s tick、上课/下课边沿、设置分发、集成调度
   App/Plugins/                          插件宿主（可卸载 ALC / 管理器 / IPluginHost 实现）
   App/Market/MarketService.cs           插件市场编排（拉索引 / 下载校验 / 交给安装器）
+  App/DeveloperTool/                    插件 IDE 的定位与安装引导（分离后"前往"按钮的落点，见下文）
   Themes/                               设计令牌与控件样式
     Tokens.Base.xaml                    字体 / 字号 / 圆角 / 度量 / 动效曲线（与深浅色无关）
     Tokens.Light.xaml / Tokens.Dark.xaml 浅深两套色板（ThemeService 运行时整本替换）
@@ -78,17 +85,47 @@ Class Daily Land 2/                     主工程（WinExe）
                                         urgent 穿透专注助手；失败退回托盘气泡
   Updates/VersionInfo.cs                版本号与更新源等部署配置（唯一真源）
   Resources/cities.json                 全国 31 省 / 366 市 / 2817 区县经纬度（内嵌进程序集）
-  Resources/icon.ico                    应用图标
+  Resources/icon.ico                    应用图标（16/24/32/48 BMP 帧 + 256 PNG 帧，托盘显式取 32px）
   settings/                             出厂默认配置（构建时复制到输出目录）
 
-ClassDailyLand2.Plugin.Abstractions/     插件契约（IPlugin / IPluginHost 50 成员 / 各显示位 Spec，无 WPF）
+DeveloperTool/                          插件 IDE（独立 WinExe，独立版本：DeveloperTool\VersionInfo.cs）
+  Views/ MainWindow / NewProjectWindow / SettingsWindow / PromptWindow
+  Core/ PluginWorkshop（新建/编译/打包）/ AppConfig / WritableData
+  Market/ 登录（Gitee/GitHub OAuth）、我的插件、上传、审核面板
+  Updates/ UpdateLauncher（只认 version.json 的 developer_tool 节点）+ AboutWindow
+
+ClassDailyLand2.Plugin.Abstractions/    插件契约（IPlugin / IPluginHost 50 成员 / 各显示位 Spec，无 WPF）
+
+ClassDailyLand2.Updater/                主程序更新器 → Updater.exe（框架依赖 + 单文件夹）
+ClassDailyLand2.DeveloperTool.Updater/  IDE 更新器 → IDEUpdater.exe（同构，差异只在 Program.cs 三处）
+ClassDailyLand2.Installer.Online/       主程序在线安装器 → ClassDailyLand2_Setup_Online.exe（自包含单文件）
+DeveloperTool.Installer.Online/         IDE 在线安装器 → DeveloperTool_Setup_Online.exe（自包含单文件）
+ClassDailyLand2.Uninstaller/            主程序卸载器 → ClassDailyLand2.Uninstaller.exe（框架依赖单文件，安装根）
+DeveloperTool.Uninstaller/              IDE 卸载器 → DeveloperTool.Uninstaller.exe（同上）
+
+Shared/                                 跨工程共享源码（源码链接，各工程各编一份，不互相引用）
+  UpdateContract/                       job.json / version.json DTO、SemVer、SafeRelativePath（Zip Slip）、Hashing
+  NativeProcess.cs                      纯 P/Invoke 进程查询与结束（不引 System.Diagnostics.Process）
+  SingleInstanceLock.cs                 单实例锁 + 唤醒事件 + 窗口前置（六个辅助程序共用）
+  Market/                               市场 HTTP 客户端（主程序与 IDE 共用）
+  UninstallerContract/                  卸载核心流程 + 卸载进度窗（两个卸载器共用）
+
 samples/HelloPlugin/                    可编译的示例插件（九个显示位用了一大半）
 samples/GaokaoCountdown/                官方示例插件：下拉面板里的高考倒计时（插件市场首个条目）
+
+tools/                                  发版工具（Node，无第三方依赖）
+  pack-update.mjs                       打更新包 + 算 SHA256 + 生成 dist\version.json
+  market.mjs / zip.mjs                  插件市场上架：build 聚合索引 / pack 打包 / add 上架
+  make-fake-update.mjs / serve.mjs      本地演练：假更新包 + 静态服务
+dist/                                   发版产物（version.json + 各版本说明）
+updater-dist/                           历史产物目录 —— CopyUpdater 已改从 ClassDailyLand2.Updater
+                                        工程的 bin 取（ProjectReference），此目录不再参与构建
+
 docs/plugins.md                         插件开发指南（清单字段 / 显示位 / 50 个 API / 线程纪律 / 排错）
 docs/market.md                          插件市场（索引格式 / 客户端结构 / 三道校验）
 docs/ROADMAP.md                         阶段划分与完成状态
 LICENSE.md                              MIT 许可证（独立文件）
-tests/ClassDailyLand2.Core.Tests/        xUnit（课表引擎 / 原子写 / 设置模型 / 值日顺延 /
+tests/ClassDailyLand2.Core.Tests/       xUnit（课表引擎 / 原子写 / 设置模型 / 值日顺延 /
                                         插件清单·扫描·启停·安装安全·显示位竞争 /
                                         地震算法·城市检索·预警源解析 / 媒体暂停收起 /
                                         天气码映射·定位回退·Open-Meteo 解析 /
@@ -144,6 +181,8 @@ host.RegisterSettings(new SettingsPageSpec(
 市场**不需要服务器**：索引与安装包都在仓库的 `plugins` 分支上，客户端读 raw 地址
 （Gitee 主源 + GitHub 备源，包地址用相对路径拼，主备共用一条记录）。
 
+- **源选择**（设置 → 插件 → 更新源）：`gitee`（**默认**）/ `github` / `auto`（GitHub 优先，失败自动换 Gitee）。
+  老配置里的历史默认 `auto` 会在启动时一次性迁移成 `gitee`。
 - 索引 `index.json` 一个文件装全部插件；作者只维护 `entries/<id>.json`，
   由 `tools/market.mjs build` 聚合（`pack` 打包、`add` 上架）。
 - 安装前过三道校验：索引里的 sha256/size → 包内 `plugin.json` 的 id/version 必须等于索引条目 →
@@ -155,6 +194,99 @@ host.RegisterSettings(new SettingsPageSpec(
   已安装行会跟着亮出「可更新 vX」并可直接更新。
 
 详见 **[docs/market.md](docs/market.md)**；上架规则在 `plugins` 分支的 `docs/publish.md`。
+
+## 插件 IDE（DeveloperTool）
+
+给插件作者的独立桌面应用：新建 / 编译 / 测试 / 发布插件，浏览插件市场、上传自己的包，
+被授权的维护者还能用审核面板处理待审条目。它**不是主程序的一部分**——独立安装、
+独立更新、独立卸载，版本号也独立（`DeveloperTool\VersionInfo.cs`，发版节奏与主程序解耦）。
+
+- **登录**：Gitee / GitHub 双平台（OAuth 授权码流程，JWT 用 DPAPI 加密存
+  `%AppData%\...\ide_auth.json`）。左键「登录插件市场」先弹平台选择窗；
+  授权页**优先用系统浏览器**（本地回调 `127.0.0.1:18080`，沿用浏览器里已有的登录态），
+  浏览器调不起来、或 IDE 正以管理员运行时自动退回**内嵌 WebView2** 授权窗。
+- **更新**：只认 `version.json` 的 `developer_tool` 节点，**绝不回退读 stable**
+  （回退一次就会把主程序整包装成 IDE）。
+- **与主程序的关系**：分进程、分目录；插件产物最终部署进主程序的 `plugins\`。
+
+### 主程序侧的入口（分离后）
+
+设置 → 开发者选项 → 「为 Class Daily Land 提供插件」→ 前往：
+
+1. 依次查找：卸载注册表 `InstallLocation` → `%LocalAppData%\DeveloperTool` →
+   旧版随主程序部署的 `<主程序目录>\DeveloperTool`（分离前的老用户不重装也能用）；
+2. 找到 → 直接启动；
+3. 没找到 → 询问后弹下载窗，从 Gitee release 拉 `DeveloperTool_Setup_Online.exe`
+   （实时速度 + 可取消/重试），下完自动启动在线安装器。
+
+## 安装 · 更新 · 卸载
+
+两个产品各一条完整链路，全部**不需要服务器**——包与 `version.json` 都在 Gitee（raw + release 资产）。
+
+### 在线安装器（自包含单文件，目标机没装 .NET 也能装）
+
+```
+ClassDailyLand2_Setup_Online.exe   →  主程序（version.json 的 stable 节点）
+DeveloperTool_Setup_Online.exe     →  IDE（developer_tool 节点）
+```
+
+流程：检查 .NET 10 桌面运行时（目录 / 注册表 / `dotnet --list-runtimes` 三路，缺了先静默装）→
+拉 `version.json` → 下载整包（15 秒空闲超时、多地址回退、`.part` 落地）→ sha256 校验 →
+解压（Zip Slip 双重校验；用户数据目录**永不覆盖**：主程序 `settings/` `plugins/`，
+IDE `projects/` `plugins/` `Temp/` `WebView2Data/` 与三个配置 json）→
+桌面/开始菜单快捷方式 + 写 `HKCU\...\Uninstall\<id>`（DisplayName / Publisher /
+InstallLocation / UninstallString——安装根有卸载器 exe 才写卸载命令）。
+
+界面与更新器同款卡片：左品牌栏 + 七步进度（准备 / 运行时 / 下载 / 校验 / 解压 / 注册 / 完成）+ 状态胶囊。
+
+### 更新器（框架依赖 + 单文件夹，`<安装根>\Update\`）
+
+```
+Updater.exe（主程序） / IDEUpdater.exe（IDE）
+```
+
+主程序/IDE 检查到新版本后写 `job.json` 拉起更新器（契约在 `Shared\UpdateContract\`，两边各编一份）：
+下载与校验在**主程序还活着**时完成 → 替换文件前才独占目录（主程序更新器强杀，
+IDE 更新器只等最多 90 秒不强杀）→ 清理（保留用户数据）→ 解压替换 → 写 `last-update.json`。
+界面：七步进度（准备 / 下载 / 校验 / 关闭程序 / 备份 / 替换 / 完成）+ 状态胶囊 + 失败红字重试；
+双击裸跑只亮「请勿直接运行」。
+
+### 卸载器（框架依赖单文件，落安装根）
+
+```
+ClassDailyLand2.Uninstaller.exe / DeveloperTool.Uninstaller.exe
+```
+
+控制面板「卸载」或开始菜单入口进来：确认 → 问要不要保留个人数据 → **卸载目标以安装器写进
+注册表的 `InstallLocation` 为准**（存在、非盘根、非 %Temp% 三重护栏）→ 自我迁移到 %Temp%
+（原地删目录会删死自己）→ 进度窗：结束主程序进程 → 删快捷方式 → 删卸载注册表条目 →
+删开机自启值（仅主程序）→ 删安装目录（保留模式下跳过用户数据）→ 延迟清掉 Temp 副本。
+
+### 构建接线
+
+- 主程序 csproj：`ProjectReference` 带更更新器与卸载器工程——`CopyUpdater` 从
+  `ClassDailyLand2.Updater\bin\...` 整目录拷进输出 `Update\`，`PublishUninstaller` 把卸载器
+  **框架依赖单文件**发布到输出根；IDE 工程同构。更新包由 `tools/pack-update.mjs` 从发布目录打包，
+  卸载器随包进安装根。
+- `updater-dist\` 是历史产物目录，已不参与构建。
+
+## 单实例与唤醒
+
+所有六个可执行入口各持一把 `Local\` 命名 Mutex（非阻塞探测；`Abandoned` 视为拿到；
+句柄静态持有到进程退出）：
+
+| 程序 | 锁名（`Local\` 前缀略） | 第二个实例的行为 |
+| --- | --- | --- |
+| 主程序 | `ClassDailyLand2.SingleInstance.v1` | 命名事件唤醒旧实例（恢复+前置）后退出；带 `--restart` 时改为等旧实例释放锁（最多 10 秒） |
+| 插件 IDE | `ClassDailyLand2.DeveloperTool.SingleInstance.v1` | 唤醒主窗 |
+| 主程序更新器 | `ClassDailyLand2.Updater.SingleInstance.v1` | 唤醒进度窗（两个更新器同时替换同一目录 = 灾难） |
+| IDE 更新器 | `ClassDailyLand2.IDEUpdater.SingleInstance.v1` | 同上 |
+| 主程序安装器 | `ClassDailyLand2.Installer.SingleInstance.v1` | 唤醒安装窗 |
+| IDE 安装器 | `ClassDailyLand2.DeveloperTool.Installer.SingleInstance.v1` | 同上 |
+
+实现：主程序在 `App.xaml.cs` 自带一套；其余六个用 `Shared\SingleInstanceLock.cs`
+（`TryAcquire` / `SignalWake` / `ListenWake` / `Activate`）。撞锁**不弹框**——唤醒本身就是提示。
+`Local\` 按会话隔离：多用户互不影响，提权与非提权同会话互见。
 
 ## 内置集成
 
@@ -270,8 +402,23 @@ host.RegisterSettings(new SettingsPageSpec(
 需要 .NET SDK（本仓库用 SDK 10 编译，目标框架 `net10.0-windows`）：
 
 ```bash
-dotnet build "Class Daily Land 2\Class Daily Land 2.csproj"
-dotnet test  tests/ClassDailyLand2.Core.Tests/ClassDailyLand2.Core.Tests.csproj
+# 全量构建（更新器/卸载器由工程引用自动带上，Copy/Publish 目标随后搬运）
+dotnet build "Class Daily Land 2.slnx"
+
+# 主程序（框架依赖、单目录；Release 自动带 win-x64）
+dotnet publish "Class Daily Land 2" -c Release
+
+# 插件 IDE
+dotnet publish DeveloperTool -c Release
+
+# 在线安装器（自包含单文件，开关已写死在 csproj 里）
+dotnet publish ClassDailyLand2.Installer.Online -c Release
+dotnet publish DeveloperTool.Installer.Online -c Release
+
+# 测试
+dotnet test tests/ClassDailyLand2.Core.Tests/ClassDailyLand2.Core.Tests.csproj
+
+# 运行主程序
 dotnet run --project "Class Daily Land 2"
 ```
 
@@ -284,7 +431,17 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 
 > 运行时：目标框架 `net10.0-windows`，工程带 `RollForward=LatestMajor`，
 > 装了更高版本的桌面运行时也能直接跑。
-> 要发给别人，用 `dotnet publish -r win-x64 --self-contained -p:PublishSingleFile=true`。
+> 更新器/卸载器是框架依赖（目标机装了产品就有运行时）；**在线安装器必须自包含**——
+> 它要负责「本机没装 .NET」的情况。
+
+发版：
+
+```bash
+node tools/pack-update.mjs --channel stable --version X.Y.Z --app <发布目录> --out dist --base-url <下载地址前缀>
+node tools/market.mjs build|pack|add          # 插件市场上架
+# IDE 的包写进 version.json 的 developer_tool 节点（pack-update 只认 stable/beta/resources 通道，
+# 该节点目前需在 version.json 里手工维护，发 IDE 版时别漏）。
+```
 
 运行期数据写在 `settings\`（发布后是 exe 旁），
 `AppDomain.UnhandledException` 兜底日志在 `%LOCALAPPDATA%\ClassDailyLand2\startup-crash.log`。
@@ -295,6 +452,8 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 | --- | --- |
 | 双击运行 → 托盘 → 主窗贴右 + 岛顶部居中 | 单实例 Mutex（非阻塞探测）+ 命名事件唤醒；MainBoardWindow 贴右居中；岛每秒 SetWindowPos 保置顶 |
 | **任务栏只有一个条目** | 主窗 `ShowInTaskbar=false`；岛 / 副岛 / 面板是 tool window（`WS_EX_TOOLWINDOW`），入口走托盘 |
+| 托盘图标可见 | `icon.ico` 带 16/24/32/48 BMP 帧 + 256 PNG 帧；NotifyIcon 显式按 32px 取帧（单帧 PNG 会画成空白） |
+| 更新器/安装器/IDE 重复启动 | 各自 `Local\` Mutex + Wake 事件：第二个实例唤醒已开窗口（恢复+前置）后静默退出，全程不弹框 |
 | 全屏视频/PPT → 岛 1s 内收起，退出恢复 | `Interop.IsForegroundFullscreen()`（DWM 边框 + 显示器矩形）每 tick 检测 |
 | 距下节课 ≤ 60s → 宽 600 + 蓝色进度条 | `island_countdown_sec`；进度条 `#0A84FF` + 流光 + 前缘彗星光晕 |
 | 上课/下课瞬间提示 | AppController 边沿检测 → Alert 态（绿字/白字，停留 `island_alert_hold_ms`） |
@@ -304,6 +463,8 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 | **手指上下滑动** | 所有滚动区 `PanningMode=VerticalOnly`（无条件），惯性 0.001 |
 | 改「提前提醒」生效 | settings.json 为准，同步进 schedule.json；文案 `下节 X · N分钟后` |
 | 重启后数据原样恢复 | 全部 JSON 原子写（tmp + File.Replace），坏文件自动隔离为 `.bad` |
+| 控制面板能卸载 | UninstallString 指向安装根的单文件卸载器；卸载目标以注册表 InstallLocation 为准 |
+| 安装器输入框可用 | `InvariantGlobalization=false`（WPF 输入框按键盘 LANGID 构造 CultureInfo，invariant 模式必崩）；线程文化钉死只作保险带 |
 
 ## 设置中心与浮层
 
@@ -318,10 +479,25 @@ dotnet build samples/HelloPlugin/HelloPlugin.csproj
 | 同上 → 状态测试 | `StatusTestDialog`：按宿主引擎试算任意时间点的岛状态并预览胶囊 |
 | 设置 → 媒体 / 天气 / 灾害预警 | `MediaPage` / `WeatherPage` / `DisasterPage`：媒体可注入测试曲目预览；天气带 11 种动画预览网格；灾害可省市县联动 + 模拟演练 |
 | 设置 → 作业 | 内嵌卡片版 `HomeworkEditor`（一科一色、卡片可拖动排序、每条带提交时间下拉框，改动即时生效）；主窗右键打开独立「编辑作业」窗口（带取消/保存） |
+| 设置 → 开发者选项 → 前往 | 定位/引导插件 IDE（见「插件 IDE」一节） |
 | 主岛点击 | 今日课程 + 插件面板（`IslandPanelHost`，3 秒自动收起） |
 | 主窗右键 → 随机点名 | `RollCallWindow`（10 人冷却不重复） |
 
 > 浮层一律画在设置窗口内部的页内推进层上，不另开窗口；ESC 关闭最上层浮层。
+
+## 已知限制与常见坑
+
+- **WPF 不能开 `InvariantGlobalization`**：TextBox 获焦时 WPF 按键盘 LANGID（2052=zh-CN）
+  构造 `CultureInfo`，invariant 模式下必抛、点输入框直接闪退。安装器因此带 ICU（体积 +20~30MB）。
+  无边框卡片的"按住拖动"必须避开交互控件（DragMove 会抢走输入框的鼠标会话）。
+- **管理员运行下的登录降级链**：提权进程直接拉起浏览器常"不报错但没窗口"→ 借非提权
+  `explorer.exe` 在用户会话里开默认浏览器；内嵌 WebView2 兜底时若撞 `RPC_E_DISCONNECTED`，
+  自动做「隔离 UserDataFolder → `--no-sandbox`」两级升级重建。
+- **老用户要重装一次才有"卸载"**：`UninstallString` 只有在线安装器会写，更新器不补注册表；
+  已装机器拿到带卸载器的新版本后，需再跑一次安装器（覆盖安装）控制面板才可卸载。
+- **IDE 发版别漏 `developer_tool` 节点**：`pack-update.mjs` 只写 stable/beta/resources 通道，
+  IDE 的节点需在 `version.json` 手工维护；IDE 安装器/更新器**只认这个节点、绝不回退**。
+- `updater-dist\` 是历史目录：`CopyUpdater` 已改从 `ClassDailyLand2.Updater` 工程的 bin 取产物。
 
 ## 许可证
 

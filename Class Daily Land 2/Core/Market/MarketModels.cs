@@ -1,7 +1,7 @@
+using ClassDailyLand2.UpdateContract;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
-using ClassDailyLand2.UpdateContract;
 
 namespace ClassDailyLand2.Core.Market;
 
@@ -144,11 +144,13 @@ public sealed partial class MarketEntry
     [JsonIgnore] public SemVer VersionValue => SemVer.ParseOrZero(Version);
 
     /// <summary>哈希是否可用 —— 不可用的条目一律不许安装（同更新器对 sha256 的判法）。</summary>
-    [JsonIgnore] public bool HasValidHash =>
+    [JsonIgnore]
+    public bool HasValidHash =>
         Sha256.Length == 64 && Sha256.All(Uri.IsHexDigit);
 
     /// <summary>包地址是绝对 URL（Releases 逃生口）而不是相对路径。</summary>
-    [JsonIgnore] public bool HasAbsolutePackage =>
+    [JsonIgnore]
+    public bool HasAbsolutePackage =>
         Path.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
         Path.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
 

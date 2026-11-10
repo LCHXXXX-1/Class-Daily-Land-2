@@ -1,6 +1,4 @@
 using ClassDailyLand2.App.Integrations.Disaster;
-using System.Net;
-using System.Text;
 using System.Text.Json;
 
 namespace ClassDailyLand2.App.Integrations.Weather;
@@ -203,20 +201,20 @@ public static class WeatherLocator
                     Str(root, "region"), Str(root, "city"));
 
             case "ipip":
-            {
-                // {"ret":"ok","data":{"ip":"…","location":["中国","四川省","成都市","龙泉驿区","电信"]}}
-                if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
-                    return null;
-                if (!data.TryGetProperty("location", out var arr) || arr.ValueKind != JsonValueKind.Array)
-                    return null;
+                {
+                    // {"ret":"ok","data":{"ip":"…","location":["中国","四川省","成都市","龙泉驿区","电信"]}}
+                    if (!root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+                        return null;
+                    if (!data.TryGetProperty("location", out var arr) || arr.ValueKind != JsonValueKind.Array)
+                        return null;
 
-                var parts = arr.EnumerateArray()
-                    .Select(x => x.ValueKind == JsonValueKind.String ? (x.GetString() ?? "").Trim() : "")
-                    .ToList();
-                string At(int i) => i < parts.Count ? parts[i] : "";
+                    var parts = arr.EnumerateArray()
+                        .Select(x => x.ValueKind == JsonValueKind.String ? (x.GetString() ?? "").Trim() : "")
+                        .ToList();
+                    string At(int i) => i < parts.Count ? parts[i] : "";
 
-                return FromNames(At(1), At(2), At(3), source);
-            }
+                    return FromNames(At(1), At(2), At(3), source);
+                }
 
             default:   // pconline：只有 pro / city，没有区县和经纬度
                 return FromNames(Str(root, "pro"), Str(root, "city"), "", source);

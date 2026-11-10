@@ -64,74 +64,74 @@ public sealed class PluginSettingsPanel : DialogPanel
         switch (field.Kind)
         {
             case SettingFieldKind.Toggle:
-            {
-                var toggle = new FluentToggle
                 {
-                    Label = "",
-                    IsChecked = string.Equals(current, "true", StringComparison.OrdinalIgnoreCase),
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                };
-                box.Children.Add(toggle);
-                _getters.Add((field, () => toggle.IsChecked == true ? "true" : "false"));
-                break;
-            }
+                    var toggle = new FluentToggle
+                    {
+                        Label = "",
+                        IsChecked = string.Equals(current, "true", StringComparison.OrdinalIgnoreCase),
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                    };
+                    box.Children.Add(toggle);
+                    _getters.Add((field, () => toggle.IsChecked == true ? "true" : "false"));
+                    break;
+                }
 
             case SettingFieldKind.Number:
-            {
-                // Min/Max 都是 0 = 不限制（声明里这个约定要跟文档一致）
-                var limited = field.Min != 0 || field.Max != 0;
-                var min = limited ? (int)Math.Round(field.Min) : int.MinValue;
-                var max = limited ? (int)Math.Round(field.Max) : int.MaxValue;
-                var value = int.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
-                    ? parsed
-                    : (limited ? Math.Clamp(0, min, max) : 0);
-
-                var number = new NumberBox
                 {
-                    Value = Math.Clamp(value, min, max),
-                    Minimum = min,
-                    Maximum = max,
-                    Suffix = field.Unit ?? "",
-                    Width = 150,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                };
-                box.Children.Add(number);
-                _getters.Add((field, () => number.Value.ToString(CultureInfo.InvariantCulture)));
-                break;
-            }
+                    // Min/Max 都是 0 = 不限制（声明里这个约定要跟文档一致）
+                    var limited = field.Min != 0 || field.Max != 0;
+                    var min = limited ? (int)Math.Round(field.Min) : int.MinValue;
+                    var max = limited ? (int)Math.Round(field.Max) : int.MaxValue;
+                    var value = int.TryParse(current, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+                        ? parsed
+                        : (limited ? Math.Clamp(0, min, max) : 0);
+
+                    var number = new NumberBox
+                    {
+                        Value = Math.Clamp(value, min, max),
+                        Minimum = min,
+                        Maximum = max,
+                        Suffix = field.Unit ?? "",
+                        Width = 150,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                    };
+                    box.Children.Add(number);
+                    _getters.Add((field, () => number.Value.ToString(CultureInfo.InvariantCulture)));
+                    break;
+                }
 
             case SettingFieldKind.Choice:
-            {
-                var options = field.Options ?? Array.Empty<SettingOption>();
-                var combo = new ComboBox
                 {
-                    Style = S("EdSelect"),
-                    MinWidth = 200,
-                    HorizontalAlignment = HorizontalAlignment.Left,
-                };
+                    var options = field.Options ?? Array.Empty<SettingOption>();
+                    var combo = new ComboBox
+                    {
+                        Style = S("EdSelect"),
+                        MinWidth = 200,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                    };
 
-                var selected = 0;
-                for (var i = 0; i < options.Count; i++)
-                {
-                    combo.Items.Add(options[i].Label);
-                    if (string.Equals(options[i].Value, current, StringComparison.OrdinalIgnoreCase)) selected = i;
+                    var selected = 0;
+                    for (var i = 0; i < options.Count; i++)
+                    {
+                        combo.Items.Add(options[i].Label);
+                        if (string.Equals(options[i].Value, current, StringComparison.OrdinalIgnoreCase)) selected = i;
+                    }
+                    if (combo.Items.Count > 0) combo.SelectedIndex = Math.Clamp(selected, 0, combo.Items.Count - 1);
+
+                    box.Children.Add(combo);
+                    _getters.Add((field, () =>
+                        options.Count == 0 ? null : options[Math.Clamp(combo.SelectedIndex, 0, options.Count - 1)].Value));
+                    break;
                 }
-                if (combo.Items.Count > 0) combo.SelectedIndex = Math.Clamp(selected, 0, combo.Items.Count - 1);
-
-                box.Children.Add(combo);
-                _getters.Add((field, () =>
-                    options.Count == 0 ? null : options[Math.Clamp(combo.SelectedIndex, 0, options.Count - 1)].Value));
-                break;
-            }
 
             default:
-            {
-                var text = Input(current ?? "", 280);
-                text.HorizontalAlignment = HorizontalAlignment.Left;
-                box.Children.Add(text);
-                _getters.Add((field, () => string.IsNullOrWhiteSpace(text.Text) ? null : text.Text.Trim()));
-                break;
-            }
+                {
+                    var text = Input(current ?? "", 280);
+                    text.HorizontalAlignment = HorizontalAlignment.Left;
+                    box.Children.Add(text);
+                    _getters.Add((field, () => string.IsNullOrWhiteSpace(text.Text) ? null : text.Text.Trim()));
+                    break;
+                }
         }
 
         if (!string.IsNullOrWhiteSpace(field.Hint))

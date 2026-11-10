@@ -1,6 +1,6 @@
+using ClassDailyLand2.App.Updates;
 using System.ComponentModel;
 using System.Windows;
-using ClassDailyLand2.App.Updates;
 
 namespace ClassDailyLand2.App.Views.Dialogs;
 

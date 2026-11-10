@@ -2,10 +2,8 @@ using ClassDailyLand2.App.Controls;
 using ClassDailyLand2.App.Integrations.Disaster;
 using ClassDailyLand2.App.Integrations.Weather;
 using ClassDailyLand2.App.ViewModels;
-using ClassDailyLand2.Core.Models;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using System.Windows.Threading;
 
 namespace ClassDailyLand2.App.Views.Pages;

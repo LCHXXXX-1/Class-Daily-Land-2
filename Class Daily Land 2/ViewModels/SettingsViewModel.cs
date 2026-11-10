@@ -75,7 +75,7 @@ public sealed partial class SettingsViewModel : ObservableObject
     }
 
     /// <summary>
-    /// 插件市场的更新源：auto（默认，GitHub 优先，失败自动换 Gitee）/ github / gitee。
+    /// 插件市场的更新源：gitee（默认）/ github / auto（GitHub 优先，失败自动换 Gitee）。
     /// 与程序的更新源分开设置 —— 市场是插件包，程序是安装包，两边线路不一定一样。
     /// </summary>
     public string MarketSource

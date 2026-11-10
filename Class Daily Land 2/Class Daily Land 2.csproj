@@ -8,6 +8,8 @@
 		<Version>1.0</Version>
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
 		<FileVersion>1.0</FileVersion>
+		<Company>Class Daily Land 2</Company>
+		<Copyright>© 2026 Class Daily Land 2</Copyright>
 		<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -91,12 +93,12 @@
 	-->
 	<Target Name="CopyUpdater" AfterTargets="Build">
 		<PropertyGroup>
-			<!-- 更新器源码在仓库外（桌面"更新器"目录），本仓库只收构建产物 updater-dist\；
-		     重新构建更新器：在源码目录 dotnet build -c Release -r win-x64，然后把输出同步到 updater-dist -->
-		<_UpdaterOutDir>..\updater-dist</_UpdaterOutDir>
+			<!-- 更新器就是本仓库的 ClassDailyLand2.Updater 工程，由下方 ProjectReference 先构建；
+			     产物取它自己的 bin（RID win-x64 写死在该工程里，Debug 也落 win-x64 子目录） -->
+		<_UpdaterOutDir>..\ClassDailyLand2.Updater\bin\$(Configuration)\net10.0-windows10.0.19041.0\win-x64</_UpdaterOutDir>
 		</PropertyGroup>
 
-		<Error Condition="!Exists('$(_UpdaterOutDir)\Updater.exe')" Text="更新器没有编译出 Updater.exe：$(_UpdaterOutDir) 不存在或为空。请先构建 ClassDailyLand2.Updater 工程。" />
+		<Error Condition="!Exists('$(_UpdaterOutDir)\Updater.exe')" Text="更新器工程没有编译出 Updater.exe：$(_UpdaterOutDir) 不存在或为空。检查 ClassDailyLand2.Updater 的 ProjectReference 是否参与构建。" />
 
 		<!-- 上一版把单文件 Updater.exe 放在输出根目录：清掉，免得旧的坏更新器被优先找到 -->
 		<Delete Files="$(OutputPath)Updater.exe;$(OutputPath)Updater.dll;$(OutputPath)Updater.deps.json;$(OutputPath)Updater.runtimeconfig.json" />
@@ -110,20 +112,28 @@
 	</Target>
 
 	<!--
-	  插件开发工具是按需启动的独立 WPF 进程。构建图只负责先生成它；随后把完整输出目录
-	  （含 Roslyn、WebView2、Update 子目录与 runtimeconfig）复制到主程序旁的 DeveloperTool\。
+	  卸载器以**框架依赖单文件**发布到输出根目录（一个 exe，不陪跑 dll 群）。
+	  嵌套 MSBuild 只跑 Publish 不跑 Restore：还原+构建已由 ProjectReference 在构建图里做完，
+	  Publish 只是把现成产物压成单文件，不会踩"Build 期间跑 Restore"那个引擎坑。
 	-->
-	<Target Name="CopyPluginDeveloperTool" AfterTargets="Build">
+	<Target Name="PublishUninstaller" AfterTargets="Build">
 		<PropertyGroup>
-			<_PluginDeveloperToolOutDir>..\DeveloperTool\bin\$(Configuration)\net10.0-windows10.0.19041.0\win-x64</_PluginDeveloperToolOutDir>
+			<_UninstallerProj>$(MSBuildThisFileDirectory)..\ClassDailyLand2.Uninstaller\ClassDailyLand2.Uninstaller.csproj</_UninstallerProj>
+			<_UninstallerPublishDir>$(MSBuildThisFileDirectory)obj\UninstallerPublish\</_UninstallerPublishDir>
 		</PropertyGroup>
 
-		<Error Condition="!Exists('$(_PluginDeveloperToolOutDir)\DeveloperTool.exe')" Text="插件开发工具没有编译出 DeveloperTool.exe：$(_PluginDeveloperToolOutDir)" />
-		<ItemGroup>
-			<_PluginDeveloperToolFiles Include="$(_PluginDeveloperToolOutDir)\**\*.*" Exclude="$(_PluginDeveloperToolOutDir)\**\*.pdb;$(_PluginDeveloperToolOutDir)\**\*.xml" />
-		</ItemGroup>
-		<Copy SourceFiles="@(_PluginDeveloperToolFiles)" DestinationFiles="@(_PluginDeveloperToolFiles->'$(OutputPath)DeveloperTool\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+		<MSBuild Projects="$(_UninstallerProj)" Targets="Publish" Properties="Configuration=$(Configuration);SelfContained=false;PublishSingleFile=true;PublishDir=$(_UninstallerPublishDir)" />
+
+		<Error Condition="!Exists('$(_UninstallerPublishDir)ClassDailyLand2.Uninstaller.exe')" Text="卸载器单文件发布没有产出 exe：$(_UninstallerPublishDir)" />
+
+		<Copy SourceFiles="$(_UninstallerPublishDir)ClassDailyLand2.Uninstaller.exe" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
 	</Target>
+
+	<!--
+	  插件开发工具（DeveloperTool）已从主程序分离：不再构建、不再拷进输出目录、不随更新包发布。
+	  它由自己的在线安装器单独安装；主程序在「开发者选项 → 前往」里检测安装并引导下载
+	  （见 App\DeveloperTool\DeveloperToolService.cs 与 Views\Dialogs\DeveloperToolSetupWindow）。
+	-->
 
 	<ItemGroup>
 		<!--
@@ -141,18 +151,15 @@
 	<ItemGroup>
 	  <!-- 插件契约：插件作者只引用这一个程序集，宿主与插件共享同一份副本 -->
 	  <ProjectReference Include="..\ClassDailyLand2.Plugin.Abstractions\ClassDailyLand2.Plugin.Abstractions.csproj" />
-	  <!-- 只参与构建，不把开发工具程序集加载进主程序进程。 -->
-	  <ProjectReference Include="..\DeveloperTool\DeveloperTool.csproj" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 
 	<ItemGroup>
-	<!--
-	  更新器源码已移出本仓库（位于仓库外的"更新器"源码目录），本仓库只收**构建产物**：
-	  仓库根的 updater-dist\（Updater.exe + deps.json + runtimeconfig + 依赖 dll）。
-	  CopyUpdater 目标把它整目录复制到输出 Update\ 下。
-	  重新构建更新器：在源码目录 dotnet build -c Release -r win-x64，再把输出同步到 updater-dist。
-	-->
-	<!--（不再引用 ..\ClassDailyLand2.Updater 工程：那份旧源码保留在仓库里仅作参考，不再参与构建）-->
+	  <!-- 更新器：只参与构建（它的 bin 由上面的 CopyUpdater 整目录搬到输出 Update\），
+	       不把更新器程序集加载进主程序进程。以前靠人手在仓库外构建再同步 updater-dist，
+	       现在回归工程依赖：主程序一构建，更新器必然同 Configuration 跟着构建。 -->
+	  <ProjectReference Include="..\ClassDailyLand2.Updater\ClassDailyLand2.Updater.csproj" ReferenceOutputAssembly="false" />
+	  <!-- 卸载器：同上，只参与构建，产物由 PublishUninstaller 以单文件发布到输出根目录 -->
+	  <ProjectReference Include="..\ClassDailyLand2.Uninstaller\ClassDailyLand2.Uninstaller.csproj" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 
 </Project>
