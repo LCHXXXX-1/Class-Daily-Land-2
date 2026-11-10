@@ -21,7 +21,6 @@
 !tests/
 !tools/
 !docs/
-!.github/
 
 # —— 放行的根文件 ——
 !.gitignore
