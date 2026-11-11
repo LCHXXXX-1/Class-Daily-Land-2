@@ -1,11 +1,11 @@
 {
   "stable": {
-    "version": "1.8",
-    "release_date": "2026-11-10",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.zip",
-    "sha256": "8e31fe73e2730251248a32061730bb42a4e8a4b7e59ee34f4096dbf0a278155c",
+    "version": "1.8.1",
+    "release_date": "2026-11-11",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.1.zip",
+    "sha256": "28fbdba484e2df4a0b81bacc58f05137e5d0bfcd7473fb6097c64081fdf3a433",
     "changelog": [
-      "优化已知问题"
+      "优化了使用体验"
     ],
     "is_mandatory": false
   },
