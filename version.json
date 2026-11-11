@@ -1,11 +1,11 @@
 {
   "stable": {
-    "version": "1.8.0",
+    "version": "1.8.2",
     "release_date": "2026-11-11",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.1.zip",
-    "sha256": "28fbdba484e2df4a0b81bacc58f05137e5d0bfcd7473fb6097c64081fdf3a433",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.2.zip",
+    "sha256": "07ff7e57e3fcc152d9555e8da09aca94b423d9d57b0a692982917e9112022ae4",
     "changelog": [
-      "优化了使用体验"
+      "修复更新失败的问题，如果你的版本已经出现更新失败的问题，请从GitHub下载新的"
     ],
     "is_mandatory": false
   },
