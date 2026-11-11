@@ -866,7 +866,24 @@ public sealed partial class DynamicIslandWindow : Window
     {
         if (_frameHooked) return;
         _frameHooked = true;
-        CompositionTarget.Rendering += (_, _) => SmoothTick();
+        CompositionTarget.Rendering += OnRenderingFrame;
+    }
+
+    /// <summary>
+    /// 逐帧回调必须用**具名方法**订阅：lambda 无法退订，而 CompositionTarget.Rendering
+    /// 是静态事件，不退订会一直持有本窗口（连同整棵可视树），窗口关不掉。
+    /// </summary>
+    void OnRenderingFrame(object? sender, EventArgs e) => SmoothTick();
+
+    /// <summary>关窗时退订逐帧回调，别让静态事件把窗口钉住。</summary>
+    protected override void OnClosed(EventArgs e)
+    {
+        if (_frameHooked)
+        {
+            CompositionTarget.Rendering -= OnRenderingFrame;
+            _frameHooked = false;
+        }
+        base.OnClosed(e);
     }
     void SmoothTick()
     {

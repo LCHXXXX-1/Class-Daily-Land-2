@@ -1189,6 +1189,9 @@ public sealed class MainBoardWindow : Window
 
     void StepScroll()
     {
+        // 关窗=隐藏（OnClosing 取消并 Hide），但 _scrollTimer 不会停（OnClosed 永不执行）。
+        // 隐藏时直接跳过，别在后台滚一个看不见的列表。
+        if (!IsVisible) return;
         if (!_autoScroll || _pausedByHover) return;
 
         var max = _homeworkScroll.ScrollableHeight;

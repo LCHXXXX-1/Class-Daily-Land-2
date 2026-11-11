@@ -1,0 +1,88 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<!--
+    DeveloperTool 专属更新器：与主程序 ClassDailyLand2.Updater 同一套契约式架构
+    （job.json 驱动、卡片 UI、结果回执），契约源码直接链接 Shared\UpdateContract\*.cs，不另造协议。
+
+    AssemblyName 故意取 IDEUpdater：
+      · 产物就是 IDEUpdater.exe，放在 IDE 安装目录的 Update\ 下，一眼认得出是谁；
+      · apphost 里写死的托管 dll 名（IDEUpdater.dll）跟着一起改，副本才能正常启动；
+      · 与主程序的 Class Daily Land 2.exe、主程序更新器 Updater.exe 名字分开，不会互相误认进程。
+
+    ★ 与主程序的差异只有三处（都在 Program.cs，见那里的注释）：
+      不强杀 DeveloperTool.exe（WaitForIdeExit）、保留清单按 IDE 落点、拉起的是 DeveloperTool.exe。
+  -->
+	<PropertyGroup>
+		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<OutputType>WinExe</OutputType>
+		<RootNamespace>IDEUpdater</RootNamespace>
+		<AssemblyName>IDEUpdater</AssemblyName>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<UseWPF>true</UseWPF>
+		<LangVersion>latest</LangVersion>
+		<SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+
+		<!--
+      借 IDE 的图标，IDE 若挪走该文件需同步改（本工程没有自己的 Resources\，
+      图标只在文件资源管理器/任务栏露脸，不影响 apphost 与程序集名）。
+    -->
+		<ApplicationIcon>..\DeveloperTool\Resources\icon.ico</ApplicationIcon>
+		<Company>Class Daily Land 2</Company>
+		<Copyright>© 2026 Class Daily Land 2</Copyright>
+
+		<!--
+      框架依赖 + 单文件夹：与主程序更新器（ClassDailyLand2.Updater）同构。
+      IDE 本体已经改成框架依赖，两边共用同一份本机 .NET 10 桌面运行时，不再各自带一份。
+      IDE 侧准备阶段整目录复制到 %Temp% 仍然成立，只是文件数从 246 降到十几个。
+
+      RollForward=LatestMajor：目标机装了 .NET 11/12 等更高大版本的桌面运行时也能直接跑。
+      与主程序、主程序更新器、IDE 保持统一，不要单独改这里。
+
+      PublishTrimmed=false：更新器里有反射 / COM / JSON 序列化，裁掉哪个成员都是运行期才炸。
+    -->
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<SelfContained>false</SelfContained>
+		<PublishSingleFile>false</PublishSingleFile>
+		<RollForward>LatestMajor</RollForward>
+		<PublishTrimmed>false</PublishTrimmed>
+
+		<NoWarn>$(NoWarn);CA1416</NoWarn>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<!--
+      开了 UseWPF 之后 SDK 的隐式 using 里没有 System.IO 与 System.Threading
+      （File / Path / Thread / CancellationTokenSource 会集体报找不到）。
+      照主程序的做法用 csproj 一次性补回来，不在十来个 .cs 顶部各贴一行。
+    -->
+		<Using Include="System.IO" />
+		<Using Include="System.Threading" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!--
+      更新契约（job.json / version.json 的 DTO、SemVer、路径校验、哈希、替换计划）。
+      与主程序一样用源码链接，而不是引用主程序程序集：更新器是独立进程，
+      只靠**文件**（job.json）跟 IDE 对话，两边各自把契约编进自己的程序集。
+    -->
+		<Compile Include="..\Shared\UpdateContract\*.cs" Link="Contract\%(Filename)%(Extension)" />
+
+		<!--
+      版本号等常量与主程序共用同一份（Updates\VersionInfo.cs）。
+      ★ 但 ExeName 是主程序名（Class Daily Land 2.exe），更新器拉起 IDE 时用 job.App.ExeName，
+        绝不能拿这个常量去拼路径 —— 那会把主程序拉起来。
+    -->
+		<Compile Include="..\Class Daily Land 2\Updates\VersionInfo.cs" Link="VersionInfo.cs" />
+
+		<!--
+      进程查询：纯 P/Invoke。不用 System.Diagnostics.Process 是因为它在进程刚退出或无权访问时抛
+      Win32Exception，而更新器恰好只在"主进程正在退出"这个时间点工作，异常率最高。
+    -->
+		<Compile Include="..\Shared\NativeProcess.cs" Link="Shared\NativeProcess.cs" />
+
+		<!-- 单实例锁：两个更新器不能同时替换同一个目录 -->
+		<Compile Include="..\Shared\SingleInstanceLock.cs" Link="Shared\SingleInstanceLock.cs" />
+	</ItemGroup>
+
+</Project>

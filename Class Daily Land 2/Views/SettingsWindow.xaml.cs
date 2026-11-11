@@ -40,9 +40,6 @@ public partial class SettingsWindow : Window
     /// <summary>转场时长，与 QML 版一致。</summary>
     const int TransitionMs = 280;
 
-    /// <summary>强调条滑动时长。</summary>
-    const int MarkerMs = 320;
-
     /// <summary>左侧大项。每个大项下面挂若干子页面，子页面显示在顶部胶囊里。</summary>
     readonly List<NavGroup> _groups;
 
@@ -59,6 +56,8 @@ public partial class SettingsWindow : Window
     string _currentSubId = "";
     bool _subLensShown;
     DispatcherTimer? _transitionScrollBarTimer;
+    /// <summary>上次写进 WindowChrome 的玻璃帧厚度（只在变化时重建 Chrome，避免闪屏）。</summary>
+    Thickness _appliedGlassFrame = new Thickness(-1);
     Action? _confirmOnOk;
     Action? _confirmOnCancel;
     bool _subOpen;
@@ -310,19 +309,24 @@ public partial class SettingsWindow : Window
         // Windows 10 的 accent 亚克力和整窗玻璃帧叠在一起时，窗口边缘会多出一圈白边。
         // Win10 亚克力把 GlassFrameThickness 收到 0（AccentPolicy 自己会铺满客户区）；
         // Win11 不动 Chrome，继续由 DWM 背板负责云母/亚克力。
+        // ★ 只在厚度真的变化时重建 Chrome：每次 ApplyWindowChrome（主题/背景一变就跑）
+        //   都 new 一个会重设非客户区，肉眼可见地闪一下。
         if (!Interop.IsWindows11)
         {
-            WindowChrome.SetWindowChrome(this, new WindowChrome
+            var glass = kind == WindowBackdrop.Acrylic ? new Thickness(0) : new Thickness(-1);
+            if (glass != _appliedGlassFrame)
             {
-                CaptionHeight = 48,
-                ResizeBorderThickness = new Thickness(6),
-                CornerRadius = new CornerRadius(0),
-                GlassFrameThickness = kind == WindowBackdrop.Acrylic
-                    ? new Thickness(0)
-                    : new Thickness(-1),
-                NonClientFrameEdges = NonClientFrameEdges.None,
-                UseAeroCaptionButtons = false,
-            });
+                _appliedGlassFrame = glass;
+                WindowChrome.SetWindowChrome(this, new WindowChrome
+                {
+                    CaptionHeight = 48,
+                    ResizeBorderThickness = new Thickness(6),
+                    CornerRadius = new CornerRadius(0),
+                    GlassFrameThickness = glass,
+                    NonClientFrameEdges = NonClientFrameEdges.None,
+                    UseAeroCaptionButtons = false,
+                });
+            }
         }
 
         Core.Logger.Current?.Info($"[设置背景] 模式={mode} 材质={kind} 深色={ThemeService.IsDark}");
@@ -756,6 +760,9 @@ public partial class SettingsWindow : Window
             SubHost.Content = null;
             ScrollCur.Visibility = Visibility.Visible;
             ScrollCur.RenderTransform = Transform.Identity;
+            // 直接收起、没走 Slide：把 ShowOverlay 时挂的位图缓存清掉，否则文字发虚
+            ScrollCur.CacheMode = null;
+            SubScroll.CacheMode = null;
         }
 
         var direction = DirectionFor(_currentId, id, _currentGroupId, group.Id);
@@ -780,19 +787,19 @@ public partial class SettingsWindow : Window
         // 先记下当前页：后面胶囊的 SizeChanged / ScrollChanged 都按新页对齐
         _currentId = id;
 
-        // 同一个大项内切页：只改胶囊选中态；换大项才重建胶囊
+        // 同一个大项内切页：只改胶囊选中态；换大项才重建胶囊。
+        // ★ 页面自带顶部标签（插件页的已安装/插件市场）时必须重建：此时
+        //   SubNavPanel 里还是上一个页面的按钮，只改选中态会全部落空。
         var groupChanged = !string.Equals(_currentGroupId, group.Id, StringComparison.Ordinal);
         _currentGroupId = group.Id;
-        if (groupChanged || SubNavPanel.Children.Count == 0)
+        if (groupChanged || SubNavPanel.Children.Count == 0 || page is ISettingsPageTabs)
         {
             BuildSubNav(group, id, page);
         }
         else
         {
-            // 同一大项内切子页：底片左右滑；页面自带标签（插件页）则保留它当前的标签
-            _currentSubId = page is ISettingsPageTabs host && host.Tabs.Count > 0
-                ? host.CurrentTabId
-                : id;
+            // 同一大项内切子页：底片左右滑（ISettingsPageTabs 页面已由上面强制重建）
+            _currentSubId = id;
             SyncSubNavSelection(_currentSubId);
             if (_subButtons.TryGetValue(_currentSubId, out var subButton))
                 SyncSubNavLens(subButton, animate: true);
@@ -844,6 +851,10 @@ public partial class SettingsWindow : Window
         PrevInner.Children.Clear();
         ScrollPrev.Visibility = Visibility.Collapsed;
         ScrollPrev.RenderTransform = Transform.Identity;
+        // ★ 动画被中断时 Completed 不一定触发，BitmapCache 会残留 → 文字持续发虚。
+        //   这里兜底清一次；落定路径 Slide 的 Completed 已清过，重复清是幂等的。
+        ScrollPrev.CacheMode = null;
+        ScrollCur.CacheMode = null;
     }
 
     /// <summary>
@@ -853,10 +864,20 @@ public partial class SettingsWindow : Window
     /// </summary>
     void HideScrollBarsDuringTransition()
     {
-        // 直接 Hidden 而不是 Disabled：原本有滚动条的页面，Hidden 仍占住那一列，
-        // 内容不会横向重排；本来没有滚动条的短页面会多预留 10px，但比滑动时拖着滚动条掉帧好。
-        ScrollCur.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
-        ScrollPrev.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        // ★ 只在滚动条当前真的可见时才改成 Hidden：
+        //   Hidden 仍占住那一列，但 Auto 在「内容没超框」时并不占位 ——
+        //   对短页面强行 Hidden 会让内容窄 10px，恢复 Auto 时又变宽，
+        //   滑动落定后反而看到一次横向抖动。
+        //   ScrollPrev 接的是当前页移过去的旧内容，此刻它还是 Collapsed、
+        //   ComputedVerticalScrollBarVisibility 不可信，所以镜像 ScrollCur 的判断
+        //   （ScrollCur 此刻还留着旧页的布局结果，正是 ScrollPrev 要显示的内容）。
+        if (ScrollCur.ComputedVerticalScrollBarVisibility == Visibility.Visible)
+        {
+            ScrollCur.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+            ScrollPrev.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        }
+        // 二级页（课表编辑 / 作业编辑器）内容总是超框，且 ShowOverlay 里
+        // 这行执行时 SubScroll 还没变 Visible、Computed 值不可信，直接强制隐藏。
         SubScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
 
         if (_transitionScrollBarTimer is null)

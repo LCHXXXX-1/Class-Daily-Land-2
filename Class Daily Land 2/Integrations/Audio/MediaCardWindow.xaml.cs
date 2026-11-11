@@ -41,6 +41,13 @@ public sealed partial class MediaCardWindow : Window
             Dismiss();
         };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Dismiss(); };
+
+        // 外部直接 Hide()（更新前隐藏等）不走 Dismiss，_hold 会继续空跑 6 秒；
+        // 只要不可见就停表，重新 Present 时会再 Start。
+        IsVisibleChanged += (_, _) =>
+        {
+            if (!IsVisible) _hold.Stop();
+        };
     }
 
     /// <summary>显示并更新内容；已显示时只换内容（不重新播入场动画）。</summary>

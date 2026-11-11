@@ -1803,6 +1803,31 @@ public partial class AboutPage : UserControl
         //   每次切回关于页都挂一次 Click，连点 5 次会发 5 个请求（见 AGENTS 坑清单）。
         DataContextChanged += (_, _) => Hook();
         Loaded += (_, _) => { Hook(); Render(); };
+
+        // ★ 控件自有事件只在构造里挂一次：Hook 会在 Loaded/Unloaded 循环里反复进出，
+        //   放在 Hook 里会随 _hooked 重置而重复订阅（连点一次发多次请求）。
+        DeveloperToggle.Checked += (_, _) => ApplyDeveloperMode(true);
+        DeveloperToggle.Unchecked += (_, _) => ApplyDeveloperMode(false);
+
+        // 通道切换后要重新检查（同一个源的 stable/beta 是不同的块）
+        ChannelBar.SelectedChanged += _ =>
+        {
+            ChannelHint.Text = _vm?.UpdateChannel == "beta" ? "测试版可能不稳定" : "";
+            _vm?.Ctx.CheckForUpdate();
+        };
+
+        // ★ 页面卸载（关设置窗口 / 切走）必须退订：Updates 是进程常驻对象，
+        //   不退订的话每开一次设置窗口就永久泄漏一棵 AboutPage 可视树，
+        //   而且状态回调还会往已不可见的页面 BeginInvoke。
+        Unloaded += (_, _) => Unhook();
+    }
+
+    void Unhook()
+    {
+        if (!_hooked) return;
+        if (_vm is not null) _vm.Ctx.Updates.StatusChanged -= OnStatusChanged;
+        _vm = null;
+        _hooked = false;
     }
 
     void Hook()
@@ -1824,16 +1849,6 @@ public partial class AboutPage : UserControl
         TestErrorRow.Visibility = devVisible;
         ErrorCodeRow.Visibility = devVisible;
         PluginDeveloperToolRow.Visibility = devVisible;
-
-        DeveloperToggle.Checked += (_, _) => ApplyDeveloperMode(true);
-        DeveloperToggle.Unchecked += (_, _) => ApplyDeveloperMode(false);
-
-        // 通道切换后要重新检查（同一个源的 stable/beta 是不同的块）
-        ChannelBar.SelectedChanged += _ =>
-        {
-            ChannelHint.Text = vm.UpdateChannel == "beta" ? "测试版可能不稳定" : "";
-            vm.Ctx.CheckForUpdate();
-        };
     }
 
     void OnStatusChanged(UpdateStatus status)

@@ -83,6 +83,7 @@ public sealed class AppSettings
         // —— 课表与提醒 ——
         new("schedule_advance_minutes", ValueKind.Int, 2, 0, 60),     // 提前提醒
         new("schedule_time_offset_seconds", ValueKind.Int, 0, -3600, 3600), // 时间偏移
+        new("weekend_custom_schedule", ValueKind.Bool, false),        // 课表编辑器里展开周末课表
 
         // —— 作业 ——
         new("homework_show_date", ValueKind.Bool, true),
@@ -152,7 +153,7 @@ public sealed class AppSettings
             "island_alert_hold_ms", "island_hide_on_fullscreen", "island_wake_animation",
             "show_sub_island", "sub_island_default_collapsed", "sub_island_auto_collapse_sec",
         },
-        [PageSchedule] = new[] { "schedule_advance_minutes", "schedule_time_offset_seconds" },
+        [PageSchedule] = new[] { "schedule_advance_minutes", "schedule_time_offset_seconds", "weekend_custom_schedule" },
         [PageHomework] = new[] { "homework_show_date", "homework_history_days", "homework_notify_enabled" },
         // 关于页：更新通道、更新源、被跳过的版本、上次检查时间、已装资源包版本、开发者选项
         [PageAbout] = new[] { "update_channel", "update_source", "update_skipped_version", "last_update_check", "resources_version", "developer_mode" },
