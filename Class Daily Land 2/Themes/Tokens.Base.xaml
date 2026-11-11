@@ -35,7 +35,7 @@
     <CornerRadius x:Key="OverlayCornerRadius">8</CornerRadius>      <!-- 对话框、浮层 -->
     <CornerRadius x:Key="CardCornerRadius">8</CornerRadius>         <!-- 卡片 -->
     <CornerRadius x:Key="TileCornerRadius">6</CornerRadius>         <!-- 图标磁贴 -->
-    <CornerRadius x:Key="NavCornerRadius">5</CornerRadius>          <!-- 导航药丸 -->
+    <CornerRadius x:Key="NavCornerRadius">18</CornerRadius>         <!-- 导航项内层胶囊（半高=胶囊） -->
     <CornerRadius x:Key="GroupTileCornerRadius">6</CornerRadius>    <!-- 分区头磁贴 26px -->
 
     <sys:Double x:Key="ControlHeight">32</sys:Double>
@@ -43,6 +43,7 @@
     <sys:Double x:Key="RowMinHeight">68</sys:Double>
     <sys:Double x:Key="StrokeWidth">1</sys:Double>
     <sys:Double x:Key="NavPaneWidth">264</sys:Double>
+    <CornerRadius x:Key="NavPaneCornerRadius">16</CornerRadius>      <!-- 侧栏玻璃卡 -->
     <sys:Double x:Key="ContentMaxWidth">980</sys:Double>
     <sys:Double x:Key="TitleBarHeight">48</sys:Double>
     <sys:Double x:Key="CaptionButtonWidth">46</sys:Double>

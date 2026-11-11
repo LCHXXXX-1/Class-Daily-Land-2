@@ -29,6 +29,19 @@ namespace ClassDailyLand2.App.Views.Pages;
 //  （DataContext 由外壳在创建后赋值，所以取 VM 的时机一律放在 Loaded）。
 // ============================================================================
 
+/// <summary>
+/// 页面自己往顶部胶囊提供的子标签。设置中心优先使用页面提供的标签
+/// （例如插件页的「已安装 / 插件市场」），而不是把整个页面当成唯一子项。
+/// </summary>
+public interface ISettingsPageTabs
+{
+    IReadOnlyList<SettingsPageTab> Tabs { get; }
+    string CurrentTabId { get; }
+    void SelectTab(string id);
+}
+
+public sealed record SettingsPageTab(string Id, string Label);
+
 public partial class GeneralPage : UserControl
 {
     public GeneralPage() => InitializeComponent();
@@ -45,6 +58,7 @@ public partial class AppearancePage : UserControl
             // Win11 → 云母，Win10 1803+ → 亚克力；更老的系统才置灰
             var supported = vm.SupportsBackdrop;
             MicaRow.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
+            AcrylicRow.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
             MicaUnsupportedRow.Visibility = supported ? Visibility.Collapsed : Visibility.Visible;
 
             BuildThemeSwatches();
@@ -964,14 +978,38 @@ public partial class HomeworkPage : UserControl
     }
 }
 
-public partial class PluginsPage : UserControl
+public partial class PluginsPage : UserControl, ISettingsPageTabs
 {
+    static readonly SettingsPageTab[] PageTabs =
+    {
+        new("installed", "已安装"),
+        new("market", "插件市场"),
+    };
+
     PluginManager? _manager;
     MarketService? _market;
     bool _hooked;
     bool _installing;
     bool _syncing;
     bool _applyingSource;   // 正在把设置里的值写回选择器：此时不触发刷新
+
+    // —— 顶部胶囊的「已安装 / 插件市场」 ——
+    public IReadOnlyList<SettingsPageTab> Tabs => PageTabs;
+
+    public string CurrentTabId =>
+        string.Equals(PluginTabs.SelectedValue, "market", StringComparison.Ordinal) ? "market" : "installed";
+
+    /// <summary>
+    /// 顶部胶囊切换子标签：选择器本身是隐藏的（UI 已搬到顶栏），
+    /// 所以这里同步值后手动调用一次 SwitchTab —— 代码设值不会触发 SelectedChanged。
+    /// </summary>
+    public void SelectTab(string id)
+    {
+        var value = string.Equals(id, "market", StringComparison.Ordinal) ? "market" : "installed";
+        if (string.Equals(PluginTabs.SelectedValue, value, StringComparison.Ordinal)) return;
+        PluginTabs.SelectedValue = value;
+        SwitchTab(value);
+    }
 
     /// <summary>市场里比本机新的插件（id → 视图），用来在已安装行上亮「可更新」。</summary>
     readonly Dictionary<string, MarketView> _updates = new(StringComparer.OrdinalIgnoreCase);
@@ -1000,7 +1038,8 @@ public partial class PluginsPage : UserControl
         };
 
         // ── 插件市场 ──
-        PluginTabs.SelectedChanged += SwitchTab;
+        // 两段标签已经搬到设置窗口顶部的胶囊里，切换由 SelectTab 手动调 SwitchTab；
+        // 这里不再挂 SelectedChanged，避免隐藏控件和顶部胶囊各触发一次。
         MarketSyncButton.Click += (_, _) => _ = SyncMarketAsync();
         MarketSourceBar.SelectedChanged += OnMarketSourceChanged;
         MarketSearch.TextChanged += (_, _) => RenderMarket();
@@ -1309,6 +1348,14 @@ public partial class PluginsPage : UserControl
         var market = string.Equals(value, "market", StringComparison.Ordinal);
         InstalledPanel.Visibility = market ? Visibility.Collapsed : Visibility.Visible;
         MarketPanel.Visibility = market ? Visibility.Visible : Visibility.Collapsed;
+
+        // 顶部胶囊左右滑动的同步动作：新面板从对应方向轻轻滑入（不淡化）
+        var incoming = market ? (FrameworkElement)MarketPanel : InstalledPanel;
+        var shift = new TranslateTransform(market ? 26 : -26, 0);
+        incoming.RenderTransform = shift;
+        var slide = Anim.Slide(0, 180);
+        if (slide is not null) shift.BeginAnimation(TranslateTransform.XProperty, slide);
+        else incoming.RenderTransform = Transform.Identity;
 
         if (market) _ = RefreshMarketAsync(force: false);
         else Refresh();

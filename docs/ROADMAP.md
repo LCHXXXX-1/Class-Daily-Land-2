@@ -192,6 +192,19 @@
 - 文档补全：README 新增「作业与提交时间」「系统通知」两节与 `LICENSE.md`（MIT 独立成档）；
   ROADMAP 4.6 改写为提交时段模型；plugins.md 的 `Toast` 语义同步（托盘气泡 → 系统通知）
 
+## 阶段 4.9 —— Win10 亚克力背板（1.8，已完成 2026-11-11）
+- `Interop.ApplyBlur` 以前在非 Win11 上**直接返回 None**，导致 Win10 拿不到任何模糊背板
+  （主窗的"云母"开关在 Win10 等于没效果）。现在 Win11 分支只保留 DWM 那几步
+  （圆角 / SYSTEMBACKDROP_TYPE=NONE / 扩边框），**Win10 直接走
+  `SetWindowCompositionAttribute` + ACCENT_ENABLE_ACRYLICBLURBEHIND**，这才有实时模糊。
+  真失败（<1803 或组策略禁用）才回退纯色。
+- 外观页「窗口材质」新增 **亚克力** 开关（`settings_acrylic`，默认关），就排在云母下面：
+  两个开关**互斥**——开一个自动关掉另一个，两个都关即不用系统材质（纯色窗口）。
+  Win11 22H2 起老办法（accent 亚克力）已经失效（那就是"勾了没反应"），改用系统背板
+  `DWMSBT_TRANSIENTWINDOW`；21H2 及更早与 Win10 走 accent policy。
+- 顺手：设置中心侧栏那块玻璃去掉白膜（`Background=Transparent`），
+  底色完全交给云母/亚克力/背景图，玻璃只保留边缘高光暗边 + 跟随指针的柔光。
+
 ## 阶段 5 —— 可选增强（未做）
 - 插件市场进阶：`icons/` 图标、评分与举报入口、包签名、依赖声明
 - Mica 主题（DWM API）

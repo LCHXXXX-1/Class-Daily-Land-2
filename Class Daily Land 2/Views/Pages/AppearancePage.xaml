@@ -3,116 +3,128 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls"
              xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <!--
+      个性化：三组，各管一件事，互不重叠
+        主题     —— 配色主题 + 浅色/深色
+        窗口背景 —— 设置中心与「班级日常」各一套（同组内用行标题区分，不再开两个结构一样的分组）
+        窗口材质 —— 云母 / 亚克力（互斥）
+      图标也刻意各用各的：Palette / Home / Capsule，避免三个分组看起来像同一个。
+    -->
     <StackPanel>
         <TextBlock Style="{StaticResource PageTitle}" Text="个性化" />
-        <TextBlock Style="{StaticResource PageLead}" Text="配色主题、窗口背景与作业区配色" />
+        <TextBlock Style="{StaticResource PageLead}" Text="配色、窗口背景与材质" />
 
-        <!-- 主题色（色块在代码里生成：玻璃色球 + 选中环） -->
-        <fl:SettingGroup Title="主题色" Icon="{StaticResource Icon.Palette}" TileColor="#FFF7630C">
-                    <fl:SettingRow Title="配色主题" Hint="选中一个色系，按钮、开关、选中态会立刻换色">
-                        <StackPanel VerticalAlignment="Center">
-                            <WrapPanel x:Name="ThemeStrip" HorizontalAlignment="Right" MaxWidth="430" />
-                            <TextBlock x:Name="ThemeHint"
-                                       Margin="0,7,2,0"
-                                       HorizontalAlignment="Right"
-                                       FontSize="{DynamicResource FontSizeCaption}"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
-                        </StackPanel>
-                    </fl:SettingRow>
+        <!-- ——————————————— 主题 ——————————————— -->
+        <fl:SettingGroup Title="主题" Icon="{StaticResource Icon.Palette}" TileColor="#FFF7630C">
+            <fl:SettingRow Title="配色主题" Hint="选中一个色系，按钮、开关、选中态会立刻换色">
+                <StackPanel VerticalAlignment="Center">
+                    <WrapPanel x:Name="ThemeStrip" HorizontalAlignment="Right" MaxWidth="430" />
+                    <TextBlock x:Name="ThemeHint"
+                               Margin="0,7,2,0"
+                               HorizontalAlignment="Right"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                </StackPanel>
+            </fl:SettingRow>
+
+            <fl:SettingRow Title="颜色模式" Hint="跟随系统时会随 Windows 的浅色 / 深色实时切换">
+                <fl:SelectorBar SelectedValue="{Binding ThemeMode, Mode=TwoWay}">
+                    <fl:SelectorItem Value="system" Label="跟随系统" />
+                    <fl:SelectorItem Value="light" Label="浅色" />
+                    <fl:SelectorItem Value="dark" Label="深色" />
+                </fl:SelectorBar>
+            </fl:SettingRow>
         </fl:SettingGroup>
 
-        <!-- 颜色模式 -->
-        <fl:SettingGroup Title="颜色模式" Icon="{StaticResource Icon.Palette}" TileColor="#FF8661C5">
-                    <fl:SettingRow Title="颜色模式" Hint="跟随系统时会随 Windows 的浅色 / 深色实时切换">
-                        <fl:SelectorBar SelectedValue="{Binding ThemeMode, Mode=TwoWay}">
-                            <fl:SelectorItem Value="system" Label="跟随系统" />
-                            <fl:SelectorItem Value="light" Label="浅色" />
-                            <fl:SelectorItem Value="dark" Label="深色" />
-                        </fl:SelectorBar>
-                    </fl:SettingRow>
+        <!-- ——————————————— 窗口背景（两个窗口各一套，同组内区分） ——————————————— -->
+        <fl:SettingGroup Title="窗口背景" Icon="{StaticResource Icon.Home}" TileColor="#FF107C10"
+                         Note="设置中心与「班级日常」各有一套，互不影响">
+            <fl:SettingRow Title="设置中心 · 来源"
+                           Hint="云母跟随系统壁纸取色；纯色 / 图片用下面两项">
+                <fl:SelectorBar SelectedValue="{Binding SettingsBackground, Mode=TwoWay}">
+                    <fl:SelectorItem Value="mica" Label="云母" />
+                    <fl:SelectorItem Value="solid" Label="纯色" />
+                    <fl:SelectorItem Value="image" Label="图片" />
+                </fl:SelectorBar>
+            </fl:SettingRow>
+
+            <fl:SettingRow x:Name="BgColorRow" Title="设置中心 · 颜色"
+                           Hint="纯色模式生效，内容区会压一层薄雾保证可读">
+                <WrapPanel x:Name="BgColorStrip" HorizontalAlignment="Right" MaxWidth="300" />
+            </fl:SettingRow>
+
+            <fl:SettingRow x:Name="BgImageRow" Title="设置中心 · 图片"
+                           Hint="图片模式生效，按比例铺满窗口">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="BgImageText"
+                               MaxWidth="200"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Button Content="选择…" Height="28" MinWidth="64" Margin="10,0,0,0"
+                            Style="{StaticResource SubtleButton}"
+                            Click="OnPickBackgroundImage" />
+                    <Button Content="清除" Height="28" MinWidth="56" Margin="6,0,0,0"
+                            Style="{StaticResource SubtleButton}"
+                            Click="OnClearBackgroundImage" />
+                </StackPanel>
+            </fl:SettingRow>
+
+            <fl:SettingRow Title="班级日常 · 背景"
+                           Hint="整块「班级日常」窗口的底色；跟随主题时用主题色">
+                <fl:SelectorBar SelectedValue="{Binding BoardBackground, Mode=TwoWay}">
+                    <fl:SelectorItem Value="inherit" Label="跟随主题" />
+                    <fl:SelectorItem Value="color" Label="颜色" />
+                    <fl:SelectorItem Value="image" Label="图片" />
+                </fl:SelectorBar>
+            </fl:SettingRow>
+
+            <fl:SettingRow x:Name="BoardColorRow" Title="班级日常 · 颜色"
+                           Hint="颜色模式生效；深色底会自动把文字换成浅色">
+                <WrapPanel x:Name="BoardColorStrip" HorizontalAlignment="Right" MaxWidth="340" />
+            </fl:SettingRow>
+
+            <fl:SettingRow x:Name="BoardImageRow" Title="班级日常 · 图片"
+                           Hint="图片模式生效，按比例铺满整窗，并压一层薄雾保证文字可读">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="BoardImageText"
+                               MaxWidth="180"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis"
+                               FontSize="{DynamicResource FontSizeCaption}"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Button Content="选择…" Height="28" MinWidth="64" Margin="10,0,0,0"
+                            Style="{StaticResource SubtleButton}"
+                            Click="OnPickBoardImage" />
+                    <Button Content="清除" Height="28" MinWidth="56" Margin="6,0,0,0"
+                            Style="{StaticResource SubtleButton}"
+                            Click="OnClearBoardImage" />
+                </StackPanel>
+            </fl:SettingRow>
         </fl:SettingGroup>
 
-        <!-- 窗口背景：云母取色 / 纯色 / 自定义图片 -->
-        <fl:SettingGroup Title="设置窗口背景" Icon="{StaticResource Icon.Shield}" TileColor="#FF107C10">
-                    <fl:SettingRow Title="背景来源" Hint="设置中心自己的背景；云母会跟随系统壁纸取色">
-                        <fl:SelectorBar SelectedValue="{Binding SettingsBackground, Mode=TwoWay}">
-                            <fl:SelectorItem Value="mica" Label="云母" />
-                            <fl:SelectorItem Value="solid" Label="纯色" />
-                            <fl:SelectorItem Value="image" Label="图片" />
-                        </fl:SelectorBar>
-                    </fl:SettingRow>
-
-                    <fl:SettingRow x:Name="BgColorRow" Title="背景颜色" Hint="纯色模式生效，内容区会压一层薄雾保证可读">
-                        <WrapPanel x:Name="BgColorStrip" HorizontalAlignment="Right" MaxWidth="300" />
-                    </fl:SettingRow>
-
-                    <fl:SettingRow x:Name="BgImageRow" Title="背景图片" Hint="图片模式生效，按比例铺满窗口">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock x:Name="BgImageText"
-                                       MaxWidth="200"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       FontSize="{DynamicResource FontSizeCaption}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            <Button Content="选择…" Height="28" MinWidth="64" Margin="10,0,0,0"
-                                    Style="{StaticResource SubtleButton}"
-                                    Click="OnPickBackgroundImage" />
-                            <Button Content="清除" Height="28" MinWidth="56" Margin="6,0,0,0"
-                                    Style="{StaticResource SubtleButton}"
-                                    Click="OnClearBackgroundImage" />
-                        </StackPanel>
-                    </fl:SettingRow>
-        </fl:SettingGroup>
-
-        <!-- 班级日常窗口：整窗底色/背景图 -->
-        <fl:SettingGroup Title="班级日常窗口" Icon="{StaticResource Icon.Home}" TileColor="#FF038387">
-                    <fl:SettingRow Title="窗口背景" Hint="整块「班级日常」窗口的底色；跟随主题时用主题色">
-                        <fl:SelectorBar SelectedValue="{Binding BoardBackground, Mode=TwoWay}">
-                            <fl:SelectorItem Value="inherit" Label="跟随主题" />
-                            <fl:SelectorItem Value="color" Label="颜色" />
-                            <fl:SelectorItem Value="image" Label="图片" />
-                        </fl:SelectorBar>
-                    </fl:SettingRow>
-
-                    <fl:SettingRow x:Name="BoardColorRow" Title="窗口颜色"
-                                   Hint="颜色模式生效；深色底会自动把文字换成浅色">
-                        <WrapPanel x:Name="BoardColorStrip" HorizontalAlignment="Right" MaxWidth="340" />
-                    </fl:SettingRow>
-
-                    <fl:SettingRow x:Name="BoardImageRow" Title="窗口图片"
-                                   Hint="图片模式生效，按比例铺满整窗，并压一层薄雾保证文字可读">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <TextBlock x:Name="BoardImageText"
-                                       MaxWidth="180"
-                                       VerticalAlignment="Center"
-                                       TextTrimming="CharacterEllipsis"
-                                       FontSize="{DynamicResource FontSizeCaption}"
-                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                            <Button Content="选择…" Height="28" MinWidth="64" Margin="10,0,0,0"
-                                    Style="{StaticResource SubtleButton}"
-                                    Click="OnPickBoardImage" />
-                            <Button Content="清除" Height="28" MinWidth="56" Margin="6,0,0,0"
-                                    Style="{StaticResource SubtleButton}"
-                                    Click="OnClearBoardImage" />
-                        </StackPanel>
-                    </fl:SettingRow>
-        </fl:SettingGroup>
-
-        <!-- 窗口材质 -->
-        <fl:SettingGroup Title="窗口材质" Icon="{StaticResource Icon.Shield}" TileColor="#FF038387"
+        <!-- ——————————————— 窗口材质 ——————————————— -->
+        <fl:SettingGroup Title="窗口材质" Icon="{StaticResource Icon.Capsule}" TileColor="#FF038387"
                          Note="{Binding MaterialNote}">
-                    <!-- 非 Win11：整行置灰 + 说明徽标（对位 web 版的 micaRow 两分支） -->
-                    <fl:SettingRow x:Name="MicaRow"
-                                   Title="{Binding MaterialRowTitle}"
-                                   Hint="{Binding MaterialRowHint}">
-                        <fl:FluentToggle x:Name="MicaToggle" IsChecked="{Binding SettingsMica, Mode=TwoWay}"
-                                         Label="窗口材质" />
-                    </fl:SettingRow>
-                    <fl:SettingRow x:Name="MicaUnsupportedRow" Title="窗口材质"
-                                   Hint="半透明背板需要 Windows 10 1803 或更高，当前系统使用普通窗口。"
-                                   IsDisabled="True" Visibility="Collapsed">
-                        <fl:Badge Text="当前系统不支持" />
-                    </fl:SettingRow>
+            <!-- 非 Win11：整行置灰 + 说明徽标（对位 web 版的 micaRow 两分支） -->
+            <fl:SettingRow x:Name="MicaRow"
+                           Title="{Binding MaterialRowTitle}"
+                           Hint="{Binding MaterialRowHint}">
+                <fl:FluentToggle x:Name="MicaToggle" IsChecked="{Binding SettingsMica, Mode=TwoWay}"
+                                 Label="窗口材质" />
+            </fl:SettingRow>
+            <!-- 亚克力：和上面的云母互斥，开一个自动关另一个 -->
+            <fl:SettingRow x:Name="AcrylicRow" Title="亚克力材质(beta)"
+                           Hint="实时模糊，Windows 10 1803 起支持，Windows 11 也能用（需系统里开着「透明效果」）；和云母只能开一个。设置中心与「班级日常」主窗都按这里走">
+                <fl:FluentToggle x:Name="AcrylicToggle" IsChecked="{Binding SettingsAcrylic, Mode=TwoWay}"
+                                 Label="亚克力材质(beta)" />
+            </fl:SettingRow>
+            <fl:SettingRow x:Name="MicaUnsupportedRow" Title="窗口材质"
+                           Hint="半透明背板需要 Windows 10 1803 或更高，当前系统使用普通窗口。"
+                           IsDisabled="True" Visibility="Collapsed">
+                <fl:Badge Text="当前系统不支持" />
+            </fl:SettingRow>
         </fl:SettingGroup>
     </StackPanel>
 </UserControl>

@@ -15,6 +15,7 @@
         Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <shell:WindowChrome.WindowChrome>
+        <!-- Win10 亚克力会在 ApplyWindowChrome 里把 GlassFrameThickness 收到 0，避免玻璃帧白边 -->
         <shell:WindowChrome CaptionHeight="48" ResizeBorderThickness="6"
                             CornerRadius="0" GlassFrameThickness="-1"
                             UseAeroCaptionButtons="False" />
@@ -23,15 +24,32 @@
     <Window.Resources>
 
         <!--
-          导航药丸（WinUI 3 NavigationView）：36 高 / 5 圆角。
-          选中 = 中性灰底 + 主文字色 SemiBold，左侧再叠一条会滑动的强调条
-          （NavMarker，代码里单条独立强调条，跟高亮项走）。
+          键盘焦点框：只有**用键盘走到这一项**时才出现（WPF 的 FocusVisualStyle 机制，
+          鼠标点过不会亮），而且是强调色细线 —— 之前那个 2px 黑圈是模板里的 FocusRing，
+          鼠标一点就跟着出来，看着像"选中项套了个黑框"。
+        -->
+        <Style x:Key="NavFocusVisual">
+            <Setter Property="Control.Template">
+                <Setter.Value>
+                    <ControlTemplate>
+                        <Border Margin="-1" CornerRadius="{DynamicResource NavCornerRadius}"
+                                BorderThickness="2"
+                                BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+          导航项：36 高 / 全圆角（= 胶囊）。整条导航装在一张圆角玻璃卡里（NavGlass），
+          选中项是卡里的**内层小胶囊**（更白 + 细描边 + 图标强调色 + 文字 SemiBold），
+          左侧再叠一条会滑动的强调蓝条（NavMarker，代码里单条独立强调条，跟高亮项走）。
         -->
         <Style x:Key="NavItem" TargetType="RadioButton">
-            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="FocusVisualStyle" Value="{StaticResource NavFocusVisual}" />
             <!-- 高度走资源：触屏优化开着时窗口会把 NavItemHeight 覆盖成 54（见 TouchMode） -->
             <Setter Property="Height" Value="{DynamicResource NavItemHeight}" />
-            <Setter Property="Margin" Value="0,2,0,0" />
+            <Setter Property="Margin" Value="2,3,2,3" />
             <Setter Property="Padding" Value="11,0" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
@@ -41,6 +59,7 @@
                         <Grid>
                             <Border x:Name="Bd" Background="Transparent"
                                     CornerRadius="{DynamicResource NavCornerRadius}"
+                                    BorderThickness="1" BorderBrush="Transparent"
                                     Padding="{TemplateBinding Padding}">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -60,30 +79,67 @@
                                                Foreground="{TemplateBinding Foreground}" />
                                 </Grid>
                             </Border>
-                            <Border x:Name="FocusRing" CornerRadius="{DynamicResource NavCornerRadius}"
-                                    BorderThickness="2"
-                                    BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}"
-                                    Visibility="Collapsed" />
                         </Grid>
                         <ControlTemplate.Triggers>
+                            <!--
+                              悬停不铺底色：以前鼠标扫过（以及按下的一瞬间）会在条目上先出现一块灰色，
+                              然后才轮到那块玻璃滑过来 —— 看起来就像"先弹了个灰板子"。
+                              现在悬停只把图标提亮，选中反馈完全交给 NavLens 那块玻璃。
+                            -->
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter TargetName="Ico" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
-                                <Setter TargetName="Ico" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                <!-- 选中态不画底色：那层"玻璃"是 NavLens 一块在条目间滑动的东西 -->
+                                <Setter TargetName="Ico" Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                                 <Setter TargetName="Lbl" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
                                 <Setter TargetName="Lbl" Property="FontWeight" Value="SemiBold" />
                             </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!--
+          顶部胶囊里的子页面标签：一条横向胶囊栏，只放当前左侧大项下的子页面。
+          选中底不是自己画的：由外面那块灰色 SubLens 在标签间左右滑动；
+          标签本身只负责文字颜色与半粗，悬停仅对未选中项提亮。
+        -->
+        <Style x:Key="SubNavItem" TargetType="RadioButton">
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FluentFocusVisual}" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="16,0" />
+            <Setter Property="Margin" Value="1,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FontSize" Value="{DynamicResource FontSizeBody}" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" CornerRadius="16"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <TextBlock Text="{Binding Content, RelativeSource={RelativeSource TemplatedParent}}"
+                                       FontSize="{TemplateBinding FontSize}"
+                                       FontWeight="{TemplateBinding FontWeight}"
+                                       Foreground="{TemplateBinding Foreground}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
                             <MultiTrigger>
                                 <MultiTrigger.Conditions>
-                                    <Condition Property="IsChecked" Value="True" />
                                     <Condition Property="IsMouseOver" Value="True" />
+                                    <Condition Property="IsChecked" Value="False" />
                                 </MultiTrigger.Conditions>
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
                             </MultiTrigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="FocusRing" Property="Visibility" Value="Visible" />
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                <Setter Property="FontWeight" Value="SemiBold" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -141,62 +197,192 @@
                 <ColumnDefinition Width="*" MinWidth="0" />
             </Grid.ColumnDefinitions>
 
-            <Border x:Name="NavPane" Grid.Column="0" Width="{DynamicResource NavPaneWidth}"
-                    ClipToBounds="True"
-                    Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+            <!--
+              侧栏三层：品牌块 → 「查找设置」长条 → 导航玻璃卡。
+              玻璃卡是一个整体的圆角容器（圆角 + 半透明），导航项在里面是内层小胶囊；
+              强调蓝条是卡里一条独立元素，跟着高亮项滑动。
+            -->
+            <Grid x:Name="NavPane" Grid.Column="0" Width="{DynamicResource NavPaneWidth}"
+                  Background="Transparent">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
 
-                <Grid>
-                    <DockPanel>
-                        <StackPanel x:Name="AboutPanel" DockPanel.Dock="Bottom"
-                                    Margin="8,0,8,10">
-                            <Border Height="1" Margin="4,0,4,8"
-                                    Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                        </StackPanel>
+                <!-- 品牌块：应用名（Win11 设置的侧栏顶部语境） -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="18,8,16,2" Height="34">
+                    <Border Width="28" Height="28" CornerRadius="7"
+                            VerticalAlignment="Center"
+                            Background="{DynamicResource AccentFillColorDefaultBrush}">
+                        <TextBlock Text="C" FontSize="14" FontWeight="SemiBold"
+                                   FontFamily="{DynamicResource FontFamilyDisplay}"
+                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="Class Daily Land 2"
+                                   FontSize="{DynamicResource FontSizeBody}"
+                                   FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
 
-                        <StackPanel DockPanel.Dock="Top">
-                            <!-- 品牌块：应用名 + 「设置」副题（Win11 设置的侧栏顶部语境） -->
-                            <StackPanel Orientation="Horizontal" Margin="16,10,16,4" Height="34">
-                                <Border Width="28" Height="28" CornerRadius="7"
-                                        VerticalAlignment="Center"
-                                        Background="{DynamicResource AccentFillColorDefaultBrush}">
-                                    <TextBlock Text="C" FontSize="14" FontWeight="SemiBold"
-                                               FontFamily="{DynamicResource FontFamilyDisplay}"
-                                               Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                               HorizontalAlignment="Center" VerticalAlignment="Center" />
-                                </Border>
-                                <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="Class Daily Land 2"
-                                               FontSize="{DynamicResource FontSizeBody}"
-                                               FontWeight="SemiBold"
-                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
-                                </StackPanel>
+                <!-- 查找设置：导航栏上方的一条长条，实时过滤导航，Enter 跳到第一个匹配 -->
+                <TextBox x:Name="SearchBox" Grid.Row="1" Style="{StaticResource NavSearchStrip}"
+                         Tag="查找设置" Margin="10,8,10,8" Height="32" />
+
+                <!-- 导航玻璃卡：圆角 + 半透明；「关于」钉在卡片最底下 -->
+                <!-- 环境光：一层极淡的左上柔光，给整块玻璃一个光的方向 -->
+                <Border Grid.Row="2" Margin="10,0,10,10" IsHitTestVisible="False"
+                        CornerRadius="{DynamicResource NavPaneCornerRadius}">
+                    <Border.Background>
+                        <RadialGradientBrush Center="0.12,0.02" GradientOrigin="0.12,0.02"
+                                             RadiusX="1.1" RadiusY="0.9">
+                            <GradientStop Color="#26FFFFFF" Offset="0" />
+                            <GradientStop Color="#00FFFFFF" Offset="0.75" />
+                        </RadialGradientBrush>
+                    </Border.Background>
+                </Border>
+
+                <!--
+                  落影层：玻璃要"浮起来"就得有影子（web 那套配方里 0 8px 32px 那一条）。
+                  单独放一个元素是因为 DropShadowEffect 会把整个元素连同文字一起栅格化，
+                  直接加在卡片上字会发虚；这里它只有 2% 黑，肉眼看不见本体，只看得到影子。
+                -->
+                <Border x:Name="NavGlassShadow" Grid.Row="2" Margin="10,0,10,10"
+                        CornerRadius="{DynamicResource NavPaneCornerRadius}"
+                        Background="#05000000" IsHitTestVisible="False">
+                    <Border.Effect>
+                        <DropShadowEffect BlurRadius="30" ShadowDepth="8" Direction="270"
+                                          Opacity="0.45" Color="#141414" />
+                    </Border.Effect>
+                </Border>
+
+                <!--
+                  注意：这里**不铺底色**（Transparent）。玻璃的那层白膜在彩色背景下会把颜色
+                  洗成灰绿，看着像垫了一块灰板子 —— 底色一律交给云母/背景，玻璃只负责
+                  边缘的一圈高光/暗边 + 跟随指针的柔光。
+                -->
+                <Border x:Name="NavGlass" Grid.Row="2" Margin="10,0,10,10"
+                        CornerRadius="{DynamicResource NavPaneCornerRadius}"
+                        Background="{DynamicResource NavGlassBrush}"
+                        BorderThickness="0">
+                    <Grid>
+                        <!--
+                          选中「液态玻璃」：**同一块玻璃**在条目之间滑过去，条目自己不画底色。
+                          排在 DockPanel 之前 = 在文字下面；位移只动 Transform（不动布局）。
+                        -->
+                        <Canvas x:Name="LensCanvas" IsHitTestVisible="False" ClipToBounds="True">
+                            <!--
+                              选中「液态玻璃」（参数照 iOS 26 / web 那套分层配方搬过来的）：
+                                ① 折射层  背后内容**放大 1.28 倍**取进来 + blur 3（= CSS 的 blur(2px)）
+                                          —— 低模糊才是"透镜"，高模糊会变成磨砂白板，这是关键
+                                ② 白膜    40% 白，让玻璃读成"材质"而不是"洞"
+                                ③ 顶柔光  光从上进入玻璃（inset 0 4px 20px 的等价物）
+                                ④ 对角 sheen  135° 高光扫过表面
+                                ⑤ 抛光边  1px 白 85%（web 里 border: 1px solid rgba(255,255,255,.8)）
+                                ⑥ 底内暗边  玻璃厚度
+                                ⑦ 蓝条
+                            -->
+                            <Border x:Name="NavLens" Width="220" Height="{DynamicResource NavItemHeight}"
+                                    CornerRadius="{DynamicResource NavCornerRadius}"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                    BorderThickness="1"
+                                    RenderTransformOrigin="0.5,0.5"
+                                    Visibility="Collapsed">
+                                <!-- 投影必须极轻：28px 的模糊 + 6px 偏移会让这块"浮"起来，
+                                     看起来像拱起一个按钮。rdev 用的是 0 1px 4px rgba(0,0,0,.35)。 -->
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="6" ShadowDepth="1" Direction="270"
+                                                      Opacity="0.28" Color="#000000" />
+                                </Border.Effect>
+                                <Border.RenderTransform>
+                                    <TransformGroup>
+                                        <ScaleTransform x:Name="LensScale" />
+                                        <TranslateTransform x:Name="LensShift" />
+                                    </TransformGroup>
+                                </Border.RenderTransform>
+                                <Grid>
+                                    <!-- ② 白膜：极淡（rdev 那套基本没有白膜，全靠折射和边光）。
+                                         竖向一点点，上亮下暗，不要均匀白。 -->
+                                    <Border Margin="1" CornerRadius="17" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#1AFFFFFF" Offset="0" />
+                                                <GradientStop Color="#0AFFFFFF" Offset="0.55" />
+                                                <GradientStop Color="#03FFFFFF" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <!-- ③ 横向扫光：rdev 的 specular 是一条横穿表面的光带
+                                         （0% → 12% → 40% → 0%），不是顶部一块白。 -->
+                                    <Border Margin="1" CornerRadius="17" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#00FFFFFF" Offset="0" />
+                                                <GradientStop Color="#12FFFFFF" Offset="0.34" />
+                                                <GradientStop Color="#40FFFFFF" Offset="0.68" />
+                                                <GradientStop Color="#00FFFFFF" Offset="1" />
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <!-- ④ 顶部中心径向白光（按钮类玻璃的核心特征，radial at 50% 0%） -->
+                                    <Border Margin="1" CornerRadius="17" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <RadialGradientBrush Center="0.5,0" GradientOrigin="0.5,0"
+                                                                 RadiusX="0.62" RadiusY="0.9">
+                                                <GradientStop Color="#59FFFFFF" Offset="0" />
+                                                <GradientStop Color="#00FFFFFF" Offset="1" />
+                                            </RadialGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <!-- ⑦ 强调蓝条长在玻璃里面，跟着一起滑 -->
+                                    <Border Width="3" Height="16" CornerRadius="1.5"
+                                            HorizontalAlignment="Left" VerticalAlignment="Center"
+                                            Margin="7,0,0,0"
+                                            Background="{DynamicResource AccentFillColorDefaultBrush}" />
+                                </Grid>
+                            </Border>
+                        </Canvas>
+
+                        <!--
+                          光泽层：跟着指针走的柔光（web 上叫 sheen）。
+                          那几个开源实现都是"frost + rim + sheen"三层，sheen 是唯一
+                          不依赖背景抓取、又最能读出"这是一块玻璃"的东西。
+                        -->
+                        <Border x:Name="NavSheen" CornerRadius="{DynamicResource NavPaneCornerRadius}"
+                                IsHitTestVisible="False" Opacity="0">
+                            <Border.Background>
+                                <RadialGradientBrush x:Name="NavSheenBrush"
+                                                     Center="0.18,0" GradientOrigin="0.18,0"
+                                                     RadiusX="0.75" RadiusY="0.75">
+                                    <GradientStop Color="#33FFFFFF" Offset="0" />
+                                    <GradientStop Color="#00FFFFFF" Offset="1" />
+                                </RadialGradientBrush>
+                            </Border.Background>
+                        </Border>
+
+                        <DockPanel Margin="0,5,0,4">
+                            <StackPanel x:Name="AboutPanel" DockPanel.Dock="Bottom"
+                                        Margin="5,0,5,4">
+                                <Border Height="1" Margin="6,0,6,6"
+                                        Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
                             </StackPanel>
 
-                            <!-- 查找设置：实时过滤导航，Enter 跳到第一个匹配 -->
-                            <TextBox x:Name="SearchBox" Style="{StaticResource SearchTextBox}"
-                                     Tag="查找设置" Margin="12,10,12,8" Height="32" />
-                        </StackPanel>
-
-                        <ScrollViewer x:Name="NavScroll" VerticalScrollBarVisibility="Auto"
-                                      HorizontalScrollBarVisibility="Disabled"
-                                      PanningMode="VerticalOnly" PanningDeceleration="0.001">
-                            <StackPanel x:Name="NavItemsPanel" Margin="8,0" />
-                        </ScrollViewer>
-                    </DockPanel>
-
-                    <!-- 单条滑动强调条：3×16 药丸，跟着高亮项走 -->
-                    <Canvas x:Name="MarkerCanvas" IsHitTestVisible="False">
-                        <Border x:Name="NavMarker" Width="3" Height="16" CornerRadius="1.5"
-                                Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                Visibility="Collapsed"
-                                Canvas.Left="0" Canvas.Top="0">
-                            <Border.RenderTransform>
-                                <TranslateTransform x:Name="MarkerShift" />
-                            </Border.RenderTransform>
-                        </Border>
-                    </Canvas>
-                </Grid>
-            </Border>
+                            <ScrollViewer x:Name="NavScroll" VerticalScrollBarVisibility="Hidden"
+                                          HorizontalScrollBarVisibility="Disabled"
+                                          PanningMode="VerticalOnly" PanningDeceleration="0.001">
+                                <StackPanel x:Name="NavGroupPanel" Margin="5,0" />
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Grid>
+                </Border>
+            </Grid>
 
             <!--
               页面栈：两层，旧页留在下面往反方向整段移出、新页从反侧整段移入。
@@ -205,13 +391,57 @@
             -->
             <Border x:Name="ContentPane" Grid.Column="1" ClipToBounds="True"
                     Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}">
-                <Grid x:Name="PageStack" ClipToBounds="True">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <!--
+                      顶部子页面胶囊：只放当前左侧大项下的子页面。
+                      固定在页面之上、不随内容滚动；切页时只有下面的 PageStack 在移动。
+                    -->
+                    <Border x:Name="SubNavBar" Grid.Row="0" Height="44"
+                            Margin="40,16,40,0" Padding="4,0"
+                            CornerRadius="22"
+                            Background="{DynamicResource NavGlassBrush}"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            BorderThickness="1">
+                        <Grid>
+                            <!-- 选中底片：一块灰色玻璃在子页面之间左右滑动（不是每个标签自己画底） -->
+                            <Canvas x:Name="SubLensCanvas" IsHitTestVisible="False" ClipToBounds="True">
+                                <Border x:Name="SubLens" Width="0" Height="32"
+                                        CornerRadius="16"
+                                        Background="{DynamicResource TabSelectedBrush}"
+                                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                        BorderThickness="1"
+                                        Visibility="Collapsed">
+                                    <Border.RenderTransform>
+                                        <TranslateTransform x:Name="SubLensShift" />
+                                    </Border.RenderTransform>
+                                </Border>
+                            </Canvas>
+
+                            <ScrollViewer x:Name="SubNavScroll" Focusable="False"
+                                          Background="Transparent"
+                                          BorderThickness="0" Padding="0"
+                                          HorizontalScrollBarVisibility="Hidden"
+                                          VerticalScrollBarVisibility="Disabled"
+                                          PanningMode="HorizontalOnly"
+                                          PanningDeceleration="0.001">
+                                <StackPanel x:Name="SubNavPanel" Orientation="Horizontal"
+                                            VerticalAlignment="Center" />
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+
+                    <Grid x:Name="PageStack" Grid.Row="1" ClipToBounds="True">
 
                     <ScrollViewer x:Name="ScrollPrev" Visibility="Collapsed"
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   PanningMode="VerticalOnly" PanningDeceleration="0.001"
-                                  Padding="40,28,40,64">
+                                  Padding="40,20,40,64">
                         <StackPanel x:Name="PrevInner" MaxWidth="900" />
                     </ScrollViewer>
 
@@ -219,13 +449,8 @@
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   PanningMode="VerticalOnly" PanningDeceleration="0.001"
-                                  Padding="40,28,40,64">
+                                  Padding="40,20,40,64">
                         <StackPanel MaxWidth="900">
-                            <!-- Win11 设置的顶部面包屑：设置 › 当前类别 -->
-                            <TextBlock x:Name="MainCrumb" Margin="2,0,0,2"
-                                       FontSize="{DynamicResource FontSizeCaption}"
-                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                                       Text="设置" />
                             <StackPanel x:Name="ToastSlot" />
                             <ContentControl x:Name="PageHost" HorizontalContentAlignment="Stretch" />
                         </StackPanel>
@@ -236,7 +461,7 @@
                                   VerticalScrollBarVisibility="Auto"
                                   HorizontalScrollBarVisibility="Disabled"
                                   PanningMode="VerticalOnly" PanningDeceleration="0.001"
-                                  Padding="40,28,40,64">
+                                  Padding="40,20,40,64">
                         <StackPanel MaxWidth="900">
                             <Button x:Name="SubBackButton" Style="{StaticResource SubtleButton}"
                                     HorizontalAlignment="Left" Padding="8,4,12,4"
@@ -253,6 +478,7 @@
                             <ContentControl x:Name="SubHost" HorizontalContentAlignment="Stretch" />
                         </StackPanel>
                     </ScrollViewer>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>

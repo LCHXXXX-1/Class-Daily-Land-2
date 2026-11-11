@@ -10,14 +10,18 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Shell;
 using System.Windows.Threading;
 
 namespace ClassDailyLand2.App.Views;
 
 /// <summary>
 /// 设置中心（WinUI 3 / Win11「设置」观感）：
-/// 1232×762、48px 标题栏、264px 固定侧栏（品牌块 + 「查找设置」搜索框 + 导航，不可折叠）、
-/// 内容区 40px 横向内边距、内容列 900。
+/// 1232×762、48px 标题栏、264px 固定侧栏（品牌块 + 「查找设置」搜索框 + 大项导航，不可折叠）、
+/// 内容区顶部一条横向胶囊放当前大项的子页面，下方 40px 横向内边距、内容列 900。
+///
+/// 两级导航：
+///   左侧「大项」→ 顶部胶囊「子页面」。左侧选中项仍用液态玻璃强调条滑动。
 ///
 /// 三处动画：
 ///   1. 导航强调条  —— 单条独立强调条，200ms OutCubic 跟着高亮项滑动
@@ -37,13 +41,24 @@ public partial class SettingsWindow : Window
     const int TransitionMs = 280;
 
     /// <summary>强调条滑动时长。</summary>
-    const int MarkerMs = 200;
+    const int MarkerMs = 320;
 
-    readonly List<NavEntry> _entries;
+    /// <summary>左侧大项。每个大项下面挂若干子页面，子页面显示在顶部胶囊里。</summary>
+    readonly List<NavGroup> _groups;
+
+    /// <summary>所有页面按「大项 → 子项」顺序摊平，用来算切页方向。</summary>
+    readonly List<NavEntry> _flatPages;
+
     readonly Dictionary<string, UserControl> _pages = new(StringComparer.Ordinal);
-    readonly Dictionary<string, RadioButton> _navButtons = new(StringComparer.Ordinal);
+    readonly Dictionary<string, NavGroup> _pageToGroup = new(StringComparer.Ordinal);
+    readonly Dictionary<string, RadioButton> _groupButtons = new(StringComparer.Ordinal);
+    readonly Dictionary<string, RadioButton> _subButtons = new(StringComparer.Ordinal);
     RadioButton? _selectedNav;
     string _currentId = "";
+    string _currentGroupId = "";
+    string _currentSubId = "";
+    bool _subLensShown;
+    DispatcherTimer? _transitionScrollBarTimer;
     Action? _confirmOnOk;
     Action? _confirmOnCancel;
     bool _subOpen;
@@ -52,29 +67,62 @@ public partial class SettingsWindow : Window
 
     sealed record NavEntry(string Id, string Label, string Glyph, Func<UserControl> Create);
 
+    /// <summary>左侧大项。<paramref name="PinBottom"/> = 钉在导航卡底部（「关于」）。</summary>
+    sealed record NavGroup(string Id, string Label, string Glyph, bool PinBottom, NavEntry[] Pages);
+
     public SettingsWindow(AppController ctx)
     {
         Vm = new SettingsViewModel(ctx);
         DataContext = Vm;
 
-        // 先建页表，再 InitializeComponent：导航要按同样的顺序生成
-        _entries = new List<NavEntry>
+        // 两级导航：左边是大项，顶部胶囊是当前大项下的子页面。
+        // 先建页表，再 InitializeComponent：导航要按同样的顺序生成。
+        _groups = new List<NavGroup>
         {
-            new(PageHome, "首页", "\uE80F", () => new HomePage()),
-            new(AppSettings.PageGeneral, "通用", "\uE713", () => new GeneralPage()),
-            new(AppSettings.PageIsland, "灵动岛", "\uE7F4", () => new IslandPage()),
-            new(AppSettings.PageMedia, "媒体", "\uE8D6", () => new MediaPage()),
-            new(AppSettings.PageWeather, "天气", "\uE706", () => new WeatherPage()),
-            new(AppSettings.PageDisaster, "灾害预警", "\uE730", () => new DisasterPage()),
-            new("interaction", "交互", "\uE7C9", () => new InteractionPage()),
-            new(AppSettings.PageAppearance, "个性化", "\uE790", () => new AppearancePage()),
-            new(AppSettings.PageSchedule, "课表与提醒", "\uE787", () => new SchedulePage()),
-            new(AppSettings.PageHomework, "作业", "\uE8A5", () => new HomeworkPage()),
-            new(AppSettings.PagePlugins, "插件", "\uE74C", () => new PluginsPage()),
-            new("logs", "日志", "\uE81E", () => new LogPage()),
-            new("advanced", "高级", "\uE90F", () => new AdvancedPage()),
-            new(AppSettings.PageAbout, "关于", "\uE946", () => new AboutPage()),
+            new("grp-home", "首页", "\uE80F", false, new[]
+            {
+                new NavEntry(PageHome, "首页", "\uE80F", () => new HomePage()),
+            }),
+            new("grp-general", "常规", "\uE713", false, new[]
+            {
+                new NavEntry(AppSettings.PageGeneral, "通用", "\uE713", () => new GeneralPage()),
+                new NavEntry("interaction", "交互", "\uE7C9", () => new InteractionPage()),
+            }),
+            new("grp-appearance", "外观", "\uE790", false, new[]
+            {
+                new NavEntry(AppSettings.PageAppearance, "个性化", "\uE790", () => new AppearancePage()),
+            }),
+            new("grp-features", "功能", "\uE7F4", false, new[]
+            {
+                new NavEntry(AppSettings.PageIsland, "灵动岛", "\uE7F4", () => new IslandPage()),
+                new NavEntry(AppSettings.PageMedia, "媒体", "\uE8D6", () => new MediaPage()),
+                new NavEntry(AppSettings.PageWeather, "天气", "\uE706", () => new WeatherPage()),
+                new NavEntry(AppSettings.PageDisaster, "灾害预警", "\uE730", () => new DisasterPage()),
+            }),
+            new("grp-teaching", "教学", "\uE787", false, new[]
+            {
+                new NavEntry(AppSettings.PageSchedule, "课表与提醒", "\uE787", () => new SchedulePage()),
+                new NavEntry(AppSettings.PageHomework, "作业", "\uE8A5", () => new HomeworkPage()),
+            }),
+            new("grp-extensions", "扩展", "\uE74C", false, new[]
+            {
+                new NavEntry(AppSettings.PagePlugins, "插件", "\uE74C", () => new PluginsPage()),
+            }),
+            new("grp-system", "系统", "\uE90F", false, new[]
+            {
+                new NavEntry("logs", "日志", "\uE81E", () => new LogPage()),
+                new NavEntry("advanced", "高级", "\uE90F", () => new AdvancedPage()),
+            }),
+            new("grp-about", "关于", "\uE946", true, new[]
+            {
+                new NavEntry(AppSettings.PageAbout, "关于", "\uE946", () => new AboutPage()),
+            }),
         };
+
+        _flatPages = _groups.SelectMany(g => g.Pages).ToList();
+        foreach (var group in _groups)
+            foreach (var entry in group.Pages)
+                _pageToGroup[entry.Id] = group;
 
         InitializeComponent();
         BuildNav();
@@ -85,23 +133,20 @@ public partial class SettingsWindow : Window
         {
             if (e.Key != Key.Enter) return;
             e.Handled = true;
-            foreach (var entry in _entries)
-            {
-                if (!_navButtons.TryGetValue(entry.Id, out var b) || b.Visibility != Visibility.Visible)
-                    continue;
-                Select(entry.Id);
-                break;
-            }
+            var match = FirstMatch(SearchBox.Text);
+            if (match is not null) Select(match);
         };
+
+        // 玻璃的柔光：指针在侧栏里移动时，那团光跟着走（离开就淡出）
+        NavGlass.MouseEnter += (_, _) => FadeSheen(1);
+        NavGlass.MouseLeave += (_, _) => FadeSheen(0);
+        NavGlass.MouseMove += OnGlassMouseMove;
 
         // 手指滑动：无条件开。设置页是最常被触摸操作的地方，
         // 只有滚轮能滚的界面在平板上等于"卡死"。
         TouchMode.EnableTouchScroll(ScrollCur);
         TouchMode.EnableTouchScroll(SubScroll);
         TouchMode.EnableTouchScroll(NavScroll);
-
-        // 点击目标大小：按设置决定
-        ApplyTouchOptimize();
 
         SourceInitialized += (_, _) => ApplyWindowChrome();
 
@@ -118,8 +163,21 @@ public partial class SettingsWindow : Window
         Loaded += (_, _) => Select(_pendingPage ?? PageHome, animate: false);
         NavScroll.ScrollChanged += (_, _) =>
         {
-            // 动画进行中时别硬拉回原位（那一下就是"卡"的观感来源）
-            if (!MarkerShift.HasAnimatedProperties) SyncMarker(_selectedNav, animate: false);
+            // 动画进行中（含刚开始、还没出第一帧）都别去"校正"它 ——
+            // 以前只看 HasAnimatedProperties，动画还没启动的那一帧会把玻璃直接摆到终点，
+            // 观感就是"顿一下再滑"，也就是用户说的"卡"。
+            if (DateTime.UtcNow < _animGate) return;
+            if (!LensShift.HasAnimatedProperties) SyncMarker(_selectedNav, animate: false);
+        };
+
+        // 顶部胶囊滚动 / 窗口缩放时，灰色选中底片跟着当前子项重新落位（不播动画）
+        SubNavScroll.ScrollChanged += (_, _) =>
+        {
+            if (_subLensShown) SyncSubNavLens(SelectedSubButton, animate: false);
+        };
+        SubNavPanel.SizeChanged += (_, _) =>
+        {
+            if (_subLensShown) SyncSubNavLens(SelectedSubButton, animate: false);
         };
 
         StateChanged += (_, _) => UpdateMaximizeIcon();
@@ -127,6 +185,7 @@ public partial class SettingsWindow : Window
         Vm.PropertyChanged += OnVmChanged;
         Closed += (_, _) =>
         {
+            _transitionScrollBarTimer?.Stop();
             ThemeService.Changed -= OnThemeChanged;
             Vm.PropertyChanged -= OnVmChanged;
             Vm.Detach();
@@ -152,34 +211,48 @@ public partial class SettingsWindow : Window
 
     void OnVmChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName is nameof(SettingsViewModel.SettingsMica) or nameof(SettingsViewModel.ThemeMode)
+        if (e.PropertyName is nameof(SettingsViewModel.SettingsMica) or nameof(SettingsViewModel.SettingsAcrylic)
+            or nameof(SettingsViewModel.ThemeMode)
             or nameof(SettingsViewModel.SettingsBackground) or nameof(SettingsViewModel.SettingsBackgroundColor)
             or nameof(SettingsViewModel.SettingsBackgroundImage))
             ApplyWindowChrome();
-        if (e.PropertyName is nameof(SettingsViewModel.TouchOptimize))
-            ApplyTouchOptimize();
     }
 
     /// <summary>
-    /// 触屏优化：放大点击目标 + 开手指拖动滚动。切换即时生效，不需要重开窗口。
-    ///
-    /// 尺寸走窗口资源覆盖（模板里是 DynamicResource，改完立刻重解析）；
-    /// 导航项还要额外补两点：项间距跟着加大，强调条位置重算（行高变了）。
+    /// 柔光跟着指针走：把渐变的圆心换成指针在卡片里的相对位置。
+    /// 用百分比而不是像素，卡片缩放/触屏下尺寸变化都不会跑偏。
     /// </summary>
-    void ApplyTouchOptimize()
+    void OnGlassMouseMove(object sender, MouseEventArgs e)
     {
-        var on = Vm.TouchOptimize;
-        TouchMode.Apply(this, on);
+        if (NavSheen.ActualWidth < 1 || NavSheen.ActualHeight < 1) return;
 
-        foreach (var button in _navButtons.Values)
-            button.Margin = new Thickness(0, on ? 5 : 2, 0, 0);
+        var p = e.GetPosition(NavSheen);
+        var cx = Math.Clamp(p.X / NavSheen.ActualWidth, 0, 1);
+        var cy = Math.Clamp(p.Y / NavSheen.ActualHeight, 0, 1);
 
-        // 注意：滑动能力在上面已经无条件开好了，这里只管尺寸 ——
-        // 触屏用户关掉这个开关也依然能上下滑。
-        TouchMode.EnableTouchScroll(FindDescendant<ScrollViewer>(SubHost));
+        // 柔光是一大块径向渐变，每动一像素就重画整张卡会发涩 —— 位移超过 2% 才更新一次
+        var dx = Math.Abs(cx - _sheenX);
+        var dy = Math.Abs(cy - _sheenY);
+        if (dx < 0.02 && dy < 0.02) return;
 
-        // 行高变了 → 强调条要重新对齐（不等下一次切页才正位）
-        if (IsLoaded) SyncMarker(_selectedNav, animate: false);
+        _sheenX = cx;
+        _sheenY = cy;
+        NavSheenBrush.Center = new Point(cx, cy);
+        NavSheenBrush.GradientOrigin = new Point(cx, cy);
+        FadeSheen(1);
+    }
+
+    double _sheenX = 0.18, _sheenY;
+
+    /// <summary>玻璃滑动期间的时间闸门：在这之前不接受任何"校正位置"的调用。</summary>
+    DateTime _animGate;
+
+    /// <summary>柔光淡入/淡出（0/1）。</summary>
+    void FadeSheen(double to)
+    {
+        if (Math.Abs(NavSheen.Opacity - to) < 0.01 && !NavSheen.HasAnimatedProperties) return;
+        NavSheen.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(to, new Duration(TimeSpan.FromMilliseconds(180))));
     }
 
     /// <summary>在可视树里找第一个指定类型的后代（子页宿主里的 ScrollViewer 用）。</summary>
@@ -214,6 +287,9 @@ public partial class SettingsWindow : Window
         var useImage = mode == "image" && !string.IsNullOrWhiteSpace(imagePath) && System.IO.File.Exists(imagePath);
         var custom = mode == "solid" || useImage;
 
+        // 每次重新判断：云母态给卡片顶边加了 1px 白高光，亚克力下这条线会非常显眼
+        Resources.Remove("HairlineHighlightBrush");
+
         // 自定义背景（纯色/图片）要先把 DWM 背板撤掉，否则云母会画在自己背景前面
         WindowBackdrop kind;
         if (custom)
@@ -221,9 +297,32 @@ public partial class SettingsWindow : Window
             Interop.ClearBackdrop(this);
             kind = WindowBackdrop.None;
         }
+        else if (Vm.SettingsAcrylic)
+        {
+            // 亚克力开关：逐帧模糊（Win11 系统背板 / Win10 accent）。失败就回退纯色。
+            kind = Interop.ApplyBlur(this, ThemeService.IsDark);
+        }
         else
         {
             kind = Interop.ApplyBackdrop(this, Vm.SettingsMica, ThemeService.IsDark);
+        }
+
+        // Windows 10 的 accent 亚克力和整窗玻璃帧叠在一起时，窗口边缘会多出一圈白边。
+        // Win10 亚克力把 GlassFrameThickness 收到 0（AccentPolicy 自己会铺满客户区）；
+        // Win11 不动 Chrome，继续由 DWM 背板负责云母/亚克力。
+        if (!Interop.IsWindows11)
+        {
+            WindowChrome.SetWindowChrome(this, new WindowChrome
+            {
+                CaptionHeight = 48,
+                ResizeBorderThickness = new Thickness(6),
+                CornerRadius = new CornerRadius(0),
+                GlassFrameThickness = kind == WindowBackdrop.Acrylic
+                    ? new Thickness(0)
+                    : new Thickness(-1),
+                NonClientFrameEdges = NonClientFrameEdges.None,
+                UseAeroCaptionButtons = false,
+            });
         }
 
         Core.Logger.Current?.Info($"[设置背景] 模式={mode} 材质={kind} 深色={ThemeService.IsDark}");
@@ -251,9 +350,22 @@ public partial class SettingsWindow : Window
         // 云母 / 亚克力：窗口与侧栏透明，内容区一层薄雾
         TitleBar.Background = Brushes.Transparent;
         NavPane.Background = Brushes.Transparent;
-        ContentPane.Background = (Brush)FindResource("MicaLayerBrush");
 
-        Resources["CardBackgroundFillColorDefaultBrush"] = FindResource("MicaCardBackgroundBrush");
+
+        if (kind == WindowBackdrop.Acrylic)
+        {
+            // ★ 亚克力本身就是"奶白磨砂"，再叠 25% 白就等于盖了块白板（"伤风景"就是这个）。
+            //   这里只压 12% 白，卡片也减半，让底下的壁纸模糊能透出来。
+            //   卡片顶边那条 72% 白的高光在亚克力上会变成明显的白边，直接撤掉。
+            ContentPane.Background = (Brush)FindResource("AcrylicLayerBrush");
+            Resources["CardBackgroundFillColorDefaultBrush"] = FindResource("AcrylicCardBrush");
+            Resources["HairlineHighlightBrush"] = Brushes.Transparent;
+        }
+        else
+        {
+            ContentPane.Background = (Brush)FindResource("MicaLayerBrush");
+            Resources["CardBackgroundFillColorDefaultBrush"] = FindResource("MicaCardBackgroundBrush");
+        }
         Resources["SolidBackgroundFillColorQuarternaryBrush"] = FindResource("MicaDialogBrush");
     }
 
@@ -299,36 +411,195 @@ public partial class SettingsWindow : Window
 
     void BuildNav()
     {
-        foreach (var entry in _entries)
+        foreach (var group in _groups)
         {
             var button = new RadioButton
             {
                 Style = (Style)FindResource("NavItem"),
-                Content = entry.Label,
-                Tag = entry.Glyph,
-                ToolTip = entry.Label,
-                GroupName = "SettingsNav",
-                CommandParameter = entry.Id,
+                Content = group.Label,
+                Tag = group.Glyph,
+                ToolTip = group.Label,
+                GroupName = "SettingsGroupNav",
+                CommandParameter = group.Id,
                 Margin = new Thickness(0, 2, 0, 0),
             };
-            var id = entry.Id;
-            button.Click += (_, _) => Select(id);
-            _navButtons[id] = button;
+            var firstPage = group.Pages[0].Id;
+            button.Click += (_, _) => Select(firstPage);
+            _groupButtons[group.Id] = button;
 
-            if (id == AppSettings.PageAbout) AboutPanel.Children.Add(button);
-            else NavItemsPanel.Children.Add(button);
+            if (group.PinBottom) AboutPanel.Children.Add(button);
+            else NavGroupPanel.Children.Add(button);
         }
     }
 
-    /// <summary>按关键字过滤导航项（空串 = 全部恢复）。「关于」也参与过滤。</summary>
+    /// <summary>
+    /// 顶部胶囊：优先使用页面自己提供的子标签（插件页的已安装/插件市场），
+    /// 否则使用大项下的子页面。同一个大项内切页时只改选中态，不重建按钮。
+    /// </summary>
+    void BuildSubNav(NavGroup group, string currentPageId, UserControl? page)
+    {
+        // 换大项时整排标签都换了：先收起旧底片，等新标签量完尺寸再摆到新位置
+        SubLens.Visibility = Visibility.Collapsed;
+        _subLensShown = false;
+
+        SubNavPanel.Children.Clear();
+        _subButtons.Clear();
+
+        // 页面自己带顶部标签：例如插件页的「已安装 / 插件市场」
+        if (page is ISettingsPageTabs host && host.Tabs.Count > 0)
+        {
+            _currentSubId = host.CurrentTabId;
+            foreach (var tab in host.Tabs)
+            {
+                var id = tab.Id;
+                var button = CreateSubButton(tab.Label,
+                    string.Equals(id, _currentSubId, StringComparison.Ordinal),
+                    () => SelectPageTab(host, id));
+                _subButtons[id] = button;
+                SubNavPanel.Children.Add(button);
+            }
+            ScheduleSubLens(_currentSubId);
+            return;
+        }
+
+        _currentSubId = currentPageId;
+        foreach (var entry in group.Pages)
+        {
+            var id = entry.Id;
+            var button = CreateSubButton(entry.Label,
+                string.Equals(id, currentPageId, StringComparison.Ordinal),
+                () => Select(id));
+            _subButtons[id] = button;
+            SubNavPanel.Children.Add(button);
+        }
+        ScheduleSubLens(_currentSubId);
+    }
+
+    RadioButton CreateSubButton(string label, bool selected, Action onClick)
+    {
+        var button = new RadioButton
+        {
+            Style = (Style)FindResource("SubNavItem"),
+            Content = label,
+            ToolTip = label,
+            GroupName = "SettingsSubNav",
+            IsChecked = selected,
+        };
+        button.Click += (_, _) => onClick();
+        return button;
+    }
+
+    /// <summary>新按钮刚进可视树，还没量出 ActualWidth：等这一轮布局完成再摆灰色底片。</summary>
+    void ScheduleSubLens(string subId)
+    {
+        Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+        {
+            if (!string.Equals(_currentSubId, subId, StringComparison.Ordinal)) return;
+            if (_subButtons.TryGetValue(subId, out var current))
+                SyncSubNavLens(current, animate: false);
+        }));
+    }
+
+    void SyncSubNavSelection(string subId)
+    {
+        foreach (var (id, button) in _subButtons)
+            button.IsChecked = string.Equals(id, subId, StringComparison.Ordinal);
+    }
+
+    /// <summary>点顶部胶囊里的页面自有标签（插件页的已安装 / 插件市场），只切页内面板。</summary>
+    void SelectPageTab(ISettingsPageTabs host, string tabId)
+    {
+        host.SelectTab(tabId);
+        _currentSubId = tabId;
+        SyncSubNavSelection(tabId);
+        ScrollCur.ScrollToVerticalOffset(0);
+        if (_subButtons.TryGetValue(tabId, out var button))
+            SyncSubNavLens(button, animate: true);
+    }
+
+    RadioButton? SelectedSubButton =>
+        _subButtons.TryGetValue(_currentSubId, out var button) ? button : null;
+
+    /// <summary>
+    /// 顶部胶囊的灰色选中底片：在子页面标签之间左右滑动。
+    /// 位置按标签当前在屏幕上的实际位置算，滚动 / 缩放后也能重新对齐。
+    /// </summary>
+    void SyncSubNavLens(RadioButton? button, bool animate)
+    {
+        if (button is null || !button.IsVisible || button.ActualWidth < 1)
+        {
+            SubLens.Visibility = Visibility.Collapsed;
+            _subLensShown = false;
+            return;
+        }
+
+        var point = button.TranslatePoint(new Point(0, 0), SubLensCanvas);
+        var from = SubLensShift.X;
+        var fromWidth = SubLens.ActualWidth > 0 ? SubLens.ActualWidth : SubLens.Width;
+        var targetWidth = button.ActualWidth;
+        var interrupted = SubLensShift.HasAnimatedProperties;
+
+        SubLens.Height = button.ActualHeight;
+        SubLensShift.Y = point.Y;
+        SubLensShift.BeginAnimation(TranslateTransform.XProperty, null);
+        SubLens.BeginAnimation(FrameworkElement.WidthProperty, null);
+        SubLens.Width = fromWidth;
+        SubLens.Visibility = Visibility.Visible;
+
+        if (!_subLensShown)
+        {
+            SubLensShift.X = point.X;
+            SubLens.Width = targetWidth;
+            _subLensShown = true;
+            return;
+        }
+
+        SubLensShift.X = from;
+        if (!animate || Math.Abs(point.X - from) < 0.5)
+        {
+            SubLensShift.X = point.X;
+            SubLens.Width = targetWidth;
+            return;
+        }
+
+        // 统一 350ms：这个时长下短距离不会显得急，长距离也不会拖。
+        const int ms = 350;
+
+        // 用二次减速而不是三次减速：前段不会“冲一下再爬”，慢速滑动时更均匀。
+        var anim = Anim.Slide(point.X, ms, "EaseStandard");
+        if (anim is not null)
+        {
+            if (interrupted) anim.EasingFunction = Anim.Ease("EaseStandard");
+            SubLensShift.BeginAnimation(TranslateTransform.XProperty, anim);
+        }
+        else SubLensShift.X = point.X;
+
+        // 标签宽度不同（例如「已安装」→「插件市场」）时一起把灰底拉宽/收窄，
+        // 否则宽度会在起步前瞬间跳一下，看起来就是“不流畅”。
+        if (Math.Abs(targetWidth - fromWidth) > 0.5)
+        {
+            // 宽度比位移稍快收尾，避免灰底在移动末尾还在慢慢“长胖”。
+            var widthMs = Math.Clamp((int)(ms * 0.72), 220, 430);
+            var widthAnim = new DoubleAnimation(targetWidth,
+                new Duration(TimeSpan.FromMilliseconds(widthMs)))
+            {
+                EasingFunction = Anim.Ease("EaseStandard"),
+            };
+            SubLens.BeginAnimation(FrameworkElement.WidthProperty, widthAnim);
+        }
+        else SubLens.Width = targetWidth;
+    }
+
+    /// <summary>按关键字过滤左侧大项（大项名或它下面任一子页命中都保留）。</summary>
     void FilterNav(string? keyword)
     {
         var key = (keyword ?? "").Trim();
-        foreach (var entry in _entries)
+        foreach (var group in _groups)
         {
-            if (!_navButtons.TryGetValue(entry.Id, out var button)) continue;
+            if (!_groupButtons.TryGetValue(group.Id, out var button)) continue;
             var hit = key.Length == 0 ||
-                      entry.Label.Contains(key, StringComparison.OrdinalIgnoreCase);
+                      group.Label.Contains(key, StringComparison.OrdinalIgnoreCase) ||
+                      group.Pages.Any(p => p.Label.Contains(key, StringComparison.OrdinalIgnoreCase));
             button.Visibility = hit ? Visibility.Visible : Visibility.Collapsed;
         }
 
@@ -336,77 +607,121 @@ public partial class SettingsWindow : Window
         if (IsLoaded) SyncMarker(_selectedNav, animate: false);
     }
 
+    /// <summary>搜索回车时跳到的第一个页面：先按大项名，再按子页名。</summary>
+    string? FirstMatch(string? keyword)
+    {
+        var key = (keyword ?? "").Trim();
+        foreach (var group in _groups)
+        {
+            var groupHit = key.Length == 0 ||
+                           group.Label.Contains(key, StringComparison.OrdinalIgnoreCase);
+            foreach (var entry in group.Pages)
+            {
+                if (groupHit || entry.Label.Contains(key, StringComparison.OrdinalIgnoreCase))
+                    return entry.Id;
+            }
+        }
+        return null;
+    }
+
     /// <summary>
-    /// 把强调条挪到高亮项上。
-    /// 位置用 TranslatePoint 算到 MarkerCanvas 坐标系 —— 导航项可能在滚动区里，
+    /// 把选中那块「液态玻璃」挪到高亮项上：位置、尺寸都跟着按钮走。
+    ///
+    /// 位置用 TranslatePoint 算到 LensCanvas 坐标系 —— 导航项可能在滚动区里，
     /// 也可能在底部固定的「关于」面板里，只有相对画布算才两边都对。
+    ///
+    /// 位移只动 Transform：Canvas.Top 是布局属性，每帧都会触发父级重新排列，
+    /// 滑动看着就会一顿一顿的。落位用 EaseLiquid（BackEase，轻微过冲），
+    /// 同时横向微鼓、纵向压扁再回弹 —— 就是"被吸过去的一滴玻璃"。
     /// </summary>
     void SyncMarker(RadioButton? button, bool animate)
     {
-        if (button is null || !button.IsVisible)
+        if (button is null || !button.IsVisible || button.ActualWidth < 1)
         {
-            NavMarker.Visibility = Visibility.Collapsed;
+            NavLens.Visibility = Visibility.Collapsed;
             _markerShown = false;
             return;
         }
-        var point = button.TranslatePoint(new Point(0, 0), MarkerCanvas);
-        var target = point.Y + (button.ActualHeight - NavMarker.Height) / 2;
 
-        // 起点取「当前真正在显示的值」：动画进行中时 HasAnimatedProperties 为真，
-        // 这时 MarkerShift.Y 读到的就是动画中间值，打断后能从原地继续滑，不会跳。
-        var from = MarkerShift.Y;
-        var interrupted = MarkerShift.HasAnimatedProperties;
+        var point = button.TranslatePoint(new Point(0, 0), LensCanvas);
+        var from = LensShift.Y;
+        var interrupted = LensShift.HasAnimatedProperties;
 
-        MarkerShift.BeginAnimation(TranslateTransform.YProperty, null);
-        MarkerShift.Y = _markerShown ? from : target;
+        // 尺寸跟着条目走：触屏模式下条目会变高，玻璃跟着一起长
+        // 上限：永远别顶出卡片（溢出会被 LensCanvas 裁掉，右端圆角会变成直角）
+        var maxWidth = LensCanvas.ActualWidth - 12;
+        NavLens.Width = maxWidth > 32 ? Math.Min(button.ActualWidth, maxWidth) : button.ActualWidth;
+        NavLens.Height = button.ActualHeight;
+        LensShift.X = point.X;
 
-        NavMarker.Visibility = Visibility.Visible;
-        _markerShown = true;
+        LensShift.BeginAnimation(TranslateTransform.YProperty, null);
+        NavLens.Visibility = Visibility.Visible;
 
-        if (NavMarker.Opacity < 1)
+
+        if (!_markerShown)
         {
-            NavMarker.BeginAnimation(OpacityProperty,
-                new DoubleAnimation(1, new Duration(TimeSpan.FromMilliseconds(140))));
-        }
-
-        if (!animate || Math.Abs(target - MarkerShift.Y) < 0.5)
-        {
-            MarkerShift.Y = target;
+            // 首次出现：直接落位，别从 0 滑下来
+            LensShift.Y = point.Y;
+            _markerShown = true;
             return;
         }
 
-        // 位移用 Transform 而不是 Canvas.Top：Canvas.Top 是布局属性，
-        // 每帧都会触发父级重新排列，滑动看着就会一顿一顿的。
-        var anim = Anim.Slide(target, MarkerMs);
+        LensShift.Y = from;
+
+        if (!animate || Math.Abs(point.Y - from) < 0.5)
+        {
+            LensShift.Y = point.Y;
+            return;
+        }
+
+        // 时长跟距离走：跨一屏的大跳给足时间，隔壁一格也留一点点时间，别像瞬移。
+        var distance = Math.Abs(point.Y - from);
+        var ms = Math.Clamp((int)(240 + distance * 1.5), 240, 520);
+
+        // 用平滑减速（PowerEase/Out）而不是 EaseLiquid（BackEase 会过冲再弹回）：
+        // 玻璃块这么大，一次过冲看起来就像"滑过头又缩回来"，也就是"不流畅"。
+        var anim = Anim.Slide(point.Y, ms, "EaseDecelerate");
         if (anim is not null)
         {
-            if (interrupted) anim.EasingFunction = Anim.Ease("EaseStandard");
-            MarkerShift.BeginAnimation(TranslateTransform.YProperty, anim);
+            if (interrupted) anim.EasingFunction = Anim.Ease("EaseDecelerate");
+
+            // 动画期间别让 ScrollChanged 之类的校正插进来
+            _animGate = DateTime.UtcNow.AddMilliseconds(ms + 140);
+            LensShift.BeginAnimation(TranslateTransform.YProperty, anim);
         }
-        else MarkerShift.Y = target;
+        else LensShift.Y = point.Y;
+
     }
 
-    /// <summary>强调条是否已经显示过（首次出现不要从 0 滑下来）。</summary>
+    /// <summary>选中块是否已经显示过（首次出现不要从 0 滑下来）。</summary>
     bool _markerShown;
 
-    int IndexOf(string id)
-    {
-        for (var i = 0; i < _entries.Count; i++)
-            if (_entries[i].Id == id) return i;
-        return -1;
-    }
+    int IndexOf(string id) => _flatPages.FindIndex(p => string.Equals(p.Id, id, StringComparison.Ordinal));
+
+    int GroupIndexOf(string id) =>
+        _groups.FindIndex(g => string.Equals(g.Id, id, StringComparison.Ordinal));
 
     /// <summary>
-    /// 这一跳该往哪个方向动（对位 QML 的 motionBetween）：
-    ///   down —— 目标在下方的顶层页；up —— 目标在上方；
-    ///   forward —— 首屏 / 目标不是顶层页。
+    /// 这一跳该往哪个方向动：
+    ///   · 换左侧大项 —— 页面上下移动（大项顺序靠后 = down，靠前 = up）；
+    ///   · 同一大项内换子页 —— 页面左右移动（子页顺序靠后 = forward，靠前 = back）。
+    /// 这样左侧导航的上下位置、顶部胶囊的左右位置和页面移动方向是一致的。
     /// </summary>
-    string DirectionFor(string prev, string next)
+    string DirectionFor(string prevPage, string nextPage, string prevGroup, string nextGroup)
     {
-        if (string.IsNullOrEmpty(prev)) return "forward";
-        var a = IndexOf(prev);
-        var b = IndexOf(next);
-        if (a >= 0 && b >= 0) return b > a ? "down" : "up";
+        if (string.IsNullOrEmpty(prevPage)) return "forward";
+
+        if (!string.IsNullOrEmpty(prevGroup) && !string.IsNullOrEmpty(nextGroup) &&
+            !string.Equals(prevGroup, nextGroup, StringComparison.Ordinal))
+        {
+            var ga = GroupIndexOf(prevGroup);
+            var gb = GroupIndexOf(nextGroup);
+            if (ga >= 0 && gb >= 0) return gb > ga ? "down" : "up";
+        }
+
+        var a = IndexOf(prevPage);
+        var b = IndexOf(nextPage);
+        if (a >= 0 && b >= 0) return b > a ? "forward" : "back";
         return "forward";
     }
 
@@ -414,13 +729,19 @@ public partial class SettingsWindow : Window
 
     void Select(string id, bool animate)
     {
-        if (!_navButtons.TryGetValue(id, out var button)) return;
+        if (!_pageToGroup.TryGetValue(id, out var group)) return;
+
+        var entry = group.Pages.FirstOrDefault(p => string.Equals(p.Id, id, StringComparison.Ordinal));
+        if (entry is null) return;
+
+        if (!_groupButtons.TryGetValue(group.Id, out var groupButton)) return;
 
         // 作业页的提交时段自检进行中：不让切页（同页重复点没事）
         if (NavigationLocked && !string.Equals(id, _currentId, StringComparison.Ordinal))
         {
-            // 被点亮的导航按钮拨回当前页；强调条本来就没动
+            // 被点亮的导航按钮和顶部子项都拨回当前页；强调条本来就没动
             if (_selectedNav is not null) _selectedNav.IsChecked = true;
+            SyncSubNavSelection(_currentSubId);
             Toast(InfoBarSeverity.Information, "测试进行中",
                 "测试结束或点「中断测试」后才能切换页面。");
             return;
@@ -437,33 +758,48 @@ public partial class SettingsWindow : Window
             ScrollCur.RenderTransform = Transform.Identity;
         }
 
-        var direction = DirectionFor(_currentId, id);
+        var direction = DirectionFor(_currentId, id, _currentGroupId, group.Id);
 
         if (!_pages.TryGetValue(id, out var page))
         {
-            var entry = _entries.First(e => e.Id == id);
             page = entry.Create();
             page.DataContext = Vm;
             _pages[id] = page;
             if (page is HomePage home) home.NavigateRequested += Select;
         }
 
-        // 顶部面包屑：设置 › 类别（首页只显示「设置」）
-        MainCrumb.Text = id == PageHome ? "设置" : $"设置 › {_entries.First(e => e.Id == id).Label}";
-
         var previous = PageHost.Content as UIElement;
         PageHost.Content = page;
         ToastSlot.Children.Clear();
         ScrollCur.ScrollToVerticalOffset(0);
 
-        button.IsChecked = true;
-        _selectedNav = button;
-        SyncMarker(button, animate);
+        groupButton.IsChecked = true;
+        _selectedNav = groupButton;
+        SyncMarker(groupButton, animate);
+
+        // 先记下当前页：后面胶囊的 SizeChanged / ScrollChanged 都按新页对齐
+        _currentId = id;
+
+        // 同一个大项内切页：只改胶囊选中态；换大项才重建胶囊
+        var groupChanged = !string.Equals(_currentGroupId, group.Id, StringComparison.Ordinal);
+        _currentGroupId = group.Id;
+        if (groupChanged || SubNavPanel.Children.Count == 0)
+        {
+            BuildSubNav(group, id, page);
+        }
+        else
+        {
+            // 同一大项内切子页：底片左右滑；页面自带标签（插件页）则保留它当前的标签
+            _currentSubId = page is ISettingsPageTabs host && host.Tabs.Count > 0
+                ? host.CurrentTabId
+                : id;
+            SyncSubNavSelection(_currentSubId);
+            if (_subButtons.TryGetValue(_currentSubId, out var subButton))
+                SyncSubNavLens(subButton, animate: true);
+        }
 
         if (animate && previous is not null) PlayPageTransition(previous, direction);
         else ClearPreviousLayer();
-
-        _currentId = id;
     }
 
     /// <summary>
@@ -472,6 +808,8 @@ public partial class SettingsWindow : Window
     /// </summary>
     void PlayPageTransition(UIElement oldPage, string direction)
     {
+        HideScrollBarsDuringTransition();
+
         PrevInner.Children.Clear();
         PrevInner.Children.Add(oldPage);
         ScrollPrev.Visibility = Visibility.Visible;
@@ -506,6 +844,38 @@ public partial class SettingsWindow : Window
         PrevInner.Children.Clear();
         ScrollPrev.Visibility = Visibility.Collapsed;
         ScrollPrev.RenderTransform = Transform.Identity;
+    }
+
+    /// <summary>
+    /// 页面/浮层整段滑动时先把右侧滚动条藏起来：滚动条跟着位图缓存一起移动会明显掉帧。
+    /// 用计时器而不是动画 Completed，是因为连续快速切页时旧动画会被新动画打断，
+    /// Completed 不一定触发；计时器每次重新计时，最后一次滑动结束再恢复。
+    /// </summary>
+    void HideScrollBarsDuringTransition()
+    {
+        // 直接 Hidden 而不是 Disabled：原本有滚动条的页面，Hidden 仍占住那一列，
+        // 内容不会横向重排；本来没有滚动条的短页面会多预留 10px，但比滑动时拖着滚动条掉帧好。
+        ScrollCur.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        ScrollPrev.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+        SubScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Hidden;
+
+        if (_transitionScrollBarTimer is null)
+        {
+            _transitionScrollBarTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(TransitionMs + 140),
+            };
+            _transitionScrollBarTimer.Tick += (_, _) =>
+            {
+                _transitionScrollBarTimer!.Stop();
+                ScrollCur.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+                ScrollPrev.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+                SubScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+            };
+        }
+
+        _transitionScrollBarTimer.Stop();
+        _transitionScrollBarTimer.Start();
     }
 
     /// <summary>通用位移动画（不碰 opacity）。</summary>
@@ -570,6 +940,8 @@ public partial class SettingsWindow : Window
 
     public void ShowOverlay(FrameworkElement panel)
     {
+        HideScrollBarsDuringTransition();
+
         // 面板当成"页"来用：铺满内容列，去掉卡片那套固定宽高与居中
         panel.HorizontalAlignment = HorizontalAlignment.Stretch;
         panel.VerticalAlignment = VerticalAlignment.Stretch;
@@ -591,9 +963,11 @@ public partial class SettingsWindow : Window
         SubHost.Content = panel;
         SubScroll.Visibility = Visibility.Visible;
         SubScroll.ScrollToVerticalOffset(0);
+        // 子页里可能自带滚动区（作业编辑器之类）：手指要能拖
+        TouchMode.EnableTouchScroll(FindDescendant<ScrollViewer>(SubHost));
 
         // 子页没有导航高亮（对齐 QML：navMarkerShown = False）
-        NavMarker.Visibility = Visibility.Collapsed;
+        NavLens.Visibility = Visibility.Collapsed;
 
         var w = PageStack.ActualWidth * ShiftRatio;
         _subOpen = true;
@@ -619,6 +993,7 @@ public partial class SettingsWindow : Window
     public void CloseOverlay()
     {
         if (!_subOpen) return;
+        HideScrollBarsDuringTransition();
         _subOpen = false;
 
         var w = PageStack.ActualWidth * ShiftRatio;

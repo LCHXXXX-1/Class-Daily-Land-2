@@ -271,7 +271,12 @@ public sealed partial class SettingsViewModel : ObservableObject
     /// <summary>设置窗背景：mica（云母取色）/ solid（纯色）/ image（图片）。</summary>
     public string SettingsBackground
     {
-        get => S.Str("settings_background");
+        get
+        {
+            var v = S.Str("settings_background");
+            // 上一版把"亚克力"当成背景值存过；现在它改成一个独立开关了，这里归一回云母
+            return v is "solid" or "image" ? v : "mica";
+        }
         set => Write("settings_background", value);
     }
 
@@ -334,10 +339,34 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => WriteDelayed("animation_duration_ms", value);
     }
 
+    /// <summary>
+    /// 云母材质。和 <see cref="SettingsAcrylic"/> **互斥**：开一个就把另一个关掉，
+    /// 两个都关 = 不用系统材质（窗口走纯色）。
+    /// </summary>
     public bool SettingsMica
     {
         get => S.Bool("settings_mica");
-        set => Write("settings_mica", value);
+        set
+        {
+            Write("settings_mica", value);
+            if (value && S.Bool("settings_acrylic"))
+                Write("settings_acrylic", false, nameof(SettingsAcrylic));
+        }
+    }
+
+    /// <summary>
+    /// 亚克力材质（Win10 1803+ / Win11 都支持）。和云母互斥，默认关。
+    /// Win11 走系统背板 DWMSBT_TRANSIENTWINDOW，Win10 走 accent policy（见 Interop.ApplyBlur）。
+    /// </summary>
+    public bool SettingsAcrylic
+    {
+        get => S.Bool("settings_acrylic");
+        set
+        {
+            Write("settings_acrylic", value);
+            if (value && S.Bool("settings_mica"))
+                Write("settings_mica", false, nameof(SettingsMica));
+        }
     }
 
     /// <summary>Win11 才有云母 + 原生圆角。</summary>
@@ -366,26 +395,6 @@ public sealed partial class SettingsViewModel : ObservableObject
     public string MaterialNote => "当前系统：" + SystemDescription;
 
     // ————————————————————— 触屏 —————————————————————
-
-    /// <summary>
-    /// 触屏优化：加大点击目标（控件 32→44、设置行 62→82、导航项 40→54），
-    /// 并给设置页/下拉面板开手指拖动滚动。
-    /// 切换是即时的（<see cref="TouchMode"/> 改窗口资源，DynamicResource 立刻重解析）。
-    /// </summary>
-    public bool TouchOptimize
-    {
-        get => S.Bool("touch_optimize");
-        set => Write("touch_optimize", value);
-    }
-
-    /// <summary>这台机器有没有触摸屏（没有也能手动开，只是提示语不同）。</summary>
-    public bool HasTouchScreen => System.Windows.Input.Tablet.TabletDevices
-        .OfType<System.Windows.Input.TabletDevice>()
-        .Any(d => d.Type == System.Windows.Input.TabletDeviceType.Touch);
-
-    public string TouchOptimizeHint => HasTouchScreen
-        ? "已检测到触摸屏。开启后点击目标放大，手指更容易点中（上下滑动本来就支持，不需要开它）"
-        : "开启后点击目标放大（控件 32→44、设置行 62→82），手指更容易点中";
 
     // ————————————————————— 媒体（内置集成） —————————————————————
 

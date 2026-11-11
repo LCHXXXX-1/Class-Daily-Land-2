@@ -24,6 +24,9 @@
       合成约 59%：云母透得出来，文字仍是深色压在浅底上，可读性不受影响。
     -->
     <SolidColorBrush x:Key="MicaLayerBrush" Color="#40FFFFFF" />
+    <!-- 亚克力：系统那层本来就偏白，这里只压极薄一层，别再叠白（叠厚了就是一块白板） -->
+    <SolidColorBrush x:Key="AcrylicLayerBrush" Color="#08FFFFFF" />
+    <SolidColorBrush x:Key="AcrylicCardBrush" Color="#0FFFFFFF" />
     <!-- 对话框/浮层面板：半透明而不是纯白，云母才透得上来 -->
     <SolidColorBrush x:Key="MicaDialogBrush" Color="#B8FFFFFF" />
     <!-- 35% 白：再厚就把云母完全盖住了（之前 45% 叠在 25% 的层上几乎纯白） -->
@@ -35,6 +38,51 @@
     <SolidColorBrush x:Key="CardStrokeColorDefaultBrush" Color="#0F000000" />
     <SolidColorBrush x:Key="CardStrokeColorDefaultSolidBrush" Color="#FFEBEBEB" />
     <SolidColorBrush x:Key="DividerStrokeColorDefaultBrush" Color="#15000000" />
+
+    <!--
+      液态玻璃材料（浅色）。参考 iOS 26 那套分层：内部散射 + 边缘折光 + 高光，**不用黑描边**。
+        · NavGlassBrush     卡片内部：半透明白，左上亮→右下暗（光线方向）
+        · NavGlassRimBrush  卡片边缘：上亮下暗的一圈高光，负责"玻璃有厚度"
+        · NavLensBrush      选中透镜：比卡片再亮一档，同样带渐变
+        · NavLensRimBrush   透镜边缘：顶边纯白，底部收淡（光只从上面来）
+    -->
+    <LinearGradientBrush x:Key="NavGlassBrush" StartPoint="0,0" EndPoint="0.7,1">
+        <GradientStop Color="#24FFFFFF" Offset="0" />
+        <GradientStop Color="#0FFFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="NavGlassRimBrush" StartPoint="0,0" EndPoint="0.7,1">
+        <GradientStop Color="#B3FFFFFF" Offset="0" />
+        <GradientStop Color="#1FFFFFFF" Offset="0.55" />
+        <GradientStop Color="#29000000" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="NavLensBrush" StartPoint="0,0" EndPoint="0.55,1">
+        <GradientStop Color="#8CFFFFFF" Offset="0" />
+        <GradientStop Color="#5CFFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="NavLensRimBrush" StartPoint="0,0" EndPoint="0.55,1">
+        <GradientStop Color="#FFFFFF" Offset="0" />
+        <GradientStop Color="#38000000" Offset="1" />
+    </LinearGradientBrush>
+    <!-- 内层倒角高光：贴边 1px 的一条亮线，玻璃"有厚度"的关键 -->
+    <LinearGradientBrush x:Key="NavGlassBevelBrush" StartPoint="0,0" EndPoint="0.7,1">
+        <GradientStop Color="#59FFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="0.62" />
+        <GradientStop Color="#1C000000" Offset="1" />
+    </LinearGradientBrush>
+    <!-- 抛光玻璃边缘：web 配方里的 border: 1px solid rgba(255,255,255,.80) -->
+    <!-- 0.5px 白 50% 内描边（rdev 的 0 0 0 0.5px rgba(255,255,255,.5) inset） -->
+    <LinearGradientBrush x:Key="NavLensEdgeBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#B3FFFFFF" Offset="0" />
+        <GradientStop Color="#80FFFFFF" Offset="0.45" />
+        <GradientStop Color="#66FFFFFF" Offset="1" />
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="NavLensBevelBrush" StartPoint="0,0" EndPoint="0.55,1">
+        <GradientStop Color="#FFFFFF" Offset="0" />
+        <GradientStop Color="#00FFFFFF" Offset="0.6" />
+        <GradientStop Color="#1A000000" Offset="1" />
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="NavGlassStrokeSoftBrush" Color="#1A000000" />
+    <SolidColorBrush x:Key="NavItemHoverFillBrush" Color="#0D000000" />
 
     <!-- 控件 -->
     <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#B3FFFFFF" />
@@ -103,6 +151,9 @@
     <!-- color-mix(accent 12% / 16%) 的预计算结果（导航选中底） -->
     <SolidColorBrush x:Key="NavSelectedBrush" Color="#1F005FB8" />
     <SolidColorBrush x:Key="NavSelectedHoverBrush" Color="#29005FB8" />
+
+    <!-- 顶部子页面胶囊的灰色选中底（不跟强调色走） -->
+    <SolidColorBrush x:Key="TabSelectedBrush" Color="#1A000000" />
 
     <!-- 阴影（DropShadowEffect 参数，对位 elevation-card-rest 与 elevation-dialog） -->
     <Color x:Key="CardShadowColor">#000000</Color>

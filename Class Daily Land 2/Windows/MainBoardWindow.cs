@@ -545,8 +545,6 @@ public sealed class MainBoardWindow : Window
     }
 
     /// <summary>设置里改了「触屏优化」后重新落一次滑动能力（幂等，尺寸在设置窗那边处理）。</summary>
-    public void ApplyTouchMode() => TouchMode.EnableTouchScroll(_homeworkScroll);
-
     // ————————————————————— 插件内容 —————————————————————
 
     /// <summary>
@@ -794,7 +792,10 @@ public sealed class MainBoardWindow : Window
         _fontSize = Math.Clamp(s.Int("main_font_size"), 10, 34);
         _widthRatio = Math.Clamp(s.Int("main_width_ratio"), 10, 80) / 100.0;
         _opacity = Math.Clamp(s.Int("main_opacity"), 30, 100) / 100.0;
-        _material = s.Bool("settings_mica");
+        // 主窗跟设置窗共用「窗口材质」那两个互斥开关：开哪个就用哪个，都不开就退回不透明。
+        _material = s.Bool("settings_acrylic") ? BoardMaterial.Acrylic
+                  : s.Bool("settings_mica") ? BoardMaterial.Mica
+                  : BoardMaterial.None;
         _boardBgMode = s.Str("board_bg_mode");
         _boardBgColor = s.Str("board_bg_color");
         _boardBgImage = s.Str("board_bg_image");
@@ -974,7 +975,10 @@ public sealed class MainBoardWindow : Window
     bool HasCustomBackground =>
         !string.Equals(_boardBgMode, "inherit", StringComparison.OrdinalIgnoreCase);
 
-    bool _material;                 // 设置里的「窗口材质」开关
+    /// <summary>主窗用的背板材质（跟着设置里那两个互斥开关走）。</summary>
+    enum BoardMaterial { None, Mica, Acrylic }
+
+    BoardMaterial _material;        // 设置里的「窗口材质」选择
     bool _materialHooked;           // 句柄未就绪时只挂一次 SourceInitialized
     WindowBackdrop _backdrop;       // 实际生效的材质（系统不支持时是 None）
     double _opacity = 1;            // 用户设定的整体不透明度（云母态折进底板 alpha）
@@ -1001,16 +1005,25 @@ public sealed class MainBoardWindow : Window
             return;
         }
 
-        // 主窗贴壁纸，要的是**实时模糊**（亚克力）；Mica 只是壁纸采样，几乎看不出"糊"。
-        // 关掉开关时把 accent policy 撤掉，退回不透明底色。
-        if (_material)
+        // 三个档位：
+        //   亚克力 —— 逐帧模糊（Win11 系统背板 / Win10 accent），壁纸会真的糊掉
+        //   云母   —— 壁纸采样，只取色不磨砂，文字更清楚（主窗贴桌面时更耐看）
+        //   都不开 —— 撤掉背板，退回不透明底色
+        switch (_material)
         {
-            _backdrop = Interop.ApplyBlur(this, ThemeService.IsDark, 0xA0);
-        }
-        else
-        {
-            Interop.ClearBlur(this);
-            _backdrop = Interop.ApplyBackdrop(this, false, ThemeService.IsDark);
+            case BoardMaterial.Acrylic:
+                _backdrop = Interop.ApplyBlur(this, ThemeService.IsDark, 0xA0);
+                break;
+
+            case BoardMaterial.Mica:
+                Interop.ClearBlur(this);
+                _backdrop = Interop.ApplyBackdrop(this, true, ThemeService.IsDark);
+                break;
+
+            default:
+                Interop.ClearBlur(this);
+                _backdrop = Interop.ApplyBackdrop(this, false, ThemeService.IsDark);
+                break;
         }
         // Win11 用系统原生圆角（用户明确要）；非 Win11 保持直角，
         // 且材质在上面已经整体回退成纯色 —— 不会出现"半透明但没模糊"的坏状态。
@@ -1018,7 +1031,7 @@ public sealed class MainBoardWindow : Window
         else Interop.UseSquareCorners(this);
 
         ApplyBackdropPaint();
-        Logger.Current?.Info($"[材质] 开关={(_material ? "开" : "关")} 实际={_backdrop} 系统Build={Environment.OSVersion.Version.Build}");
+        Logger.Current?.Info($"[材质] 选择={_material} 实际={_backdrop} 系统Build={Environment.OSVersion.Version.Build}");
     }
 
     void ApplyBackdropPaint()

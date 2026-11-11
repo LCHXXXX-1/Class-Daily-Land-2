@@ -7,8 +7,11 @@
         <TextBlock Style="{StaticResource PageLead}"
                    Text="插件可以往灵动岛、副岛、下拉面板和「班级日常」主窗里加内容。这里既能管理已安装的插件，也能从插件市场一键安装。" />
 
-        <!-- 两段：已安装 / 插件市场。市场不单独占一页，避免侧栏继续变长 -->
-        <fl:SelectorBar x:Name="PluginTabs" Margin="0,0,0,16" SelectedValue="installed">
+        <!--
+          两段：已安装 / 插件市场。选择器已经搬到设置窗口顶部的子页面胶囊里，
+          这里只保留控件作为状态源（代码切页仍走 PluginTabs.SelectedValue）。
+        -->
+        <fl:SelectorBar x:Name="PluginTabs" SelectedValue="installed" Visibility="Collapsed">
             <fl:SelectorItem Value="installed" Label="已安装" />
             <fl:SelectorItem Value="market" Label="插件市场" />
         </fl:SelectorBar>

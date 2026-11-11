@@ -310,9 +310,6 @@ public sealed class AppController
 
         // 内置集成：媒体（SMTC）与灾害预警。都只依赖 Paths/Settings/Dispatcher，
         // 所以放在窗口之前建好，窗口一出来就能拿到内容。
-        // 触屏优化是全局的：主窗/面板在构造时就要读到，所以先落一次
-        TouchMode.SetGlobal(Settings.Bool("touch_optimize"));
-
         Audio = new AudioService(Paths, Log);
         Audio.ApplySettings(Settings);
 
@@ -1029,13 +1026,6 @@ public sealed class AppController
         // 插件也要知道设置变了（比如它跟着 theme 换配色）
         try { Plugins?.RaiseSettingsChanged(e.Keys); }
         catch (Exception ex) { Log?.Warn("通知插件设置变更失败: " + ex.Message); }
-
-        if (e.Keys.Any(k => k == "touch_optimize"))
-        {
-            TouchMode.SetGlobal(Settings.Bool("touch_optimize"));
-            // 主窗与下拉面板是常驻窗口，设置窗口关掉后也要保持新手感
-            if (Main is not null) Main.ApplyTouchMode();
-        }
 
         if (e.Keys.Any(k => k.StartsWith("audio_", StringComparison.Ordinal)))
             Audio?.ApplySettings(Settings);

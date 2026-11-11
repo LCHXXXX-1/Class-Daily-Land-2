@@ -193,7 +193,7 @@
     </Style>
 
     <Style x:Key="SubtleButton" TargetType="Button" BasedOn="{StaticResource FluentButton}">
-        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Background" Value="{DynamicResource NavGlassBrush}" />
         <Setter Property="BorderBrush" Value="Transparent" />
         <Setter Property="MinWidth" Value="0" />
         <Setter Property="Padding" Value="8,0" />
@@ -285,7 +285,7 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource NavGlassStrokeSoftBrush}" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
@@ -386,6 +386,57 @@
                             <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
                             <Setter TargetName="RestLine" Property="Visibility" Value="Collapsed" />
                             <Setter TargetName="Underline" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!--
+      侧栏「查找设置」：一条圆角长条（半胶囊），半透明玻璃底 + 细描边，没有下划线。
+      和导航玻璃卡用同一套画刷 —— 视觉上是叠在一起的两层玻璃。
+    -->
+    <Style x:Key="NavSearchStrip" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderBrush" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TextBox">
+                    <Border x:Name="Bd" CornerRadius="16"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <fl:Icon Grid.Column="0" Size="15" Margin="12,0,0,0"
+                                     VerticalAlignment="Center"
+                                     Data="{StaticResource Icon.Search}"
+                                     Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <ScrollViewer x:Name="PART_ContentHost" Grid.Column="1" Margin="8,0,12,0"
+                                          VerticalAlignment="Center" />
+                            <TextBlock x:Name="Placeholder" Grid.Column="1" Margin="8,0,12,0"
+                                       VerticalAlignment="Center" IsHitTestVisible="False"
+                                       TextTrimming="CharacterEllipsis"
+                                       Visibility="Collapsed"
+                                       Text="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+                                       FontSize="{DynamicResource FontSizeBody}"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter TargetName="Placeholder" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ControlStrokeColorSecondaryBrush}" />
+                        </Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                            <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

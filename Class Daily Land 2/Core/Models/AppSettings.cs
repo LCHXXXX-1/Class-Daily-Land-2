@@ -62,8 +62,9 @@ public sealed class AppSettings
         new("anim_fade_panel", ValueKind.Bool, true),                 // 面板展开渐显
         new("anim_fade_text", ValueKind.Bool, true),                  // 文字变化渐显
         new("settings_mica", ValueKind.Bool, true),                   // 设置窗云母材质（Win11，默认开）
+        new("settings_acrylic", ValueKind.Bool, false),               // 设置窗亚克力材质（与云母互斥，默认关）
         new("color_theme", ValueKind.Str, "blue"),                    // 配色主题：blue/violet/teal/green/amber/rose/graphite
-        new("settings_background", ValueKind.Str, "mica"),             // 设置窗背景：mica（云母取色）/ solid / image
+        new("settings_background", ValueKind.Str, "mica"),             // 设置窗背景：mica（云母取色）/ acrylic（亚克力模糊）/ solid / image
         new("settings_bg_color", ValueKind.Str, "#F3F3F3"),           // 纯色背景颜色
         new("settings_bg_image", ValueKind.Str, ""),                  // 自定义背景图片（绝对路径）
 
@@ -78,9 +79,6 @@ public sealed class AppSettings
         new("show_sub_island", ValueKind.Bool, true),
         new("sub_island_default_collapsed", ValueKind.Bool, true),
         new("sub_island_auto_collapse_sec", ValueKind.Int, 8, 0, 600),
-
-        // —— 交互（触屏）——
-        new("touch_optimize", ValueKind.Bool, false),
 
         // —— 课表与提醒 ——
         new("schedule_advance_minutes", ValueKind.Int, 2, 0, 60),     // 提前提醒
@@ -146,7 +144,7 @@ public sealed class AppSettings
             "theme", "color_theme", "settings_background", "settings_bg_color", "settings_bg_image",
             "board_bg_mode", "board_bg_color", "board_bg_image",
             "fade_animation", "animation_duration_ms",
-            "anim_fade_panel", "anim_fade_text", "settings_mica", "touch_optimize",
+            "anim_fade_panel", "anim_fade_text", "settings_mica", "settings_acrylic",
         },
         [PageIsland] = new[]
         {

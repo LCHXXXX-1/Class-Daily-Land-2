@@ -122,7 +122,7 @@
                     CommandParameter="media" Click="OnCardClick" />
             <Button Content="灾害预警" Tag="&#xE730;" ToolTip="地震倒计时与气象灾害提醒"
                     CommandParameter="disaster" Click="OnCardClick" />
-            <Button Content="交互" Tag="&#xE7C9;" ToolTip="动画、渐显与触屏优化"
+            <Button Content="交互" Tag="&#xE7C9;" ToolTip="动画与渐显"
                     CommandParameter="interaction" Click="OnCardClick" />
             <Button Content="个性化" Tag="&#xE790;" ToolTip="颜色主题与窗口材质"
                     CommandParameter="appearance" Click="OnCardClick" />

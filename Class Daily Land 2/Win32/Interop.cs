@@ -63,6 +63,11 @@ internal static class Interop
     [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
     [DllImport("user32.dll", SetLastError = true)] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+    const int SPI_GETDESKWALLPAPER = 0x0014;
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    static extern bool SystemParametersInfo(int action, int param, StringBuilder value, int winIni);
+
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
     [DllImport("dwmapi.dll")] static extern int DwmExtendFrameIntoClientArea(IntPtr hwnd, ref MARGINS margins);
 
@@ -298,7 +303,9 @@ internal static class Interop
 
     const int DWMWCP_ROUND = 2;              // 圆角
     const int DWMWCP_DONOTROUND = 1;         // 直角（主窗要贴屏幕边缘，不能有圆角）
+    const int DWMSBT_NONE = 1;               // 无背板
     const int DWMSBT_MAINWINDOW = 2;         // Mica（主窗口云母）
+    const int DWMSBT_TRANSIENTWINDOW = 3;    // 亚克力（Desktop Acrylic），Win11 22H2+
 
     const int WCA_ACCENT_POLICY = 19;
     const int ACCENT_ENABLE_BLURBEHIND = 3;
@@ -331,6 +338,9 @@ internal static class Interop
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero) return WindowBackdrop.None;
 
+        // 合成面透明：否则 WPF 自己那层白底会把背板整个盖掉
+        MakeSurfaceTransparent(window);
+
         // 深色标题栏/边框：Win10 20H1 之前是属性 19，之后是 20
         if (!TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, dark ? 1 : 0))
             TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, dark ? 1 : 0);
@@ -362,6 +372,56 @@ internal static class Interop
         if (SupportsAcrylic && ApplyAcrylic(hwnd, dark)) return WindowBackdrop.Acrylic;
 
         return WindowBackdrop.None;
+    }
+
+    /// <summary>
+    /// 取当前桌面壁纸的文件路径（SPI_GETDESKWALLPAPER）。取不到返回 null。
+    /// DWM 的云母在浅色主题下几乎等于白，想要"玻璃背后真有东西"，只能自己拿壁纸来铺。
+    /// </summary>
+    public static string? GetWallpaperPath()
+    {
+        // ① 注册表优先：Wallpaper Engine 这类动态壁纸会把当前帧写成一张 jpg 并写在这里，
+        //    而 SPI_GETDESKWALLPAPER 在动态壁纸下经常返回空/旧路径（实测就是这么丢的）。
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
+            if (key?.GetValue("Wallpaper") is string reg && reg.Length > 0 && System.IO.File.Exists(reg))
+                return reg;
+        }
+        catch { /* 读不到就往下走 */ }
+
+        // ② 系统 API 兜底
+        try
+        {
+            var sb = new StringBuilder(1024);
+            if (SystemParametersInfo(SPI_GETDESKWALLPAPER, sb.Capacity, sb, 0) && sb.Length > 0)
+            {
+                var path = sb.ToString();
+                return System.IO.File.Exists(path) ? path : null;
+            }
+        }
+        catch { /* 老系统/只读桌面：当作没有 */ }
+        return null;
+    }
+
+    /// <summary>
+    /// 让 WPF 的合成面本身透明。
+    ///
+    /// ★ 只把 <see cref="Window.Background"/> 设成 Transparent 是不够的：WPF 的 HwndTarget
+    ///   还有一层自己的背景色（默认不透明，实测是白的），整块 HWND 会被它刷成实心色，
+    ///   DWM 的云母/亚克力就永远透不上来（表现就是"明明开了材质还是一片白"）。
+    /// </summary>
+    static void MakeSurfaceTransparent(Window window)
+    {
+        try
+        {
+            if (PresentationSource.FromVisual(window) is HwndSource src &&
+                src.CompositionTarget is not null)
+            {
+                src.CompositionTarget.BackgroundColor = System.Windows.Media.Colors.Transparent;
+            }
+        }
+        catch { /* 句柄还没建好时忽略，下一次 Apply 会补上 */ }
     }
 
     /// <summary>
@@ -407,27 +467,39 @@ internal static class Interop
     /// 背后有窗口在动也不会跟着糊；亚克力是**逐帧模糊**，才是肉眼能看出来的"毛玻璃"。
     /// Win11 上两者互斥，所以先把系统背板置为 NONE 再挂 accent policy。
     /// </summary>
-    public static WindowBackdrop ApplyBlur(Window window, bool dark, byte tintAlpha = 0xB4)
+    public static WindowBackdrop ApplyBlur(Window window, bool dark, byte tintAlpha = 0x73)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero) return WindowBackdrop.None;
 
+        MakeSurfaceTransparent(window);
+
         if (!TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, dark ? 1 : 0))
             TrySetDwm(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_OLD, dark ? 1 : 0);
 
-        // 老系统没有可靠的亚克力：直接判失败，让调用方整套回退成纯色（宁可朴素也别半透明坏掉）
-        if (!IsWindows11) return WindowBackdrop.None;
-
-        TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
-        TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, 1);   // DWMSBT_NONE：先让位给亚克力
-
-        try
+        if (IsWindows11)
         {
-            var margins = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
-            DwmExtendFrameIntoClientArea(hwnd, ref margins);
-        }
-        catch { /* 老系统没有也不影响 */ }
+            TrySetDwm(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND);
+            try
+            {
+                var margins = new MARGINS { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+                DwmExtendFrameIntoClientArea(hwnd, ref margins);
+            }
+            catch { /* 老系统没有也不影响 */ }
 
+            // ★ Win11 22H2 起，老办法（SetWindowCompositionAttribute 的 accent 亚克力）已经
+            //   **不再生效** —— 那就是"勾了亚克力但一点反应都没有"的原因。
+            //   Win11 上真正的亚克力是系统背板的 DWMSBT_TRANSIENTWINDOW。
+            if (TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_TRANSIENTWINDOW))
+                return WindowBackdrop.Acrylic;
+
+            // 21H2 及更早：系统没这档，退回 accent（先把背板置 NONE 让位）
+            TrySetDwm(hwnd, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_NONE);
+        }
+
+        // ★ Windows 10（1803+）：没有 SYSTEMBACKDROP_TYPE、也没有云母，
+        //   但 ACCENT_ENABLE_ACRYLICBLURBEHIND 一直在用，这是 Win10 唯一的"真·模糊"。
+        //   失败（<1803 / 透明效果被关）才返回 None，让调用方整套退回不透明底色。
         return ApplyAcrylic(hwnd, dark, tintAlpha) ? WindowBackdrop.Acrylic : WindowBackdrop.None;
     }
 
