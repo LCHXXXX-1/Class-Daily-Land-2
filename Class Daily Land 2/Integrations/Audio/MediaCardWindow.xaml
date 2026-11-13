@@ -1,4 +1,4 @@
-<Window x:Class="ClassDailyLand2.App.Integrations.Audio.MediaCardWindow"
+﻿<Window x:Class="ClassDailyLand2.App.Integrations.Audio.MediaCardWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="MediaCard"
@@ -16,7 +16,12 @@
       点岛上媒体片段后弹出的「展开卡」：封面 + 歌名/歌手 + 播放/暂停。
       手机灵动岛展开后也是一张这样的卡，位置直接挂在岛下面。
     -->
-    <Border x:Name="Card" CornerRadius="12" Padding="12" Opacity="0">
+    <!--
+      这里**不能**写 Opacity="0"：淡入淡出是代码在 Window 的 Opacity 上做的，
+      本地值 0 会一直压着子元素（属性优先级里只有动画能覆盖本地值，而动画动的是窗口），
+      整张卡就永远不可见 —— 但计时器、按钮、Esc 全都照常工作，极难发现。
+    -->
+    <Border x:Name="Card" CornerRadius="12" Padding="12">
         <Border.RenderTransform>
             <TranslateTransform x:Name="CardShift" Y="6" />
         </Border.RenderTransform>

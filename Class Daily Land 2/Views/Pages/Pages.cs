@@ -1903,10 +1903,25 @@ public partial class AboutPage : UserControl
         PluginDeveloperToolRow.Visibility = visibility;
     }
 
+    /// <summary>错误码清单窗（单例复用，避免连点叠出多个）。</summary>
+    ErrorCodeListWindow? _errorCodeWindow;
+
+    /// <summary>插件开发工具安装向导（单例复用：它会往 %TEMP% 下载，叠两个会互相踩）。</summary>
+    DeveloperToolSetupWindow? _devToolSetupWindow;
+
     /// <summary>错误码清单：非模态打开，方便对照着报错窗看。</summary>
     void OnShowErrorCodesClick(object sender, RoutedEventArgs e)
     {
+        // 非模态窗没有关闭前再点一次就是叠一个：同一个实例复用，已经开着就只激活
+        if (_errorCodeWindow is { IsVisible: true })
+        {
+            _errorCodeWindow.Activate();
+            return;
+        }
+
         var window = new ErrorCodeListWindow();
+        _errorCodeWindow = window;
+        window.Closed += (_, _) => { if (ReferenceEquals(_errorCodeWindow, window)) _errorCodeWindow = null; };
         if (Window.GetWindow(this) is Window owner) window.Owner = owner;
         window.Show();
     }
@@ -1940,7 +1955,16 @@ public partial class AboutPage : UserControl
             "是否下载在线安装器？下载完成后会自动启动安装向导。",
             () =>
             {
+                // 这个窗会往 %TEMP% 下载安装器：叠两个就会并发写同一个 .part，互相删对方的文件
+                if (_devToolSetupWindow is { IsVisible: true })
+                {
+                    _devToolSetupWindow.Activate();
+                    return;
+                }
+
                 var window = new DeveloperToolSetupWindow();
+                _devToolSetupWindow = window;
+                window.Closed += (_, _) => { if (ReferenceEquals(_devToolSetupWindow, window)) _devToolSetupWindow = null; };
                 if (Window.GetWindow(this) is Window owner) window.Owner = owner;
                 window.Show();
             },

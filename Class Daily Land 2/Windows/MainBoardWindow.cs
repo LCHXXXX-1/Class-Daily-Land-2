@@ -243,7 +243,10 @@ public sealed class MainBoardWindow : Window
         _scrollTimer.Tick += (_, _) => StepScroll();
 
         ApplyTheme();
-        Palette.Changed += (_, _) => ApplyTheme();
+        Palette.Changed += OnPaletteChanged;
+        // OnClosing 里无条件 e.Cancel=true，Closed 永远不会来；这里仍然挂上，
+        // 是为了将来真改成可关闭时不会又漏一个订阅。
+        Closed += (_, _) => Palette.Changed -= OnPaletteChanged;
         SourceInitialized += (_, _) =>
         {
             Interop.MakeToolWindowNoActivate(this, hideFromAltTab: false);
@@ -1095,6 +1098,10 @@ public sealed class MainBoardWindow : Window
         var alpha = (byte)Math.Clamp(0x3D * _opacity, 0, 255);
         return new SolidColorBrush(Color.FromArgb(alpha, c.R, c.G, c.B));
     }
+
+    /// <summary>调色板变化（具名方法，便于退订）。</summary>
+    void OnPaletteChanged(object? sender, EventArgs e) => ApplyTheme();
+
 
     void ApplyTheme()
     {

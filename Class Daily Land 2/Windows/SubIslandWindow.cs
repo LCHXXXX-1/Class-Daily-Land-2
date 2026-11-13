@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Integrations.Weather;
+﻿using ClassDailyLand2.App.Integrations.Weather;
 using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Win32;
 using ClassDailyLand2.Core.Models;
@@ -88,8 +88,14 @@ public sealed partial class SubIslandWindow : Window
             Interop.MakeToolWindowNoActivate(this);
             _pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         };
-        Palette.Changed += (_, _) => ApplyPalette();
+        Palette.Changed += OnPaletteChanged;
+        // 同主岛：静态事件必须成对退订，否则窗口重建时整棵可视树被钉死
+        Closed += (_, _) => Palette.Changed -= OnPaletteChanged;
     }
+
+    /// <summary>调色板变化（具名方法，便于退订）。</summary>
+    void OnPaletteChanged(object? sender, EventArgs e) => ApplyPalette();
+
 
     void ApplyPalette()
     {

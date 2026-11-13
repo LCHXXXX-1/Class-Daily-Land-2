@@ -1,4 +1,4 @@
-using ClassDailyLand2.Core;
+﻿using ClassDailyLand2.Core;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -66,7 +66,9 @@ public sealed class SmtcBridge : IDisposable
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
-                RedirectStandardError = true,
+                // ★ 不重定向 stderr：子进程 stderr 管道约 4KB，没人读就会写满并**阻塞子进程**，
+                //   轮询脚本一挂，媒体卡就再也不刷新。要留 stderr 就得异步读，这里直接不接。
+                RedirectStandardError = false,
                 RedirectStandardInput = false,
                 StandardOutputEncoding = new UTF8Encoding(false),
             };
@@ -199,7 +201,9 @@ public sealed class SmtcBridge : IDisposable
                     UseShellExecute = false,
                     CreateNoWindow = true,
                     RedirectStandardOutput = true,
-                    RedirectStandardError = true,
+                    // ★ 不重定向 stderr：子进程 stderr 管道约 4KB，没人读就会写满并**阻塞子进程**，
+                //   轮询脚本一挂，媒体卡就再也不刷新。要留 stderr 就得异步读，这里直接不接。
+                RedirectStandardError = false,
                 };
                 foreach (var a in new[] { "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script })
                     psi.ArgumentList.Add(a);

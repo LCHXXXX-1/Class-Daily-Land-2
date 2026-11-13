@@ -1,4 +1,4 @@
-using ClassDailyLand2.Core;
+﻿using ClassDailyLand2.Core;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Controls;
@@ -35,9 +35,12 @@ public sealed class TrayIcon : IDisposable
     public TrayIcon(Logger? log = null)
     {
         _log = log;
+        // 自己 new 的 Icon 句柄：NotifyIcon 不负责释放它，Dispose 里要自己收（否则每次运行漏一个 GDI 句柄）
+        _trayIcon = LoadIcon();
+
         _notify = new WinForms.NotifyIcon
         {
-            Icon = LoadIcon(),
+            Icon = _trayIcon,
             Text = "班级日常 ClassDailyLand2",
             Visible = true,
         };
@@ -186,6 +189,9 @@ public sealed class TrayIcon : IDisposable
         return menu;
     }
 
+    /// <summary>托盘图标（自己创建的才需要释放；SystemIcons.Application 是共享实例，不能 Dispose）。</summary>
+    Icon? _trayIcon;
+
     static Icon LoadIcon()
     {
         try
@@ -239,6 +245,13 @@ public sealed class TrayIcon : IDisposable
         try
         {
             _notify.Visible = false;
+            // 先摘掉图标引用再释放句柄：顺序反了 NotifyIcon 内部还会去碰已释放的 HICON
+            _notify.Icon = null;
+
+            if (_trayIcon is not null && !ReferenceEquals(_trayIcon, System.Drawing.SystemIcons.Application))
+                _trayIcon.Dispose();
+            _trayIcon = null;
+
             _notify.Dispose();
         }
         catch { }

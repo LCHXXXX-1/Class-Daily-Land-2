@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -90,14 +90,22 @@ public static class AtomicJson
         }
     }
 
+    /// <summary>
+    /// 把 tmp 文件的系统缓存刷到磁盘。
+    ///
+    /// ★ 必须以**可写**句柄打开：FileStream.Flush(true) 内部是
+    ///   <c>if (flushToDisk &amp;&amp; CanWrite) FlushFileBuffers()</c>，
+    ///   用 FileAccess.Read 打开时 CanWrite=false，这一句等于什么都没做 ——
+    ///   断电时数据还在系统缓存里，替换完就是一份空白文件。
+    /// </summary>
     static void FlushToDisk(string tmp)
     {
         try
         {
-            using var fs = new FileStream(tmp, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var fs = new FileStream(tmp, FileMode.Open, FileAccess.Write, FileShare.ReadWrite);
             fs.Flush(true);
         }
-        catch (IOException) { /* 刷盘失败不影响替换语义 */ }
+        catch (IOException) { /* 刷盘失败不影响替换语义，但不能因此不写盘 */ }
     }
 
     static void TryDelete(string path)
@@ -133,14 +141,41 @@ public static class AtomicJson
             Logger.Current?.Trace($"[文件读] 完成 {full}（{text.Length} 字符 → {typeof(T).Name}，{sw.ElapsedMilliseconds}ms）");
             return result;
         }
-        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
+        catch (JsonException ex)
         {
-            Logger.Current?.Warn($"[文件读] {full} 损坏（{ex.GetType().Name}: {ex.Message}），回退默认值" +
+            // 真的是坏内容：隔离 + 回默认值（这是 quarantine 这个机制存在的唯一理由）
+            Logger.Current?.Warn($"[文件读] {full} 内容损坏（{ex.Message}），回退默认值" +
                                  (quarantineBad ? "，原文件隔离为 .bad" : ""));
             if (quarantineBad)
             {
                 try { File.Move(full, full + ".bad", overwrite: true); } catch { }
             }
+            return factory();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // ★ 读不动 ≠ 文件坏了。杀软扫描、同步盘临时占用都会抛 IOException，
+            //   原来的写法会把好好的 schedule.json 改名 .bad，接着任意一次 Save 就用默认数据占了原名字 ——
+            //   用户看到的就是"课表凭空变回默认"。这里只重试、不隔离。
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                try
+                {
+                    Thread.Sleep(60);
+                    var retryText = File.ReadAllText(full, Encoding.UTF8);
+                    if (string.IsNullOrWhiteSpace(retryText)) continue;
+                    var retryNode = JsonNode.Parse(retryText);
+                    if (retryNode is not null)
+                    {
+                        var retryValue = retryNode.Deserialize<T>(Options);
+                        if (retryValue is not null) return retryValue;
+                    }
+                }
+                catch { /* 继续重试 */ }
+            }
+
+            Logger.Current?.Error($"[文件读] {full} 暂时读不出来（{ex.GetType().Name}: {ex.Message}），" +
+                                  "本次用默认值但不隔离原文件");
             return factory();
         }
     }
@@ -178,6 +213,12 @@ public static class AtomicJson
         {
             Logger.Current?.Warn($"[文件读] {full} JSON 解析失败（{ex.Message}），原文件隔离为 .bad");
             try { File.Move(full, full + ".bad", overwrite: true); } catch { }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // 设置文件是启动链路上第一份数据：这里让异常冒出去 = 整个程序起不来。
+            // 读不动就按"没有设置"处理，下次保存会重新写一份完好的。
+            Logger.Current?.Error($"[文件读] {full} 读不出来（{ex.GetType().Name}: {ex.Message}），本次按空设置处理");
         }
         return result;
     }

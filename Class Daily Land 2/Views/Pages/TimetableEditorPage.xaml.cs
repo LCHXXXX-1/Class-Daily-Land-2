@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.ViewModels;
+﻿using ClassDailyLand2.App.ViewModels;
 using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Models;
 using Microsoft.Win32;
@@ -330,17 +330,26 @@ public partial class TimetableEditorPage : UserControl
     {
         CommitWeekendEdits();
 
+        // ★ 上一行的「结束」是用户可自由编辑的文本框：清空 / 敲了非数字都会走到这里。
+        //   原来直接 Split(':')[1] + int.Parse，越界或格式错就是一次崩溃。
+        //   现在解析不出来就退回 08:00，并在状态栏说清楚为什么不是接着上一节排。
+        var previousEnd = _weekendRows.Count > 0 ? _weekendRows[^1].End?.Trim() ?? "" : "08:00";
+        var startText = NormalizeClock(previousEnd);
+        var guessed = startText is null;
+
         var row = new WeekendRow
         {
             Name = $"第{_weekendRows.Count + 1}节",
-            Start = _weekendRows.Count > 0 ? _weekendRows[^1].End : "08:00",
+            Start = startText ?? "08:00",
         };
 
-        var (h, m) = AddMinutes(row.Start.Split(':')[0], row.Start.Split(':')[1], 45);
+        var (h, m) = AddMinutes(row.Start[..2], row.Start[3..], 45);
         row.End = $"{h}:{m}";
 
         _weekendRows.Add(row);
-        StatusText.Text = "已新增一节周末课（记得点「保存」）。";
+        StatusText.Text = guessed
+            ? "上一节的结束时间读不出来，这一节按 08:00 起排——请手动改一下（记得点「保存」）。"
+            : "已新增一节周末课（记得点「保存」）。";
     }
 
     void DeleteWeekend_Click(object sender, RoutedEventArgs e)
@@ -694,6 +703,31 @@ public partial class TimetableEditorPage : UserControl
         }
 
         return ("08", "00");
+    }
+
+    /// <summary>
+    /// 把用户敲的时间规整成 <c>HH:mm</c>；认不出来返回 null（调用方自己决定兜底值）。
+    /// 容忍 "8:5"、"8：05"（全角冒号）、"08"、"0805" 这类常见手误。
+    /// </summary>
+    static string? NormalizeClock(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+
+        var text = raw.Trim().Replace('：', ':').Replace('．', '.').Replace('.', ':');
+
+        string hh, mm;
+        var parts = text.Split(':', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2) { hh = parts[0]; mm = parts[1]; }
+        else if (parts.Length == 1 && parts[0].Length is 3 or 4)
+        {
+            hh = parts[0][..^2];
+            mm = parts[0][^2..];
+        }
+        else return null;
+
+        if (!int.TryParse(hh, out var h) || !int.TryParse(mm, out var m)) return null;
+        if (h is < 0 or > 23 || m is < 0 or > 59) return null;
+        return $"{h:D2}:{m:D2}";
     }
 
     /// <summary>在新一节的结束时间上顺延，跨午夜时对 24 小时取模。</summary>

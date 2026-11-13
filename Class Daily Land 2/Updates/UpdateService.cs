@@ -584,8 +584,18 @@ public sealed class UpdateService
         }
 
         // ── 快速路径：检查更新时已经预复制到 %Temp%\CDL_UpdateTemp ──
+        //
+        // ★ 快速路径的启动参数只有「下载地址 / sha256 / 安装目录 / exe 名」四个，
+        //   资源包和备用下载地址都带不过去。原来无条件走快速路径，导致
+        //   ① 资源包永远装不上（下次照样提示有资源包更新）；② 主源挂了不会用备用地址。
+        //   所以：有资源包待装、或需要备用地址时，老老实实走 job.json 路径。
+        var pendingResources = Status.Resources is { } pendingRes &&
+                               pendingRes.Version > SemVer.ParseOrZero(_settings.Str("resources_version"));
+        var needsFallback = string.IsNullOrWhiteSpace(offer.DownloadUrlFallback) ||
+                            string.Equals(offer.DownloadUrlFallback, offer.DownloadUrl, StringComparison.OrdinalIgnoreCase);
+
         var preparedExe = _preparedUpdaterExe;
-        if (preparedExe is not null && File.Exists(preparedExe))
+        if (preparedExe is not null && File.Exists(preparedExe) && !pendingResources && !needsFallback)
         {
             var elevate = !UpdateEnvironment.IsElevated &&
                           !UpdateEnvironment.IsDirectoryWritable(UpdateEnvironment.InstallDir, out _);

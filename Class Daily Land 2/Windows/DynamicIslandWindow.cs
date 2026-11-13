@@ -208,8 +208,14 @@ public sealed partial class DynamicIslandWindow : Window
         //   · RefreshMarquee 要重新 MeasureText + 重建一遍关键帧动画 —— 每帧做纯属浪费，
         //     中途重启还会让跑马灯"抖一下"。改成 80ms 防抖，几何落定后再排一次。
         SizeChanged += (_, _) => { ApplyChrome(); ScheduleMarqueeRefresh(); };
-        Palette.Changed += (_, _) => ApplyPalette();
+        Palette.Changed += OnPaletteChanged;
+        // 静态事件会一直抓住这个窗口（连同整棵视觉树）：窗口一旦重建就是硬泄漏
+        Closed += (_, _) => Palette.Changed -= OnPaletteChanged;
     }
+
+    /// <summary>调色板变化（具名方法：静态事件必须能退订，lambda 退不掉）。</summary>
+    void OnPaletteChanged(object? sender, EventArgs e) => ApplyPalette();
+
 
     void ApplyPalette()
     {

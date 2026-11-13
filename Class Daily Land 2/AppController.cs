@@ -1166,11 +1166,16 @@ public sealed class AppController
     /// <summary>打开（或激活）设置中心；二级浮层都开在它内部。</summary>
     public Views.SettingsWindow EnsureSettings()
     {
-        if (_settingsWindow is { IsVisible: true })
+        // ★ 复用条件是「对象还在」，不是「当前可见」：
+        //   HideForUpdater 只会 Hide() 不 Close()，按 IsVisible 判断就会走下面的 new，
+        //   把旧窗口覆盖掉 —— 那个窗口还活着（持着 HWND 和 PreviewChanged 订阅），
+        //   WPF 不会再回收它，于是每隐藏一次就漏一棵可视树，甚至两个设置窗并存。
+        if (_settingsWindow is not null)
         {
             // 插件 / 程序内部主动要开设置页时，最小化的话先还原（右键「设置」走的是 ShowSettings，不会到这儿）
             if (_settingsWindow.WindowState == WindowState.Minimized)
                 _settingsWindow.WindowState = WindowState.Normal;
+            if (!_settingsWindow.IsVisible) _settingsWindow.Show();
             _settingsWindow.Activate();
             return _settingsWindow;
         }
@@ -1416,7 +1421,8 @@ public sealed class AppController
     }
 
     /// <summary>更新器只允许拉起一次：连点两次会变成两个更新器抢着替换同一批文件。</summary>
-    bool _updateLaunched;
+    /// <summary>更新器是否在跑。UI 线程读写、后台线程复位 —— 必须是 volatile。</summary>
+    volatile bool _updateLaunched;
 
     /// <summary>
     /// 用户在关于页点「立即更新」：只拉起更新器，**主程序继续留在后台运行**。
@@ -1602,7 +1608,14 @@ public sealed class AppController
     /// </summary>
     private void WatchUpdaterProcess(int pid)
     {
-        if (pid <= 0) return;
+        if (pid <= 0)
+        {
+            // ★ 没拿到 PID 也要放开锁存：原来这里直接 return，_updateLaunched 就永远停在 true，
+            //   本会话之后再点「立即更新 / 重新安装」全部被静默忽略（用户以为按钮坏了）。
+            _updateLaunched = false;
+            Log?.Warn("[更新] 没拿到更新器 PID，跳过进程监视，直接解除更新锁存");
+            return;
+        }
 
         _ = Task.Run(async () =>
         {
@@ -1672,6 +1685,9 @@ public sealed class AppController
         Log?.Step("退出", "开始收尾：停止定时器 / 关闭插件 / 释放托盘");
 
         _tick.Stop();
+        // 演示计时器是 33ms 的：不停掉的话，退出期间它还在逐帧改岛和目标，拖住 GC 与插件卸载
+        try { _demoTimer?.Stop(); }
+        catch { /* 退出路径不抛 */ }
         try { Plugins?.ShutdownAll(); }
         catch { /* 退出路径不抛 */ }
         try { _watchdog?.Dispose(); }      // 观察进程还活着就一起带走（标记为预期退出，不会报错）

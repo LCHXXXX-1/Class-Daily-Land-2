@@ -1,4 +1,4 @@
-using ClassDailyLand2.UpdateContract;
+﻿using ClassDailyLand2.UpdateContract;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -57,6 +57,11 @@ public sealed class MarketIndex
 
         if (raw is null)
             return new MarketParseResult(null, Array.Empty<string>(), "索引解析结果为空。");
+
+        // 远端写成 "plugins": null 时，反序列化会把初始化好的空列表也换成 null ——
+        // 后面的 raw.Plugins.Count 直接 NRE，而 NRE 不在 JsonException 的 catch 范围内，会冒到上层。
+        if (raw.Plugins is null)
+            return new MarketParseResult(null, Array.Empty<string>(), "索引里的 plugins 字段是 null。");
 
         if (raw.Schema > SupportedSchema)
         {

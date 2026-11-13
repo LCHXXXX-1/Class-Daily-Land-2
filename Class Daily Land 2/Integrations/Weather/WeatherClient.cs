@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -40,7 +40,10 @@ public static class WeatherClient
         var humidity = Num(cur, "relative_humidity_2m");
         var wind = Num(cur, "wind_speed_10m");
         var dir = Num(cur, "wind_direction_10m");
-        var isDay = Num(cur, "is_day") >= 0.5;   // 缺字段按白天算，月亮不会莫名其妙冒出来
+        // ★ NaN >= 0.5 恒为 false：缺字段时原来会判成"夜里"，与注释意图正好相反
+        //   （界面上大白天挂一轮月亮）。NaN 单独放行成白天。
+        var isDayRaw = Num(cur, "is_day");
+        var isDay = double.IsNaN(isDayRaw) || isDayRaw >= 0.5;
 
         var desc = WeatherCodes.Describe((int)code, isDay);
 

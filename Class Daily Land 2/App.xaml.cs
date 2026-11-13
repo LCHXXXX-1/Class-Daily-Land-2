@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 
 namespace ClassDailyLand2.App;
@@ -16,6 +16,9 @@ public partial class App : Application
 
     Mutex? _mutex;
     RegisteredWaitHandle? _wakeRegistration;
+
+    /// <summary>唤醒用的命名事件句柄。必须由字段持有 —— 见 OnStartup 里的说明。</summary>
+    EventWaitHandle? _wakeEvent;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -117,8 +120,11 @@ public partial class App : Application
                 Dispatcher.BeginInvoke(() => controller.ShowSettings(pageArg["--show-page=".Length..]));
 
 
-            using var wake = new EventWaitHandle(false, EventResetMode.AutoReset, WakeEventName, out _);
-            _wakeRegistration = ThreadPool.RegisterWaitForSingleObject(wake,
+            // ★ 句柄必须活到进程结束：命名事件在**最后一个句柄关闭的瞬间**名字就没了，
+            //   第二实例的 OpenExisting 会失败 → 双击图标什么也不会发生。
+            //   原来写成 `using var`（作用域到 try 块末尾），等于注册完立刻销毁。
+            _wakeEvent = new EventWaitHandle(false, EventResetMode.AutoReset, WakeEventName, out _);
+            _wakeRegistration = ThreadPool.RegisterWaitForSingleObject(_wakeEvent,
                 (_, _) => Dispatcher.BeginInvoke(() => controller.ShowFromSecondInstance()),
                 state: null, millisecondsTimeOutInterval: -1, executeOnlyOnce: false);
         }
@@ -132,6 +138,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _wakeRegistration?.Unregister(null);
+        _wakeEvent?.Dispose();      // 进程要走了，这时才可以放掉命名事件
         Controller?.Shutdown();
         base.OnExit(e);
     }

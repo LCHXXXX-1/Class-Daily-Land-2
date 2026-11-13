@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Theme;
+﻿using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.Core.Managers;
 using CommunityToolkit.Mvvm.ComponentModel;
 using System.ComponentModel;
@@ -121,9 +121,11 @@ public sealed partial class SettingsViewModel : ObservableObject
     void Write(string key, object? value, [System.Runtime.CompilerServices.CallerMemberName] string property = "")
     {
         _keyToProperty[key] = property;
+        // ★ 必须 try/finally：落盘抛异常（磁盘满、文件被占）时标志会卡在 true，
+        //   之后 OnSettingsChangedExternally 永远 early-return，外部改设置再也刷不到界面。
         _writingFromUi = true;
-        S.Set(key, value);
-        _writingFromUi = false;
+        try { S.Set(key, value); }
+        finally { _writingFromUi = false; }
         OnPropertyChanged(property);
     }
 
@@ -157,8 +159,11 @@ public sealed partial class SettingsViewModel : ObservableObject
         var batch = _pending.ToList();
         _pending.Clear();
         _writingFromUi = true;
-        foreach (var (key, value) in batch) S.Set(key, value);
-        _writingFromUi = false;
+        try
+        {
+            foreach (var (key, value) in batch) S.Set(key, value);
+        }
+        finally { _writingFromUi = false; }
     }
 
     /// <summary>窗口关闭前调用，确保防抖中的值都落盘。</summary>

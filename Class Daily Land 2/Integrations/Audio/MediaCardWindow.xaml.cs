@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Theme;
+﻿using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Win32;
 using System.Windows;
 using System.Windows.Input;
@@ -16,6 +16,9 @@ public sealed partial class MediaCardWindow : Window
 {
     readonly DispatcherTimer _hold = new() { Interval = TimeSpan.FromSeconds(6) };
     bool _closing;
+
+    /// <summary>淡出代次：Present 时 +1，过期的 Completed 回调据此自我作废。</summary>
+    int _fadeGeneration;
 
     public event Action? PlayPauseRequested;
 
@@ -61,6 +64,9 @@ public sealed partial class MediaCardWindow : Window
         Left = Math.Max(work.Left + 8, left);
         Top = top;
 
+        // 上一次淡出还没播完就又来了：作废那一轮，否则它 140ms 后会把刚弹出的卡 Hide 掉
+        _fadeGeneration++;
+
         if (!IsVisible)
         {
             _closing = false;
@@ -97,9 +103,11 @@ public sealed partial class MediaCardWindow : Window
         _closing = true;
         _hold.Stop();
 
+        var generation = ++_fadeGeneration;
         var fade = new DoubleAnimation(Opacity, 0, new Duration(TimeSpan.FromMilliseconds(140)));
         fade.Completed += (_, _) =>
         {
+            if (generation != _fadeGeneration) return;    // 期间又 Present 过，这次淡出作废
             Hide();
             Opacity = 0;
             _closing = false;

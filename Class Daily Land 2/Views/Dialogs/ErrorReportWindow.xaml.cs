@@ -1,4 +1,4 @@
-using ClassDailyLand2.Core;
+﻿using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Diagnostics;
 using Microsoft.Win32;
 using System.Diagnostics;
@@ -238,6 +238,12 @@ public partial class ErrorReportWindow : Window
     /// 统一的报错入口：写 ERROR 日志 → 存最近 200 行快照 → 发通知 → 弹窗（同一时刻只留一个）。
     /// 任意线程可调用。<paramref name="detail"/> 同时进日志和窗口，别只给窗口。
     /// </summary>
+    /// <summary>报错节流：错误码+种类+模块 → 上次弹窗时刻（TickCount64）。</summary>
+    static readonly Dictionary<string, long> _lastReportAt = new(StringComparer.Ordinal);
+
+    /// <summary>同一错误的最短重复间隔（毫秒）。</summary>
+    const int ReportCooldownMs = 10_000;
+
     public static void Report(string kind, string? detail = null, Exception? exception = null,
         string? moduleName = null, ErrorCode? code = null)
     {
@@ -251,6 +257,22 @@ public partial class ErrorReportWindow : Window
             text += Environment.NewLine + exception;
 
         var module = string.IsNullOrWhiteSpace(moduleName) ? ModuleOf(exception) : moduleName!;
+
+        // ★ 同一错误 10 秒内只报一次。
+        //   异常一旦落在每秒的 Tick 里，原来每拍都会拉一个独立报错进程 + 写一份 JSON，
+        //   形成"每秒一个进程"的风暴（而且是主程序越不稳越猛）。这里按「错误码+种类+模块」压一压：
+        //   重复的直接吞掉（日志里留一行），首条照常弹。
+        var throttleKey = $"{resolved.Code}|{kind}|{module}";
+        var nowTicks = Environment.TickCount64;
+        if (_lastReportAt.TryGetValue(throttleKey, out var lastAt) && nowTicks - lastAt < ReportCooldownMs)
+        {
+            try { logger?.Warn($"[报错] {throttleKey} 在 {ReportCooldownMs / 1000} 秒内重复出现，本次只记日志不弹窗"); }
+            catch { /* 日志失败不能影响主流程 */ }
+            return;
+        }
+
+        _lastReportAt[throttleKey] = nowTicks;
+        if (_lastReportAt.Count > 64) _lastReportAt.Clear();   // 键是有限集合，加个上限兜底
 
         try { logger?.Error($"[报错] {resolved.Code} {kind}（{module}）：{text}"); }
         catch { /* 日志失败不能影响弹窗 */ }
