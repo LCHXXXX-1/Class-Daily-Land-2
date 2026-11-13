@@ -1,12 +1,14 @@
 {
   "stable": {
-    "version": "1.8.5",
+    "version": "1.8.6",
     "release_date": "2026-11-14",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.5.zip",
-    "sha256": "0aa823b7ca58d5f0aa464e05ab9435badbecc97ddcbfa2a564937448e5bcf414",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.6.zip",
+    "sha256": "f8354c4451fc29deb7d60f9466d1642e21f21575db4b82931d457303a3676977",
     "changelog": [
-      "新增：更新器组件缺失时自动从更新包补回（缺 Update\\ 也能自愈，不用再手动重装）",
-      "修复：1.8.3 更新包漏带 Update\\ 导致「重装 / 更新」报「更新器准备失败」"
+      "更新器改为「先解压到临时目录 → 关键文件校验 → 备份 → 替换 → 失败自动回滚」，不再先清空程序目录",
+      "安装包缺少主程序时直接中止，现有程序不动（不会再出现\"更新完打不开\"）",
+      "打包脚本加残包拦截：缺主程序 / 缺 Update\\Updater.exe 一律拒绝出包",
+      "修复 1.8.5 因打包残缺导致更新后程序目录被清空的问题"
     ],
     "is_mandatory": false
   },
