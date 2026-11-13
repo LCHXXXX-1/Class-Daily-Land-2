@@ -146,6 +146,18 @@ fs.writeFileSync(path.join(work, 'install.info.json'), JSON.stringify(info, null
 
 console.log(`staging：${copied.length} 个文件（已排除 settings/ plugins/ *.pdb *.log）`);
 
+// ★ 硬校验：包里必须有主程序和更新器。
+//   1.8.5 就是因为 staging 少了一大半文件（连主 exe 都没有）还照样打了包，
+//   用户装完更新器把程序目录清了、却没有东西可解，直接变成"打不开"。
+//   这里宁可打不出来，也不许发出一个残包。
+const REQUIRED = ['Class Daily Land 2.exe', 'Update/Updater.exe'];
+for (const rel of REQUIRED) {
+  if (!fs.existsSync(path.join(work, rel))) {
+    console.error(`打包中止：staging 里缺少 ${rel}（共 ${copied.length} 个文件）`);
+    process.exit(1);
+  }
+}
+
 // ─────────────────────────── 打包 ───────────────────────────
 fs.mkdirSync(OUT_DIR, { recursive: true });
 const isBeta = CHANNEL === 'beta';

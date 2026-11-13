@@ -1,4 +1,4 @@
-using ClassDailyLand2.Core;
+﻿using ClassDailyLand2.Core;
 using ClassDailyLand2.Shared;
 using ClassDailyLand2.UpdateContract;
 using System.Diagnostics;
@@ -204,40 +204,62 @@ internal static class Program
         // ⑤ 先落一份「正在替换」：断电 / 被硬杀时，新程序启动能看出上次没做完
         WriteResult(job, ok: false, stage: "replacing", message: "正在替换文件…", backupDir: "");
 
-        // ⑥ 最干净的环境覆盖：删除 --target 下除 settings / plugins 外的全部内容。
-        //    更新器自己运行在 %Temp% 的副本里，所以目标目录的 Update 文件夹也可以删。
-        ui.Status("正在清理旧文件…");
+        var targetDir = job.App.InstallDir;
+
+        // ⑥ ★ 先解到**临时目录**，确认这个包是完整的，再动程序目录。
+        //    以前是"先把目标目录清空再解压进去"：包一旦不完整（1.8.5 就是这么发的），
+        //    旧文件已经删了、新的又没有，用户直接少一个程序，而且没有任何回滚余地。
+        ui.Status("正在解压安装包…");
         ui.SetProgress(92);
 
-        var targetDir = job.App.InstallDir;
-        var cleaned = await Task.Run(() => ClearTarget(targetDir, log), ct).ConfigureAwait(true);
-        if (!cleaned)
-        {
-            return Fail(job, log, ui, UpdateExitCode.AccessDenied,
-                $"清理目标目录失败：{targetDir}。请确认没有其他程序占用文件后重试。");
-        }
-
-        // ⑦ 直接把下载的 ZIP 解压到目标目录；PayloadExtractor 仍然负责 Zip Slip、
-        //    条目数 / 解压总量限制，以及 settings / plugins 的保留规则。
-        ui.Status("正在解压替换文件…");
-        ui.SetProgress(94);
+        var staging = Path.Combine(job.Paths.WorkDir, "payload");
+        try { if (Directory.Exists(staging)) Directory.Delete(staging, recursive: true); }
+        catch { /* 删不掉就复用，下面 Extract 会覆盖 */ }
+        Directory.CreateDirectory(staging);
 
         List<string>? payload = null;
         string? extractError = null;
 
         await Task.Run(() =>
         {
-            payload = PayloadExtractor.Extract(downloaded, targetDir, job, log, out extractError,
-                (done, total) => ui.SetProgress(94 + 5.0 * done / Math.Max(1, total)));
+            payload = PayloadExtractor.Extract(downloaded, staging, job, log, out extractError,
+                (done, total) => ui.SetProgress(92 + 3.0 * done / Math.Max(1, total)));
         }, ct).ConfigureAwait(true);
 
-        if (payload is null)
+        if (payload is null || payload.Count == 0)
         {
             await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
             return Fail(job, log, ui, UpdateExitCode.ExtractFailed, extractError ?? "解压失败");
         }
 
-        log.Write($"解压完成：{payload.Count} 个文件 → {targetDir}");
+        log.Write($"解压完成：{payload.Count} 个文件 → {staging}");
+
+        // ⑦ 关键文件先验一遍：包里连主程序都没有，就别去碰程序目录。
+        var stagedExe = Path.Combine(staging, job.App.ExeName);
+        if (!File.Exists(stagedExe))
+        {
+            await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
+            log.Write("安装包不完整：缺少主程序 " + job.App.ExeName);
+            return Fail(job, log, ui, UpdateExitCode.ExtractFailed,
+                $"安装包不完整：里面没有 {job.App.ExeName}。已中止更新，现有程序没有任何改动。");
+        }
+
+        // ⑧ 交给 Replacer：计划 → 备份 → 覆盖 → 关键文件校验 → 失败自动回滚。
+        //    这条路径本来只用在资源包上，其实程序本体更需要它。
+        ui.Status("正在替换文件…");
+        ui.SetProgress(95);
+
+        ReplaceOutcome? outcome = null;
+        await Task.Run(() => outcome = Replacer.Apply(job, staging, targetDir, payload!, log), ct)
+            .ConfigureAwait(true);
+
+        if (outcome is null || !outcome.Ok)
+        {
+            await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
+            return Fail(job, log, ui, UpdateExitCode.ReplaceFailed,
+                outcome?.Message ?? "替换文件失败（已尝试回滚）");
+        }
+
         await Task.Run(() => TryDeleteDownloadedZip(downloaded, log), ct).ConfigureAwait(true);
 
         WriteResult(job, ok: true, stage: "done", message: "更新完成", backupDir: "");
