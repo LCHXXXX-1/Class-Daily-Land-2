@@ -1,20 +1,13 @@
 {
   "stable": {
-    "version": "1.8.3",
+    "version": "1.8.4",
     "release_date": "2026-11-14",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.3.zip",
-    "sha256": "64d26568c1ce3efb2c34bce97dea57f81f8dd8682441450e74582a06a35c6272",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.4.zip",
+    "sha256": "5bc51b70efa5c1e9e4a9d650a972d5e54555fd2acde82c3c805fabf9c6388af0",
     "changelog": [
-      "设置中心「个性化」页重做：主题 / 设置中心背景 / 班级日常背景 / 液态玻璃 四组，材质改为四选一",
-      "顶栏标签放不下时两端出现翻页箭头；修复切页残留旧页面、选中胶囊停错位置",
-      "教学大项：课表编辑、假期与调休、值日生名单、临时调课、状态测试 提升为平级标签",
-      "提示条改为右下角滑入，相同内容合并计数，5 秒自动收起",
-      "确认框改为自窗口底部升入 / 滑出（1 秒），点遮罩空白处可关闭",
-      "开启「开发者选项」前增加二次确认",
-      "天气页移除手动经纬度，定位统一由省 / 市 / 区县决定",
-      "日志页自动滚动只滚动日志区域，不再带动整页",
-      "渲染：新增硬件渲染保障与滚动位图缓存，灵动岛跑马灯不再逐帧重排",
-      "插件新增 Notify 接口，可在应用内右下角弹提示"
+      "修复 1.8.3 更新包里缺少 Update\\ 目录导致「重装 / 更新」报「更新器准备失败」的问题",
+      "发布流程补上 publish 阶段的更新器搬运（此前只在 build 阶段拷，打包出来的更新包没有更新器）",
+      "已经装过 1.8.3 的用户请手动下载 1.8.4 覆盖安装一次（旧包的更新器缺失，无法自更新）"
     ],
     "is_mandatory": false
   },
