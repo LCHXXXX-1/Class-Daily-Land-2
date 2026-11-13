@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
 		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
@@ -109,6 +109,28 @@
 		</ItemGroup>
 
 		<Copy SourceFiles="@(_UpdaterFiles)" DestinationFiles="@(_UpdaterFiles->'$(OutputPath)Update\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+	</Target>
+
+	<!--
+	  ★ publish 也要把更新器搬到 publish\Update\ 下。
+	  CopyUpdater 只挂 AfterTargets="Build"，拷的是 $(OutputPath)；
+	  而 dotnet publish 的产物在 $(PublishDir)（win-x64\publish\），它不会带上自定义目标拷进去的目录 ——
+	  结果就是打出来的更新包里没有 Update\，装上去的客户端「重装 / 更新」全部报
+	  "更新器准备失败：无法把 Update 目录复制到临时目录"。1.8.3 就是这么坏掉的。
+	-->
+	<Target Name="CopyUpdaterToPublish" AfterTargets="Publish">
+		<PropertyGroup>
+			<_UpdaterOutDirP>..\ClassDailyLand2.Updater\bin\$(Configuration)\net10.0-windows10.0.19041.0\win-x64</_UpdaterOutDirP>
+		</PropertyGroup>
+
+		<ItemGroup>
+			<_UpdaterFilesP Include="$(_UpdaterOutDirP)\**\*.*" Exclude="$(_UpdaterOutDirP)\publish\**\*.*;$(_UpdaterOutDirP)\**\*.pdb;$(_UpdaterOutDirP)\**\*.xml" />
+		</ItemGroup>
+
+		<Copy SourceFiles="@(_UpdaterFilesP)" DestinationFiles="@(_UpdaterFilesP->'$(PublishDir)Update\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+
+		<!-- 根目录那份旧的单文件更新器清掉：代码优先找 Update\Updater.exe，留着只会误导 -->
+		<Delete Files="$(PublishDir)Updater.exe;$(PublishDir)Updater.dll;$(PublishDir)Updater.deps.json;$(PublishDir)Updater.runtimeconfig.json" />
 	</Target>
 
 	<!--
