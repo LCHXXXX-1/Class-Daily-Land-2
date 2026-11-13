@@ -1,13 +1,12 @@
 {
   "stable": {
-    "version": "1.8.4",
+    "version": "1.8.5",
     "release_date": "2026-11-14",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.4.zip",
-    "sha256": "5bc51b70efa5c1e9e4a9d650a972d5e54555fd2acde82c3c805fabf9c6388af0",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.5.zip",
+    "sha256": "0aa823b7ca58d5f0aa464e05ab9435badbecc97ddcbfa2a564937448e5bcf414",
     "changelog": [
-      "修复 1.8.3 更新包里缺少 Update\\ 目录导致「重装 / 更新」报「更新器准备失败」的问题",
-      "发布流程补上 publish 阶段的更新器搬运（此前只在 build 阶段拷，打包出来的更新包没有更新器）",
-      "已经装过 1.8.3 的用户请手动下载 1.8.4 覆盖安装一次（旧包的更新器缺失，无法自更新）"
+      "新增：更新器组件缺失时自动从更新包补回（缺 Update\\ 也能自愈，不用再手动重装）",
+      "修复：1.8.3 更新包漏带 Update\\ 导致「重装 / 更新」报「更新器准备失败」"
     ],
     "is_mandatory": false
   },
