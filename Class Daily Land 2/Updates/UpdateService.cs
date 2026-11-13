@@ -1,7 +1,9 @@
-using ClassDailyLand2.Core;
+﻿using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Managers;
 using ClassDailyLand2.Core.Storage;
 using ClassDailyLand2.UpdateContract;
+using System.IO.Compression;
+using System.Net.Http;
 
 namespace ClassDailyLand2.App.Updates;
 
@@ -276,6 +278,9 @@ public sealed class UpdateService
     {
         try
         {
+            // 更新器组件可能压根不在（1.8.3 的包就漏了 Update\）：先补，再复制
+            await RepairUpdaterIfMissingAsync(ct).ConfigureAwait(false);
+
             var prepared = await Task.Run(() => CopyUpdaterToTemp(ct), ct).ConfigureAwait(false);
             _preparedUpdaterExe = prepared;
             return prepared;
@@ -290,6 +295,130 @@ public sealed class UpdateService
             _preparedUpdaterExe = null;
             return null;
         }
+    }
+
+    /// <summary>
+    /// 更新器组件自愈：安装目录里没有 <c>Update\Updater.exe</c> 时，从**更新包**里把它捞回来。
+    ///
+    /// 为什么需要：更新器自己就是"更新"的执行者，缺了它「立即更新 / 重装」都只能报错，
+    /// 用户没有任何自救入口（1.8.3 发包时漏了 Update\，所有装上的客户端就卡死在
+    /// 「更新器准备失败：无法把 Update 目录复制到临时目录」）。所以这里补一条兜底：
+    /// 缺了就按检查更新同一套源顺序拉 version.json，把对应通道的包下下来，
+    /// 只解出 <c>Update/</c> 下的条目写进安装目录，然后照常预复制。
+    ///
+    /// 只在缺失时才走这条路，正常用户一行都不会多花。
+    /// </summary>
+    async Task RepairUpdaterIfMissingAsync(CancellationToken ct)
+    {
+        var target = UpdateEnvironment.PrimaryUpdaterPath;
+        if (File.Exists(target)) return;
+
+        _log?.Invoke("更新器缺失：" + target + "，尝试从更新包补回");
+
+        try
+        {
+            var urls = BuildVersionUrls(_settings.Str("update_source"));
+            var (file, _, error) = await UpdateSources.FetchAsync(urls, ct).ConfigureAwait(false);
+            if (file is null)
+            {
+                _log?.Invoke("更新器自愈放弃：拿不到 version.json（" + error + "）");
+                return;
+            }
+
+            var block = string.Equals(Channel, "beta", StringComparison.OrdinalIgnoreCase)
+                ? file.Beta
+                : file.Stable;
+
+            if (block is null || string.IsNullOrWhiteSpace(block.DownloadUrl))
+            {
+                _log?.Invoke("更新器自愈放弃：version.json 里没有可用的下载地址");
+                return;
+            }
+
+            var bytes = await DownloadBytesAsync(block.DownloadUrl, ct).ConfigureAwait(false);
+
+            // 有 sha256 就校验：宁可补不上，也别把半个坏包解进安装目录
+            if (!string.IsNullOrWhiteSpace(block.Sha256))
+            {
+                var actual = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+                if (!string.Equals(actual, block.Sha256.Trim(), StringComparison.OrdinalIgnoreCase))
+                {
+                    _log?.Invoke("更新器自愈放弃：更新包 sha256 不匹配");
+                    return;
+                }
+            }
+
+            var count = ExtractUpdaterEntries(bytes, UpdateEnvironment.InstallDir);
+            _log?.Invoke(count > 0
+                ? $"更新器自愈完成：补回 {count} 个文件"
+                : @"更新器自愈放弃：包里没有 Update\ 目录");
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _log?.Invoke("更新器自愈失败：" + ex.Message);
+        }
+    }
+
+    static async Task<byte[]> DownloadBytesAsync(string url, CancellationToken ct)
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("ClassDailyLand2-Updater/1.0");
+        using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsByteArrayAsync(ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// 从更新包里只解出更新器（<c>Update/</c> 下的条目）。返回补回的文件数。
+    /// 兼容两种包：标准包（条目带 <c>Update/</c> 前缀）和单独的更新器包（条目是平铺的）。
+    /// </summary>
+    static int ExtractUpdaterEntries(byte[] zipBytes, string installDir)
+    {
+        using var stream = new MemoryStream(zipBytes);
+        using var zip = new ZipArchive(stream, ZipArchiveMode.Read);
+
+        // ★ tar/bsdtar 打出来的条目名带 "./" 前缀（"./Update/Updater.exe"），
+        //   不先削掉它，"Update/" 就永远对不上，整个自愈会被静默跳过。
+        static string Normalize(string raw)
+        {
+            var name = raw.Replace('\\', '/');
+            while (name.StartsWith("./", StringComparison.Ordinal)) name = name[2..];
+            return name;
+        }
+
+        var prefixed = zip.Entries.Any(e =>
+            Normalize(e.FullName).StartsWith("Update/", StringComparison.OrdinalIgnoreCase));
+
+        var root = Path.Combine(installDir, UpdateEnvironment.NewUpdaterDir);
+        Directory.CreateDirectory(root);
+
+        var written = 0;
+        foreach (var entry in zip.Entries)
+        {
+            var name = Normalize(entry.FullName);
+            if (prefixed)
+            {
+                const string prefix = "Update/";
+                if (!name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+                name = name[prefix.Length..];
+            }
+
+            if (name.Length == 0 || name.EndsWith("/", StringComparison.Ordinal)) continue;
+
+            var dest = Path.Combine(root, name.Replace('/', Path.DirectorySeparatorChar));
+            Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+
+            using var src = entry.Open();
+            using var dst = File.Create(dest);
+            src.CopyTo(dst);
+            written++;
+        }
+
+        return written;
     }
 
     string? CopyUpdaterToTemp(CancellationToken ct)

@@ -7,7 +7,7 @@
 /// </summary>
 public static class VersionInfo
 {
-    public const string Version = "1.8.4";
+    public const string Version = "1.8.5";
 
     /// <summary>涓绘洿鏂版簮锛坴ersion.json锛夈€?/summary>
     public const string VersionUrl =
