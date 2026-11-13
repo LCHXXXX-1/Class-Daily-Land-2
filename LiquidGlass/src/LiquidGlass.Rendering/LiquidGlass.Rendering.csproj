@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    渲染层：背景快照、两遍可分离模糊、素材缓存、帧调度、性能计数。
+    这里刻意**不含**任何具体控件 —— 控件的视觉在 LiquidGlass.Controls，
+    WPF 专属的 ShaderEffect 在 LiquidGlass.Rendering.Wpf。
+  -->
+  <PropertyGroup>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>LiquidGlass.Rendering</RootNamespace>
+    <AssemblyName>LiquidGlass.Rendering</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiquidGlass.Core\LiquidGlass.Core.csproj" />
+  </ItemGroup>
+
+</Project>

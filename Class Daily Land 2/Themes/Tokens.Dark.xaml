@@ -23,6 +23,11 @@
     <!-- 对话框/浮层面板：半透明而不是纯黑，云母才透得上来 -->
     <SolidColorBrush x:Key="MicaDialogBrush" Color="#B81C1C1C" />
     <SolidColorBrush x:Key="MicaCardBackgroundBrush" Color="#0DFFFFFF" />
+    <!-- 深色：卡片本来就是 5% 白，控件只高一档（6%），否则同样会跳出来 -->
+    <SolidColorBrush x:Key="MicaControlFillBrush" Color="#0FFFFFFF" />
+    <SolidColorBrush x:Key="MicaControlHoverBrush" Color="#1FFFFFFF" />
+    <SolidColorBrush x:Key="AcrylicControlFillBrush" Color="#0FFFFFFF" />
+    <SolidColorBrush x:Key="AcrylicControlHoverBrush" Color="#1FFFFFFF" />
 
     <!-- 卡片 -->
     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#0DFFFFFF" />
@@ -55,12 +60,12 @@
         <GradientStop Color="#3D000000" Offset="1" />
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="NavLensEdgeBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#C8FFFFFF" Offset="0" />
-        <GradientStop Color="#99FFFFFF" Offset="0.45" />
-        <GradientStop Color="#80FFFFFF" Offset="1" />
+        <GradientStop Color="#59FFFFFF" Offset="0" />
+        <GradientStop Color="#2EFFFFFF" Offset="0.5" />
+        <GradientStop Color="#24FFFFFF" Offset="1" />
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="NavLensBevelBrush" StartPoint="0,0" EndPoint="0.55,1">
-        <GradientStop Color="#66FFFFFF" Offset="0" />
+        <GradientStop Color="#40FFFFFF" Offset="0" />
         <GradientStop Color="#00FFFFFF" Offset="0.62" />
         <GradientStop Color="#40000000" Offset="1" />
     </LinearGradientBrush>
@@ -70,6 +75,7 @@
     <!-- 控件 -->
     <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#0FFFFFFF" />
     <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#15FFFFFF" />
+    <SolidColorBrush x:Key="ControlFillColorHoverBrush" Color="#15FFFFFF" />
     <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#08FFFFFF" />
     <SolidColorBrush x:Key="ControlFillColorDisabledBrush" Color="#0BFFFFFF" />
     <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#12FFFFFF" />

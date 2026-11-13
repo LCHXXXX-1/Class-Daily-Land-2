@@ -1,0 +1,187 @@
+<Window x:Class="LiquidGlass.Demo.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:lg="clr-namespace:LiquidGlass.Controls;assembly=LiquidGlass.Controls"
+        xmlns:rw="clr-namespace:LiquidGlass.Rendering.Wpf;assembly=LiquidGlass.Rendering.Wpf"
+        Title="Liquid Glass · 拖动 / 单击 / 弹性"
+        Width="1040" Height="740"
+        MinWidth="880" MinHeight="640"
+        WindowStartupLocation="CenterScreen"
+        Background="#0A0A10"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType">
+
+    <Window.Resources>
+        <!-- 细网格：折射最容易看出来的参照物。1px 线，56 一格里两条。 -->
+        <DrawingBrush x:Key="GridBrush" TileMode="Tile"
+                      Viewport="0,0,44,44" ViewportUnits="Absolute">
+            <DrawingBrush.Drawing>
+                <GeometryDrawing>
+                    <GeometryDrawing.Geometry>
+                        <GeometryGroup>
+                            <LineGeometry StartPoint="0,0" EndPoint="44,0" />
+                            <LineGeometry StartPoint="0,0" EndPoint="0,44" />
+                        </GeometryGroup>
+                    </GeometryDrawing.Geometry>
+                    <GeometryDrawing.Pen>
+                        <Pen Brush="#33FFFFFF" Thickness="1" />
+                    </GeometryDrawing.Pen>
+                </GeometryDrawing>
+            </DrawingBrush.Drawing>
+        </DrawingBrush>
+
+        <Style x:Key="Hint" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12.5" />
+            <Setter Property="Foreground" Value="#A8FFFFFF" />
+            <Setter Property="TextAlignment" Value="Center" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+        </Style>
+
+        <Style x:Key="SegLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#E6FFFFFF" />
+            <Setter Property="HorizontalAlignment" Value="Center" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextAlignment" Value="Center" />
+        </Style>
+    </Window.Resources>
+
+    <Grid x:Name="Root">
+
+        <!-- ============ 背景层 ============
+             玻璃采样的是这一层（它是玻璃的兄弟节点，在下面）。
+             内容刻意做得"有线、有字、有圆"，这样折射有没有真的把背景掰弯一眼可辨。 -->
+        <Grid x:Name="Backdrop" ClipToBounds="True">
+
+            <Rectangle>
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#071B3D" Offset="0" />
+                        <GradientStop Color="#12406F" Offset="0.30" />
+                        <GradientStop Color="#8A2E7A" Offset="0.62" />
+                        <GradientStop Color="#D9713C" Offset="0.86" />
+                        <GradientStop Color="#F2C46B" Offset="1" />
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+
+            <!-- 几团柔光色块：折射在渐变上几乎看不见，需要有边界的色块 -->
+            <Ellipse Width="520" Height="520" HorizontalAlignment="Left" VerticalAlignment="Top"
+                     Margin="-120,-140,0,0">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#E63EC8FF" Offset="0" />
+                        <GradientStop Color="#003EC8FF" Offset="1" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+
+            <Ellipse Width="620" Height="620" HorizontalAlignment="Right" VerticalAlignment="Top"
+                     Margin="0,-180,-160,0">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#D6FF4D8D" Offset="0" />
+                        <GradientStop Color="#00FF4D8D" Offset="1" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+
+            <Ellipse Width="700" Height="480" HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                     Margin="40,0,0,-220">
+                <Ellipse.Fill>
+                    <RadialGradientBrush>
+                        <GradientStop Color="#C64CE3A1" Offset="0" />
+                        <GradientStop Color="#004CE3A1" Offset="1" />
+                    </RadialGradientBrush>
+                </Ellipse.Fill>
+            </Ellipse>
+
+            <Rectangle Fill="{StaticResource GridBrush}" />
+
+            <!-- 大字号：折射时字母会被明显拉弯/挤压，是最直观的证据 -->
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False">
+                <TextBlock Text="LIQUID" FontSize="176" FontWeight="Bold"
+                           Foreground="#26FFFFFF" HorizontalAlignment="Center"
+                           Margin="0,0,0,-40" />
+                <TextBlock Text="GLASS" FontSize="176" FontWeight="Bold"
+                           Foreground="#1CFFFFFF" HorizontalAlignment="Center" />
+            </StackPanel>
+
+            <TextBlock Text="拖动 · 单击 · 弹性" FontSize="13" Foreground="#66FFFFFF"
+                       HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                       Margin="44,0,0,32" IsHitTestVisible="False" />
+        </Grid>
+
+        <!-- ============ 前景 UI ============ -->
+        <Grid Margin="40,28,40,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <StackPanel Grid.Row="0">
+                <TextBlock Text="Liquid Glass" FontSize="24" FontWeight="SemiBold"
+                           Foreground="#F2FFFFFF" />
+                <TextBlock Text="拖动查看背景实时弯折 · 单击让玻璃弹到另一端"
+                           FontSize="13" Foreground="#9AFFFFFF" Margin="0,4,0,0" />
+            </StackPanel>
+
+            <StackPanel Grid.Row="1" VerticalAlignment="Center" HorizontalAlignment="Center">
+
+                <TextBlock Text="自由拖动" Style="{StaticResource Hint}" Margin="0,0,0,10" />
+
+                <!-- 轨道：玻璃在上面滑，轨道只是给一个"可动范围"的暗示 -->
+                <Grid Width="740" Height="116">
+                    <Border CornerRadius="58" Background="#1CFFFFFF"
+                            BorderBrush="#2EFFFFFF" BorderThickness="1" />
+
+                    <lg:GlassLens x:Name="FreeLens"
+                                  Width="236" Height="88"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Travel="452">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="10" Height="10" Fill="#CCFFFFFF"
+                                     VerticalAlignment="Center" Margin="0,0,9,0" />
+                            <TextBlock Text="DRAG" FontSize="14" FontWeight="Bold"
+                                       Foreground="#F2FFFFFF" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </lg:GlassLens>
+                </Grid>
+
+                <TextBlock Text="越界会有橡皮筋阻尼，松手回弹" Style="{StaticResource Hint}"
+                           Margin="0,10,0,0" />
+
+                <TextBlock Text="点击切换（弹性吸附）" Style="{StaticResource Hint}"
+                           Margin="0,40,0,10" />
+
+                <!-- 分段控件：玻璃指示器在三个档位之间弹跳 -->
+                <Grid x:Name="SegmentTrack" Width="452" Height="64"
+                      Background="Transparent" Cursor="Hand"
+                      MouseLeftButtonUp="OnSegmentTrackClick">
+                    <Border CornerRadius="32" Background="#1AFFFFFF"
+                            BorderBrush="#2BFFFFFF" BorderThickness="1" />
+
+                    <lg:GlassLens x:Name="SegmentLens"
+                                  Width="142" Height="64"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Travel="284" SnapDivisions="3"
+                                  SelectedIndex="0" />
+
+                    <UniformGrid Columns="3" IsHitTestVisible="False">
+                        <TextBlock Text="课堂" Style="{StaticResource SegLabel}" />
+                        <TextBlock Text="日程" Style="{StaticResource SegLabel}" />
+                        <TextBlock Text="统计" Style="{StaticResource SegLabel}" />
+                    </UniformGrid>
+                </Grid>
+
+                <TextBlock x:Name="SegmentHint" Text="当前：课堂" Style="{StaticResource Hint}"
+                           Margin="0,10,0,0" />
+            </StackPanel>
+
+            <TextBlock x:Name="Perf" Grid.Row="2" FontSize="11.5" Foreground="#7AFFFFFF"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    控件层：把 GlassLayer（纯渲染）+ 交互动效组合成可用的玻璃控件。
+    这里不写任何着色器，只消费 LiquidGlass.Rendering.Wpf。
+  -->
+  <PropertyGroup>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>LiquidGlass.Controls</RootNamespace>
+    <AssemblyName>LiquidGlass.Controls</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiquidGlass.Core\LiquidGlass.Core.csproj" />
+    <ProjectReference Include="..\LiquidGlass.Rendering.Wpf\LiquidGlass.Rendering.Wpf.csproj" />
+  </ItemGroup>
+
+</Project>

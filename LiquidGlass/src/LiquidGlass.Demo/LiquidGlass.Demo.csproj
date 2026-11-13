@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Demo：控件展示 + 材质对比 + 参数实时调节 + 性能监控。
+    同时充当"渲染是否真的生效"的验证载体。
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <UseWPF>true</UseWPF>
+    <RootNamespace>LiquidGlass.Demo</RootNamespace>
+    <AssemblyName>LiquidGlass.Demo</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiquidGlass.Core\LiquidGlass.Core.csproj" />
+    <ProjectReference Include="..\LiquidGlass.Rendering\LiquidGlass.Rendering.csproj" />
+    <ProjectReference Include="..\LiquidGlass.Rendering.Wpf\LiquidGlass.Rendering.Wpf.csproj" />
+    <ProjectReference Include="..\LiquidGlass.Controls\LiquidGlass.Controls.csproj" />
+  </ItemGroup>
+
+</Project>

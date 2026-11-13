@@ -21,20 +21,5 @@
                                       Value="{Binding ScheduleTimeOffsetSeconds, Mode=TwoWay}" Label="时间偏移" />
                     </fl:SettingRow>
         </fl:SettingGroup>
-
-        <!-- 课表与值日（二级入口，图标底色沿用 web 版；课表编辑是本组第一个入口，打开为二级页） -->
-        <fl:SettingGroup Title="课表与值日" Icon="{StaticResource Icon.Calendar}" TileColor="#FF107C10"
-                         IsSection="True">
-                    <fl:LinkRow x:Name="TimetableLink" Title="课表编辑" Hint="编辑周一到周五与周末课表"
-                                Icon="{StaticResource Icon.Calendar}" TileColor="#FF107C10" />
-                    <fl:LinkRow x:Name="HolidaysLink" Title="假期与调休" Hint="设置假期与调休日"
-                                Icon="{StaticResource Icon.Calendar}" TileColor="#FFF7630C" />
-                    <fl:LinkRow x:Name="DutyLink" Title="值日生名单" Hint="设置值日轮流安排"
-                                Icon="{StaticResource Icon.Home}" TileColor="#FF038387" />
-                    <fl:LinkRow x:Name="TempAdjustLink" Title="临时调课" Hint="只替换某一天的课程"
-                                Icon="{StaticResource Icon.Sync}" TileColor="#FFB146C2" />
-                    <fl:LinkRow x:Name="StatusTestLink" Title="状态测试" Hint="完整演示一节课的状态变化"
-                                Icon="{StaticResource Icon.Sync}" TileColor="#FF5B5FC7" />
-        </fl:SettingGroup>
     </StackPanel>
 </UserControl>

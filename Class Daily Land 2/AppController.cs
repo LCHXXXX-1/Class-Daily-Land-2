@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Integrations.Audio;
+﻿using ClassDailyLand2.App.Integrations.Audio;
 using ClassDailyLand2.App.Integrations.Disaster;
 using ClassDailyLand2.App.Integrations.Weather;
 using ClassDailyLand2.App.DeveloperTool;
@@ -235,6 +235,8 @@ public sealed class AppController
 
         Log.Section("ClassDailyLand2 启动");
         Log.EnvironmentBanner();
+        // 渲染层：锁死硬件加速路径并记一条日志（掉到软件渲染时能第一时间发现）
+        Views.GpuAccel.WarmUp();
         Log.Trace($"[启动] 数据目录：{Paths.Root}（回退：{Paths.UsedFallback}）");
         if (Paths.UsedFallback) Log.Warn(Paths.FallbackNotice ?? "");
 
@@ -1211,6 +1213,31 @@ public sealed class AppController
         }
 
         EnsureSettings();
+    }
+
+    /// <summary>
+    /// 应用内提示（窗口右下角）。设置中心开着就弹在里面；没开则退回托盘气泡 ——
+    /// 一条"同步完成"不该把整个窗口从后台拉出来。
+    /// 插件那边是 <see cref="ClassDailyLand2.Plugin.IPluginHost.Notify"/>。
+    /// </summary>
+    public void Notify(string title, string message, ClassDailyLand2.Plugin.NoticeLevel level
+                       = ClassDailyLand2.Plugin.NoticeLevel.Info)
+    {
+        if (_settingsWindow is { IsVisible: true })
+        {
+            var severity = level switch
+            {
+                ClassDailyLand2.Plugin.NoticeLevel.Success => ClassDailyLand2.App.Controls.InfoBarSeverity.Success,
+                ClassDailyLand2.Plugin.NoticeLevel.Warning => ClassDailyLand2.App.Controls.InfoBarSeverity.Warning,
+                ClassDailyLand2.Plugin.NoticeLevel.Error => ClassDailyLand2.App.Controls.InfoBarSeverity.Error,
+                _ => ClassDailyLand2.App.Controls.InfoBarSeverity.Information,
+            };
+            _settingsWindow.Toast(severity, title, message);
+            return;
+        }
+
+        try { Tray?.Balloon(string.IsNullOrWhiteSpace(title) ? "班级日常" : title, message ?? ""); }
+        catch (Exception ex) { Log.Warn("Notify 托盘回退失败：" + ex.Message); }
     }
 
     /// <summary>打开设置中心并跳到指定页（插件调 OpenSettings("plugins") 用）。</summary>

@@ -1,0 +1,57 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    WPF 渲染后端：GlassEffect（ShaderEffect）、共享背景采样、模糊预处理。
+    着色器在**构建期**编译成 ps_2_0 字节码；运行时只读字节码，不编译、不重编。
+  -->
+  <PropertyGroup>
+    <UseWPF>true</UseWPF>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>LiquidGlass.Rendering.Wpf</RootNamespace>
+    <AssemblyName>LiquidGlass.Rendering.Wpf</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\LiquidGlass.Core\LiquidGlass.Core.csproj" />
+    <ProjectReference Include="..\LiquidGlass.Rendering\LiquidGlass.Rendering.csproj" />
+  </ItemGroup>
+
+  <!-- 只借构建顺序，不引程序集依赖 -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\tools\LiquidGlass.ShaderCompiler\LiquidGlass.ShaderCompiler.csproj"
+                      ReferenceOutputAssembly="false" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!--
+    构建期 HLSL 预编译：
+      · 编译器工具先构建（上面的 ProjectReference 保证顺序）
+      · 工具内部做时间戳增量，源码没变就跳过
+      · 编译失败让整个构建失败 —— 静默沿用旧字节码比报错更危险
+      · 产出的 *.ps 在这里动态加进 Resource，避免"首次克隆项目时目录为空"导致漏资源
+  -->
+  <Target Name="CompileGlassShaders" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <_ShaderSrc>$(MSBuildProjectDirectory)\Shaders</_ShaderSrc>
+      <_ShaderOut>$(MSBuildProjectDirectory)\Shaders\Compiled</_ShaderOut>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <_ShaderToolProj Include="@(ProjectReference)" Condition="$([System.String]::Copy('%(Filename)').Contains('LiquidGlass.ShaderCompiler'))" />
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_ShaderTool>@(_ShaderToolProj->'%(RootDir)%(Directory)bin\$(Configuration)\net10.0-windows\LiquidGlass.ShaderCompiler.dll')</_ShaderTool>
+    </PropertyGroup>
+
+    <MakeDir Directories="$(_ShaderOut)" />
+
+    <Message Importance="high" Text="[LiquidGlass] 预编译 HLSL → ps_2_0 ..." />
+    <Exec Command='dotnet "$(_ShaderTool)" "$(_ShaderSrc)" "$(_ShaderOut)"'
+          ContinueOnError="false" />
+
+    <ItemGroup>
+      <Resource Include="$(_ShaderOut)\*.ps" />
+    </ItemGroup>
+  </Target>
+
+</Project>

@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Controls;
+﻿using ClassDailyLand2.App.Controls;
 using ClassDailyLand2.App.DeveloperTool;
 using ClassDailyLand2.App.Integrations.Audio;
 using ClassDailyLand2.App.Integrations.Disaster;
@@ -55,11 +55,10 @@ public partial class AppearancePage : UserControl
         Loaded += (_, _) =>
         {
             if (DataContext is not SettingsViewModel vm) return;
-            // Win11 → 云母，Win10 1803+ → 亚克力；更老的系统才置灰
-            var supported = vm.SupportsBackdrop;
-            MicaRow.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
-            AcrylicRow.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
-            MicaUnsupportedRow.Visibility = supported ? Visibility.Collapsed : Visibility.Visible;
+            // 纯色 / 图片 / 云母 / 亚克力四选一（互斥，绑 SettingsBackground）。
+            // 老系统没有半透明背板时**不再整条藏掉**：纯色和图片仍然要能选，
+            // 只在旁边挂一条"当前系统不支持半透明背板"的说明。
+            MicaUnsupportedRow.Visibility = vm.SupportsBackdrop ? Visibility.Collapsed : Visibility.Visible;
 
             BuildThemeSwatches();
             BuildBackgroundSwatches();
@@ -247,7 +246,7 @@ public partial class AppearancePage : UserControl
             inner.Children.Add(dot);
             inner.Children.Add(check);
 
-            var halo = new Grid { Width = 34, Height = 34, Margin = new Thickness(0, 0, 6, 0) };
+            var halo = new Grid { Width = 34, Height = 34 };
             halo.Children.Add(ring);
             halo.Children.Add(new Border
             {
@@ -263,6 +262,7 @@ public partial class AppearancePage : UserControl
                 Style = (Style)Application.Current.FindResource("SubtleButton"),
                 Width = 34,
                 Height = 34,
+                Margin = new Thickness(0, 0, 6, 0),
                 Padding = new Thickness(0),
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
@@ -278,6 +278,10 @@ public partial class AppearancePage : UserControl
 
             target.Children.Add(button);
         }
+
+        // 最后一颗去掉右边距，整排右缘和行内其它控件对齐
+        if (target.Children.Count > 0 && target.Children[target.Children.Count - 1] is FrameworkElement tail)
+            tail.Margin = new Thickness(0);
     }
 
     void OnPickBackgroundImage(object sender, RoutedEventArgs e)
@@ -318,8 +322,13 @@ public partial class AppearancePage : UserControl
         foreach (var theme in ColorThemes.All)
             ThemeStrip.Children.Add(CreateSwatch(theme, theme.Key == current));
 
+        // 最后一颗不带右边距：否则整排色球比下面选择的右缘缩进 10px，看着没对齐
+        if (ThemeStrip.Children.Count > 0 && ThemeStrip.Children[ThemeStrip.Children.Count - 1] is FrameworkElement tail2)
+            tail2.Margin = new Thickness(0);
+
+        // 「当前用哪套」放左侧说明：色球下面再挂一排小字会让这一行比别的高一截
         var hit = ColorThemes.Get(current);
-        ThemeHint.Text = $"当前：{hit.Name} · {hit.Hint}";
+        ThemeRow.Hint = $"当前：{hit.Name} · {hit.Hint}";
     }
 
     FrameworkElement CreateSwatch(ColorTheme theme, bool selected)
@@ -376,16 +385,17 @@ public partial class AppearancePage : UserControl
 
         var ring = new Border
         {
-            Width = 44,
-            Height = 44,
-            CornerRadius = new CornerRadius(22),
+            Width = 42,
+            Height = 42,
+            CornerRadius = new CornerRadius(21),
             BorderThickness = new Thickness(2),
             BorderBrush = new SolidColorBrush(theme.Seed),
             Visibility = selected ? Visibility.Visible : Visibility.Collapsed,
             IsHitTestVisible = false,
         };
 
-        var halo = new Grid { Width = 44, Height = 44 };
+        // 42 而不是 44：行内上下各 13 的 padding，44 会把这一行撑到 70（别的行是 68）
+        var halo = new Grid { Width = 42, Height = 42 };
         halo.Children.Add(ring);
         halo.Children.Add(new Border
         {
@@ -399,8 +409,9 @@ public partial class AppearancePage : UserControl
         var button = new Button
         {
             Style = (Style)Application.Current.FindResource("SubtleButton"),
-            Width = 44,
-            Height = 44,
+            Width = 42,
+            Height = 42,
+            Margin = new Thickness(0, 0, 10, 0),
             Padding = new Thickness(0),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),
@@ -413,25 +424,8 @@ public partial class AppearancePage : UserControl
             BuildThemeSwatches();
         };
 
-        var label = new TextBlock
-        {
-            Text = theme.Name,
-            FontSize = 11.5,
-            Margin = new Thickness(0, 5, 0, 0),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            FontWeight = selected ? FontWeights.SemiBold : FontWeights.Normal,
-            Foreground = (Brush)Application.Current.FindResource(
-                selected ? "TextFillColorPrimaryBrush" : "TextFillColorSecondaryBrush"),
-        };
-
-        var item = new StackPanel
-        {
-            Margin = new Thickness(0, 0, 10, 0),
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
-        item.Children.Add(button);
-        item.Children.Add(label);
-        return item;
+        // 名字只在悬停提示里给：球下面再挂一行小字会把这一行撑高，和别的行对不齐
+        return button;
     }
 
     /// <summary>玻璃色球：左上提亮、主体种子色、右下压暗。</summary>
@@ -469,21 +463,10 @@ public partial class IslandPage : UserControl
 
 public partial class SchedulePage : UserControl
 {
-    public SchedulePage()
-    {
-        InitializeComponent();
-        TimetableLink.Click += (_, _) => (Window.GetWindow(this) as SettingsWindow)?.OpenTimetableEditor();
-        HolidaysLink.Click += (_, _) => Show(vm => new HolidaysDialog(vm));
-        DutyLink.Click += (_, _) => Show(vm => new DutyDialog(vm));
-        TempAdjustLink.Click += (_, _) => Show(vm => new TempAdjustDialog(vm));
-        StatusTestLink.Click += (_, _) => Show(vm => new StatusTestDialog(vm));
-    }
-
-    void Show(Func<SettingsViewModel, FrameworkElement> create)
-    {
-        if (DataContext is not SettingsViewModel vm) return;
-        DialogLauncher.Show(this, create(vm));
-    }
+    // 课表编辑 / 假期与调休 / 值日生名单 / 临时调课 / 状态测试 原来是这个页面里的列表入口，
+    // 现在都提升成「教学」大项下的平级标签（见 SettingsWindow 的 _groups），
+    // 所以这里不再需要任何点击接线。
+    public SchedulePage() => InitializeComponent();
 }
 
 public partial class HomeworkPage : UserControl
@@ -638,10 +621,7 @@ public partial class HomeworkPage : UserControl
         SetNavigationLocked(true);
 
         DialogLauncher.Toast(this, InfoBarSeverity.Information, "测试开始",
-            "课表已写入 4 节测试课（每节 10 秒上课 + 10 秒课间，课程 自习/自习/数学自习/自习），灵动岛会按 自习(1) → 自习(2) → 数学自习 → 自习(3) 依次上课、下课。" +
-            "作业区：第 1/2/3/4 节下课分别有 2/3/5/5 个科目交；同一科目的多条作业错开到不同节次（语文 3 条分别在第 1/2/3 节交），" +
-            "每一条到点只扫它自己那一行，行尾显示「时间 + 自习(1)」。" +
-            $"约 {totalSeconds} 秒后自动结束并恢复测试前的作业与课表；测试期间不能切换设置页面，想提前结束点「中断测试」。");
+            $"课表已写入 4 节测试课 · 约 {totalSeconds} 秒后自动结束");
     }
 
     void OnDueTestTick(object? sender, EventArgs e)
@@ -1806,7 +1786,7 @@ public partial class AboutPage : UserControl
 
         // ★ 控件自有事件只在构造里挂一次：Hook 会在 Loaded/Unloaded 循环里反复进出，
         //   放在 Hook 里会随 _hooked 重置而重复订阅（连点一次发多次请求）。
-        DeveloperToggle.Checked += (_, _) => ApplyDeveloperMode(true);
+        DeveloperToggle.Checked += (_, _) => RequestDeveloperMode();
         DeveloperToggle.Unchecked += (_, _) => ApplyDeveloperMode(false);
 
         // 通道切换后要重新检查（同一个源的 stable/beta 是不同的块）
@@ -1870,7 +1850,49 @@ public partial class AboutPage : UserControl
         catch { /* 打不开链接不影响功能 */ }
     }
 
-    /// <summary>开发者选项开关：写进设置，并立刻控制「测试报错」按钮的显隐。</summary>
+    /// <summary>
+    /// 打开开发者选项前先确认一次。
+    ///
+    /// ★ 顺序很重要：`Checked` 是**开关已经切成"开"之后**才发的，所以这里第一件事是把开关拨回去，
+    ///   等用户在确认框里点「开启」再真正打开。否则看起来就是"开关先亮、弹窗后到"，先斩后奏。
+    /// </summary>
+    void RequestDeveloperMode()
+    {
+        if (_applyingDev || _vm is null) return;
+
+        // 先还原视觉状态（_applyingDev 挡住这次写回设置）
+        SetDeveloperToggle(false);
+
+        // 正常都在设置窗口里；拿不到窗口就直接生效（不至于因为弹不出确认而打不开）
+        if (Window.GetWindow(this) is not SettingsWindow window)
+        {
+            SetDeveloperToggle(true);
+            ApplyDeveloperMode(true);
+            return;
+        }
+
+        window.Confirm(
+            "开启开发者选项",
+            "你正在开启开发者选项。此模式包含面向开发与调试的入口，其中部分操作可能影响程序的正常运行。" +
+            "如果你不清楚这些设置项的作用，请不要随意调整。",
+            onOk: () =>
+            {
+                SetDeveloperToggle(true);
+                ApplyDeveloperMode(true);
+            },
+            okText: "开启",
+            cancelText: "取消");
+        // 取消不用额外处理：开关刚才已经拨回去了
+    }
+
+    /// <summary>拨动开关但不触发"写回设置"（由 _applyingDev 挡住事件里的逻辑）。</summary>
+    void SetDeveloperToggle(bool on)
+    {
+        _applyingDev = true;
+        DeveloperToggle.IsChecked = on;
+        _applyingDev = false;
+    }
+
     void ApplyDeveloperMode(bool on)
     {
         if (_applyingDev || _vm is null) return;

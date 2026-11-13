@@ -1,0 +1,31 @@
+<Project>
+
+  <!--
+    LiquidGlass 子解决方案的共享构建属性。
+    只作用于本目录树（LiquidGlass\），不影响仓库里原有的 Class Daily Land 2 项目。
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Platforms>AnyCPU;x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- CA1416（Windows 专用 API 的跨平台告警）在本方案里恒不成立：全树都是 WPF -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
+    <RootNamespace>$(MSBuildProjectName.Replace('LiquidGlass.', 'LiquidGlass.'))</RootNamespace>
+    <Product>LiquidGlass</Product>
+    <Company>LiquidGlass</Company>
+    <Version>0.1.0</Version>
+    <SatelliteResourceLanguages>en;zh-Hans</SatelliteResourceLanguages>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <!-- 构建期 HLSL 预编译：着色器源码改了才重编，产出 *.ps 作为嵌入资源 -->
+  <PropertyGroup>
+    <ShaderSourceDir>$(MSBuildThisFileDirectory)src\LiquidGlass.Rendering.Wpf\Shaders\</ShaderSourceDir>
+    <ShaderCompilerDll>$(MSBuildThisFileDirectory)tools\LiquidGlass.ShaderCompiler\bin\$(Configuration)\$(TargetFramework)\LiquidGlass.ShaderCompiler.dll</ShaderCompilerDll>
+  </PropertyGroup>
+
+</Project>

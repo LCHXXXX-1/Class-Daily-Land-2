@@ -157,8 +157,7 @@
             </StackPanel>
         </fl:Card>
 
-        <!-- 开发者选项：默认关，打开后才出现「测试报错」 -->
-        <!-- 支持项目：一键去 GitHub 点 Star -->
+        <!-- 支持项目：一键去 GitHub 点 Star（放在渲染设置之前 —— 它是这页最该被看到的一条） -->
         <fl:SettingGroup Title="支持项目" Icon="{StaticResource Icon.Book}">
             <fl:SettingRow Title="给项目点个 Star"
                            Hint="如果这个工具帮到你，去 GitHub 点一颗 Star 就是最大的鼓励">
@@ -167,6 +166,16 @@
             </fl:SettingRow>
         </fl:SettingGroup>
 
+        <!-- 渲染后端：玻璃优先 DX12，不可用时自动退回 DX11 -->
+        <fl:SettingGroup Title="渲染" Icon="{StaticResource Icon.Capsule}"
+                         Note="DirectX 12 可用时玻璃走 DX12；设备或资源创建失败会自动退回 DX11">
+            <fl:SettingRow Title="DirectX 12" Hint="关掉后玻璃直接用 DX11 后端渲染（老路，更稳）">
+                <fl:FluentToggle x:Name="Dx12Toggle" IsChecked="{Binding GpuDx12, Mode=TwoWay}"
+                                 Label="DirectX 12" />
+            </fl:SettingRow>
+        </fl:SettingGroup>
+
+        <!-- 开发者选项：默认关，打开后才出现「测试报错」 -->
         <fl:SettingGroup Title="开发者选项" Icon="{StaticResource Icon.Tune}">
             <fl:SettingRow Title="开启开发者选项" Hint="正常使用不需要打开，只影响调试入口">
                 <fl:FluentToggle x:Name="DeveloperToggle" Label="开发者选项" />

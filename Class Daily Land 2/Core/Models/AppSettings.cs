@@ -63,8 +63,11 @@ public sealed class AppSettings
         new("anim_fade_text", ValueKind.Bool, true),                  // 文字变化渐显
         new("settings_mica", ValueKind.Bool, true),                   // 设置窗云母材质（Win11，默认开）
         new("settings_acrylic", ValueKind.Bool, false),               // 设置窗亚克力材质（与云母互斥，默认关）
+        new("settings_glass", ValueKind.Bool, false),                 // 设置窗液态玻璃背景板（与云母/亚克力三选一，默认关）
+        new("liquid_glass", ValueKind.Bool, true),                   // 选中胶囊的液态玻璃（关掉=普通半透明胶囊，且完全不碰 GPU/DX12）
+        new("gpu_dx12", ValueKind.Bool, true),                       // 玻璃优先用 DirectX 12（关掉=走 DX11 老路）
         new("color_theme", ValueKind.Str, "blue"),                    // 配色主题：blue/violet/teal/green/amber/rose/graphite
-        new("settings_background", ValueKind.Str, "mica"),             // 设置窗背景：mica（云母取色）/ acrylic（亚克力模糊）/ solid / image
+        new("settings_background", ValueKind.Str, "solid"),             // 设置窗背景：mica（云母取色）/ acrylic（亚克力模糊）/ solid / image
         new("settings_bg_color", ValueKind.Str, "#F3F3F3"),           // 纯色背景颜色
         new("settings_bg_image", ValueKind.Str, ""),                  // 自定义背景图片（绝对路径）
 
@@ -146,6 +149,7 @@ public sealed class AppSettings
             "board_bg_mode", "board_bg_color", "board_bg_image",
             "fade_animation", "animation_duration_ms",
             "anim_fade_panel", "anim_fade_text", "settings_mica", "settings_acrylic",
+            "liquid_glass", "settings_glass",
         },
         [PageIsland] = new[]
         {
@@ -156,7 +160,7 @@ public sealed class AppSettings
         [PageSchedule] = new[] { "schedule_advance_minutes", "schedule_time_offset_seconds", "weekend_custom_schedule" },
         [PageHomework] = new[] { "homework_show_date", "homework_history_days", "homework_notify_enabled" },
         // 关于页：更新通道、更新源、被跳过的版本、上次检查时间、已装资源包版本、开发者选项
-        [PageAbout] = new[] { "update_channel", "update_source", "update_skipped_version", "last_update_check", "resources_version", "developer_mode" },
+        [PageAbout] = new[] { "update_channel", "update_source", "update_skipped_version", "last_update_check", "resources_version", "developer_mode", "gpu_dx12" },
         // 日志页：内存里保留多少行
         ["logs"] = new[] { "log_max_lines" },
         [PagePlugins] = new[] { "market_source" },

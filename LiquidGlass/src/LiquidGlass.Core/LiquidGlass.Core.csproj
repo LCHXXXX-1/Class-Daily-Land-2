@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    纯逻辑核心：材质定义、几何（SDF）、主题调色板、动画曲线、后端契约。
+    刻意不引用 WPF —— 这样几何/材质可以在单元测试里直接跑，不被 UI 线程绑住。
+  -->
+  <PropertyGroup>
+    <UseWPF>false</UseWPF>
+    <RootNamespace>LiquidGlass.Core</RootNamespace>
+    <AssemblyName>LiquidGlass.Core</AssemblyName>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/LiquidGlass.Core/LiquidGlass.Core.csproj" />
+    <Project Path="src/LiquidGlass.Rendering/LiquidGlass.Rendering.csproj" />
+    <Project Path="src/LiquidGlass.Rendering.Wpf/LiquidGlass.Rendering.Wpf.csproj" />
+    <Project Path="src/LiquidGlass.Controls/LiquidGlass.Controls.csproj" />
+    <Project Path="src/LiquidGlass.Rendering.DirectX/LiquidGlass.Rendering.DirectX.csproj" />
+    <Project Path="src/LiquidGlass.Demo/LiquidGlass.Demo.csproj" />
+  </Folder>
+</Solution>

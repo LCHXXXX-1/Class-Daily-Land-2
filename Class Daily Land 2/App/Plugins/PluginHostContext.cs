@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Win32;
+﻿using ClassDailyLand2.App.Win32;
 using ClassDailyLand2.Core.Storage;
 using ClassDailyLand2.Plugin;
 using System.Diagnostics;
@@ -276,6 +276,12 @@ internal sealed class PluginHostContext : IPluginHost
     {
         try { Ctx.Tray?.Balloon(string.IsNullOrWhiteSpace(title) ? "班级日常" : title, message ?? ""); }
         catch (Exception ex) { Warn("Toast 失败：" + ex.Message); }
+    }
+
+    public void Notify(string title, string message, NoticeLevel level = NoticeLevel.Info)
+    {
+        try { Ctx.Notify(title, message, level); }
+        catch (Exception ex) { Warn("Notify 失败：" + ex.Message); }
     }
 
     public void OpenSettings(string? pageKey = null)

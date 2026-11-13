@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Theme;
+﻿using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Win32;
 using ClassDailyLand2.Core;
 using ClassDailyLand2.Core.Managers;
@@ -1208,6 +1208,10 @@ public sealed class MainBoardWindow : Window
         // 到底/到顶之后先停一会儿，再掉头（来回滚）
         if (DateTime.Now < _pauseUntil) return;
 
+        // 这一步要动内容了：给滚动内容挂上位图缓存。
+        // 每帧重新栅格化几十行文字很贵；挂上缓存后一帧只是在显存里平移一张位图。
+        ClassDailyLand2.App.Views.GpuAccel.BeginMotion(_homeworkPanel);
+
         if (_scrollDirection == 1)
         {
             var next = current + _scrollStep;
@@ -1733,6 +1737,7 @@ public sealed class MainBoardWindow : Window
         var dy = e.GetPosition(this).Y - _dragStart.Value.Y;
         if (Math.Abs(dy) < 3) return;
         PauseAutoScroll();
+        ClassDailyLand2.App.Views.GpuAccel.BeginMotion(_homeworkPanel);
         _homeworkScroll.ScrollToVerticalOffset(_dragOffset - dy);
     }
 
@@ -1756,6 +1761,7 @@ public sealed class MainBoardWindow : Window
     {
         base.OnPreviewMouseWheel(e);
         PauseAutoScroll();
+        ClassDailyLand2.App.Views.GpuAccel.BeginMotion(_homeworkPanel);
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)

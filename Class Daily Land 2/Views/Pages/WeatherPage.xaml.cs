@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Controls;
+﻿using ClassDailyLand2.App.Controls;
 using ClassDailyLand2.App.Integrations.Disaster;
 using ClassDailyLand2.App.Integrations.Weather;
 using ClassDailyLand2.App.ViewModels;
@@ -113,8 +113,11 @@ public partial class WeatherPage : UserControl
         FillCities(vm.DisasterCity);
         FillDistricts(vm.DisasterDistrict);
 
-        LatBox.Text = vm.DisasterLat;
-        LonBox.Text = vm.DisasterLon;
+        // 手动经纬度那一行已经删了（见 XAML 注释）。老用户设置里可能还留着上次手填的坐标，
+        // 不清掉它会一直盖在省市区查表结果上，而界面上根本看不见 —— 加载时清一次。
+        if (!string.IsNullOrEmpty(vm.DisasterLat) || !string.IsNullOrEmpty(vm.DisasterLon))
+            vm.SetDisasterCoord("", "");
+
         _loading = false;
 
         UpdateAutoLocateUi();
@@ -166,9 +169,7 @@ public partial class WeatherPage : UserControl
         _loading = false;
 
         vm.SetDisasterLocation(Province, "", "");
-        LatBox.Text = "";
-        LonBox.Text = "";
-        ApplyCoord();
+        ClearManualCoord(vm);
     }
 
     void OnCityChanged(object sender, SelectionChangedEventArgs e)
@@ -179,26 +180,23 @@ public partial class WeatherPage : UserControl
         _loading = false;
 
         vm.SetDisasterLocation(Province, CityValue, "");
-        LatBox.Text = "";
-        LonBox.Text = "";
-        ApplyCoord();
+        ClearManualCoord(vm);
     }
 
     void OnDistrictChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || DataContext is not SettingsViewModel vm) return;
         vm.SetDisasterLocation(Province, CityValue, DistrictValue);
-        LatBox.Text = "";
-        LonBox.Text = "";
-        ApplyCoord();
+        ClearManualCoord(vm);
     }
 
-    /// <summary>把（可能空着的）经纬度写回设置：空 = 按省市区查表。</summary>
-    void ApplyCoord()
+    /// <summary>
+    /// 把经纬度清空 = 完全按省市区查表。
+    /// （以前这里读的是那两个输入框；现在位置只由三级下拉决定，坐标一律查表得来。）
+    /// </summary>
+    static void ClearManualCoord(SettingsViewModel vm)
     {
-        if (DataContext is not SettingsViewModel vm) return;
-        vm.SetDisasterCoord(LatBox.Text?.Trim() ?? "", LonBox.Text?.Trim() ?? "");
-        UpdateStatus();
+        vm.SetDisasterCoord("", "");
     }
 
     void OnAutoLocateChanged(object sender, RoutedEventArgs e) => UpdateAutoLocateUi();
@@ -212,9 +210,6 @@ public partial class WeatherPage : UserControl
     {
         var auto = AutoLocateBox.IsChecked == true;
 
-        LatBox.IsEnabled = !auto;
-        LonBox.IsEnabled = !auto;
-        ApplyCoordButton.IsEnabled = !auto;
         ProvinceBox.IsEnabled = !auto;
         CityBox.IsEnabled = !auto;
         DistrictBox.IsEnabled = !auto;

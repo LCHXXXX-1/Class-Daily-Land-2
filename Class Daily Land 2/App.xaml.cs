@@ -108,6 +108,15 @@ public partial class App : Application
 
             controller.Startup();
 
+            // 调试入口：--show-settings 直接把设置中心打开（截图/回归验证用）
+            if (args.Any(a => string.Equals(a, "--show-settings", StringComparison.OrdinalIgnoreCase)))
+                Dispatcher.BeginInvoke(() => controller.EnsureSettings());
+            // 调试入口：--show-page=island 打开设置中心并直接跳到指定页（回归验证用）
+            var pageArg = args.FirstOrDefault(a => a.StartsWith("--show-page=", StringComparison.OrdinalIgnoreCase));
+            if (pageArg is not null)
+                Dispatcher.BeginInvoke(() => controller.ShowSettings(pageArg["--show-page=".Length..]));
+
+
             using var wake = new EventWaitHandle(false, EventResetMode.AutoReset, WakeEventName, out _);
             _wakeRegistration = ThreadPool.RegisterWaitForSingleObject(wake,
                 (_, _) => Dispatcher.BeginInvoke(() => controller.ShowFromSecondInstance()),

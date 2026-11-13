@@ -31,6 +31,18 @@
     <SolidColorBrush x:Key="MicaDialogBrush" Color="#B8FFFFFF" />
     <!-- 35% 白：再厚就把云母完全盖住了（之前 45% 叠在 25% 的层上几乎纯白） -->
     <SolidColorBrush x:Key="MicaCardBackgroundBrush" Color="#59FFFFFF" />
+    <!--
+      云母/亚克力下的控件填充（下拉框/输入框/数字框/默认按钮共用）。
+      原来的 ControlFillColorDefaultBrush 是 70% 白，压在 35% 白的卡片上会亮成一块白纸
+      —— 卡片已经把云母让出来了，控件还按不透明观感取值就会跳出来。
+      这里只比卡片高一档，靠 ControlElevationBorderBrush 的描边区分边界。
+      Hover 单独一个键：底色降下来后原来的 #80F9F9F9 和它几乎同亮度，悬停会没反应；
+      又不能直接改 ControlFillColorSecondaryBrush —— 开关关闭态的轨道也用它。
+    -->
+    <SolidColorBrush x:Key="MicaControlFillBrush" Color="#73FFFFFF" />
+    <SolidColorBrush x:Key="MicaControlHoverBrush" Color="#99FFFFFF" />
+    <SolidColorBrush x:Key="AcrylicControlFillBrush" Color="#26FFFFFF" />
+    <SolidColorBrush x:Key="AcrylicControlHoverBrush" Color="#3DFFFFFF" />
 
     <!-- 卡片 -->
     <SolidColorBrush x:Key="CardBackgroundFillColorDefaultBrush" Color="#B3FFFFFF" />
@@ -71,15 +83,16 @@
     </LinearGradientBrush>
     <!-- 抛光玻璃边缘：web 配方里的 border: 1px solid rgba(255,255,255,.80) -->
     <!-- 0.5px 白 50% 内描边（rdev 的 0 0 0 0.5px rgba(255,255,255,.5) inset） -->
+    <!-- 抛光边：只在上缘留一线光，别围成一圈白框 -->
     <LinearGradientBrush x:Key="NavLensEdgeBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#B3FFFFFF" Offset="0" />
-        <GradientStop Color="#80FFFFFF" Offset="0.45" />
-        <GradientStop Color="#66FFFFFF" Offset="1" />
+        <GradientStop Color="#4DFFFFFF" Offset="0" />
+        <GradientStop Color="#24000000" Offset="0.5" />
+        <GradientStop Color="#2E000000" Offset="1" />
     </LinearGradientBrush>
     <LinearGradientBrush x:Key="NavLensBevelBrush" StartPoint="0,0" EndPoint="0.55,1">
-        <GradientStop Color="#FFFFFF" Offset="0" />
+        <GradientStop Color="#59FFFFFF" Offset="0" />
         <GradientStop Color="#00FFFFFF" Offset="0.6" />
-        <GradientStop Color="#1A000000" Offset="1" />
+        <GradientStop Color="#14000000" Offset="1" />
     </LinearGradientBrush>
     <SolidColorBrush x:Key="NavGlassStrokeSoftBrush" Color="#1A000000" />
     <SolidColorBrush x:Key="NavItemHoverFillBrush" Color="#0D000000" />
@@ -87,6 +100,8 @@
     <!-- 控件 -->
     <SolidColorBrush x:Key="ControlFillColorDefaultBrush" Color="#B3FFFFFF" />
     <SolidColorBrush x:Key="ControlFillColorSecondaryBrush" Color="#80F9F9F9" />
+    <!-- 按钮/下拉框悬停专用（原来直接借用 Secondary，那样一改开关轨道也跟着变） -->
+    <SolidColorBrush x:Key="ControlFillColorHoverBrush" Color="#80F9F9F9" />
     <SolidColorBrush x:Key="ControlFillColorTertiaryBrush" Color="#4DF9F9F9" />
     <SolidColorBrush x:Key="ControlFillColorDisabledBrush" Color="#4DF9F9F9" />
     <SolidColorBrush x:Key="ControlStrokeColorDefaultBrush" Color="#0F000000" />

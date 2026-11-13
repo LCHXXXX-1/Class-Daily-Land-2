@@ -1,13 +1,22 @@
-namespace ClassDailyLand2.Plugin;
+﻿namespace ClassDailyLand2.Plugin;
+
+/// <summary>应用内提示的级别（决定图标与配色）。</summary>
+public enum NoticeLevel
+{
+    Info,
+    Success,
+    Warning,
+    Error,
+}
 
 /// <summary>
-/// 宿主交给插件的一切能力。共 50 个成员，分八组：
+/// 宿主交给插件的一切能力。共 51 个成员，分八组：
 /// <list type="number">
 ///   <item>元信息与日志（8）</item>
 ///   <item>显示位注册（11）</item>
 ///   <item>只读数据（14）</item>
 ///   <item>插件私有存储（5）</item>
-///   <item>宿主动作（7）</item>
+///   <item>宿主动作（8）</item>
 ///   <item>事件（3）</item>
 ///   <item>插件设置页（2）</item>
 ///   <item>时间（见 <see cref="Now"/>）</item>
@@ -155,8 +164,23 @@ public interface IPluginHost
 
     // ═══════════════ 五、宿主动作 ═══════════════
 
-    /// <summary>弹一条托盘气泡（系统通知）。</summary>
+    /// <summary>
+    /// 弹一条托盘气泡（系统通知）。窗口没开也看得见，但会占用系统的通知区域 ——
+    /// 想弹在应用界面里请用 <see cref="Notify"/>。
+    /// </summary>
     void Toast(string title, string message);
+
+    /// <summary>
+    /// 在班级日常窗口**右下角**弹一条应用内提示：从右侧滑入，5 秒后自动收起；
+    /// 内容相同的会合并成一条并在角上标计数（×2 / ×3 …），不会刷出一墙一样的条。
+    ///
+    /// <para>设置中心开着就弹在里面；没开则退回托盘气泡 —— 不会为了提示把窗口拉出来。
+    /// 文案建议一行说完（标题 20 字内、正文 40 字内），超出会被省略。</para>
+    /// </summary>
+    /// <param name="title">标题，一句话。</param>
+    /// <param name="message">正文，可空；会自动折成单行。</param>
+    /// <param name="level">级别，决定图标与配色。</param>
+    void Notify(string title, string message, NoticeLevel level = NoticeLevel.Info);
 
     /// <summary>打开设置中心；<paramref name="pageKey"/> 可指定页（general/appearance/island/…）。</summary>
     void OpenSettings(string? pageKey = null);

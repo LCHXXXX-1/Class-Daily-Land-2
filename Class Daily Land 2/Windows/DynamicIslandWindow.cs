@@ -1,4 +1,4 @@
-using ClassDailyLand2.App.Integrations.Audio;
+﻿using ClassDailyLand2.App.Integrations.Audio;
 using ClassDailyLand2.App.Integrations.Disaster;
 using ClassDailyLand2.App.Theme;
 using ClassDailyLand2.App.Win32;
@@ -203,7 +203,11 @@ public sealed partial class DynamicIslandWindow : Window
             Interop.MakeToolWindowNoActivate(this);
             ApplyChrome();
         };
-        SizeChanged += (_, _) => { ApplyChrome(); RefreshMarquee(); };
+        // SizeChanged 在"窗口几何动画"期间每帧都发：
+        //   · ApplyChrome 只是几个属性赋值（圆角/边距/裁切区），便宜，必须每帧跟；
+        //   · RefreshMarquee 要重新 MeasureText + 重建一遍关键帧动画 —— 每帧做纯属浪费，
+        //     中途重启还会让跑马灯"抖一下"。改成 80ms 防抖，几何落定后再排一次。
+        SizeChanged += (_, _) => { ApplyChrome(); ScheduleMarqueeRefresh(); };
         Palette.Changed += (_, _) => ApplyPalette();
     }
 
@@ -600,6 +604,24 @@ public sealed partial class DynamicIslandWindow : Window
     }
 
     /// <summary>文字比可视区宽时开跑马灯：滚一整段 + 停 0.9s，无限循环。</summary>
+    /// <summary>跑马灯重排的防抖（窗口几何动画期间 SizeChanged 每帧都来）。</summary>
+    DispatcherTimer? _marqueeDebounce;
+
+    void ScheduleMarqueeRefresh()
+    {
+        if (_marqueeDebounce is null)
+        {
+            _marqueeDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(80) };
+            _marqueeDebounce.Tick += (_, _) =>
+            {
+                _marqueeDebounce!.Stop();
+                RefreshMarquee();
+            };
+        }
+        _marqueeDebounce.Stop();
+        _marqueeDebounce.Start();
+    }
+
     void RefreshMarquee()
     {
         if (_state != IslandState.Compact || TextCur.Text.Length == 0)

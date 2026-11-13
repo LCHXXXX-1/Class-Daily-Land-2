@@ -162,4 +162,13 @@
 	  <ProjectReference Include="..\ClassDailyLand2.Uninstaller\ClassDailyLand2.Uninstaller.csproj" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 
+  <!-- LiquidGlass：液态玻璃渲染与控件（折射着色器 + iOS 26 开关等） -->
+  <ItemGroup>
+    <ProjectReference Include="..\LiquidGlass\src\LiquidGlass.Core\LiquidGlass.Core.csproj" />
+    <ProjectReference Include="..\LiquidGlass\src\LiquidGlass.Rendering\LiquidGlass.Rendering.csproj" />
+    <ProjectReference Include="..\LiquidGlass\src\LiquidGlass.Rendering.Wpf\LiquidGlass.Rendering.Wpf.csproj" />
+    <ProjectReference Include="..\LiquidGlass\src\LiquidGlass.Controls\LiquidGlass.Controls.csproj" />
+    <ProjectReference Include="..\LiquidGlass\src\LiquidGlass.Rendering.DirectX\LiquidGlass.Rendering.DirectX.csproj" />
+  </ItemGroup>
+
 </Project>

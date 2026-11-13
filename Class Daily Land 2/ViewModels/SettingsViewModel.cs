@@ -268,16 +268,33 @@ public sealed partial class SettingsViewModel : ObservableObject
         }
     }
 
-    /// <summary>设置窗背景：mica（云母取色）/ solid（纯色）/ image（图片）。</summary>
+    /// <summary>
+    /// 设置窗背景板：solid（纯色）/ image（图片）/ mica（云母）/ acrylic（亚克力）。
+    /// **只能选一个**。
+    /// </summary>
+    /// <remarks>
+    /// 四选一是硬要求：云母和亚克力都是 DWM 背板，纯色/图片要先撤掉 DWM 背板，
+    /// 同时开两个会互相覆盖（历史上就是"云母画在自己背景前面"那种错乱）。
+    /// </remarks>
     public string SettingsBackground
     {
         get
         {
             var v = S.Str("settings_background");
-            // 上一版把"亚克力"当成背景值存过；现在它改成一个独立开关了，这里归一回云母
-            return v is "solid" or "image" ? v : "mica";
+            return v is "solid" or "image" or "acrylic" or "glass" ? v : "mica";
         }
-        set => Write("settings_background", value);
+        set
+        {
+            Write("settings_background", value);
+            // 兼容两处老键：主窗「班级日常」也跟着云母/亚克力走
+            var mica = value is "mica" or "glass";      // "glass" = 早先的液态玻璃背景板
+            if (S.Bool("settings_mica") != mica)
+                Write("settings_mica", mica, nameof(SettingsMica));
+            var acrylic = value == "acrylic";
+            if (S.Bool("settings_acrylic") != acrylic)
+                Write("settings_acrylic", acrylic, nameof(SettingsAcrylic));
+            OnPropertyChanged(nameof(MaterialNote));
+        }
     }
 
     /// <summary>「班级日常」整窗背景：inherit（跟随主题）/ color / image。</summary>
@@ -339,34 +356,51 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => WriteDelayed("animation_duration_ms", value);
     }
 
-    /// <summary>
-    /// 云母材质。和 <see cref="SettingsAcrylic"/> **互斥**：开一个就把另一个关掉，
-    /// 两个都关 = 不用系统材质（窗口走纯色）。
-    /// </summary>
+    /// <summary>云母材质（四选一里的一个；开它就等于把背景板切成云母）。</summary>
     public bool SettingsMica
     {
-        get => S.Bool("settings_mica");
-        set
-        {
-            Write("settings_mica", value);
-            if (value && S.Bool("settings_acrylic"))
-                Write("settings_acrylic", false, nameof(SettingsAcrylic));
-        }
+        get => SettingsBackground == "mica";
+        set { if (value) SettingsBackground = "mica"; else if (SettingsBackground == "mica") SettingsBackground = "solid"; }
+    }
+
+    /// <summary>亚克力材质（和云母互斥，同在四选一里）。</summary>
+    public bool SettingsAcrylic
+    {
+        get => SettingsBackground == "acrylic";
+        set { if (value) SettingsBackground = "acrylic"; else if (SettingsBackground == "acrylic") SettingsBackground = "solid"; }
+    }
+
+    /// <summary>纯色背景（四选一）。</summary>
+    public bool SettingsSolid
+    {
+        get => SettingsBackground == "solid";
+        set { if (value) SettingsBackground = "solid"; }
+    }
+
+    /// <summary>图片背景（四选一）。</summary>
+    public bool SettingsImage
+    {
+        get => SettingsBackground == "image";
+        set { if (value) SettingsBackground = "image"; }
     }
 
     /// <summary>
-    /// 亚克力材质（Win10 1803+ / Win11 都支持）。和云母互斥，默认关。
-    /// Win11 走系统背板 DWMSBT_TRANSIENTWINDOW，Win10 走 accent policy（见 Interop.ApplyBlur）。
+    /// 液态玻璃总开关（个性化页）。关掉后选中胶囊回到普通半透明样式，
+    /// 并且完全不再创建 DirectX 设备（渲染层 Visibility 收起 → OnRender 不会触发）。
     /// </summary>
-    public bool SettingsAcrylic
+    public bool LiquidGlass
     {
-        get => S.Bool("settings_acrylic");
-        set
-        {
-            Write("settings_acrylic", value);
-            if (value && S.Bool("settings_mica"))
-                Write("settings_mica", false, nameof(SettingsMica));
-        }
+        get => S.Bool("liquid_glass");
+        set => Write("liquid_glass", value);
+    }
+
+    /// <summary>
+    /// 渲染后端开关（关于页）：开 = 优先 DX12（失败自动退 DX11），关 = 直接走 DX11。
+    /// </summary>
+    public bool GpuDx12
+    {
+        get => S.Bool("gpu_dx12");
+        set => Write("gpu_dx12", value);
     }
 
     /// <summary>Win11 才有云母 + 原生圆角。</summary>
@@ -391,8 +425,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         ? "普通"
         : IsWindows11 ? "Windows 11 云母（Mica）" : "Windows 10 亚克力（Acrylic）";
 
-    /// <summary>外观页「窗口材质」分区的脚注。</summary>
-    public string MaterialNote => "当前系统：" + SystemDescription;
+    /// <summary>外观页「窗口材质」分区的脚注。<br/>
+    /// 四选一：纯色 / 图片 / 云母 / 亚克力；开一个会自动关掉其它。</summary>
+    public string MaterialNote =>
+        "纯色 / 图片 / 云母 / 亚克力四选一，开一个会自动关掉其余。" +
+        "亚克力需 Windows 10 1803 起且系统开着「透明效果」；云母需 Windows 11。" +
+        "当前系统：" + SystemDescription;
 
     // ————————————————————— 触屏 —————————————————————
 

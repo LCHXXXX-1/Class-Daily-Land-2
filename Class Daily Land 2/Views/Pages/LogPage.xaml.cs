@@ -1,9 +1,10 @@
-using ClassDailyLand2.App.Controls;
+﻿using ClassDailyLand2.App.Controls;
 using ClassDailyLand2.App.ViewModels;
 using ClassDailyLand2.Core;
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace ClassDailyLand2.App.Views.Pages;
 
@@ -131,7 +132,7 @@ public partial class LogPage : UserControl
         if (Matches(line))
         {
             _view.Add(line);
-            if (AutoScrollToggle.IsChecked == true) LogList.ScrollIntoView(line);
+            if (AutoScrollToggle.IsChecked == true) ScrollToEnd();
         }
         UpdateCount();
     }
@@ -194,10 +195,39 @@ public partial class LogPage : UserControl
         catch { return "未知"; }
     }
 
+    /// <summary>
+    /// 滚到最新一行。
+    ///
+    /// ★ 不能用 <c>LogList.ScrollIntoView(…)</c>：它发出的是 BringIntoView 请求，会一路
+    ///   冒泡到设置页最外层那个 ScrollViewer —— 新日志一来，跟着动的不是这块日志区域，
+    ///   而是**整个设置页**（看起来像"页面自己在往下滚"）。直接操作 ListBox 内部那个
+    ///   ScrollViewer 就只滚这一块。
+    /// </summary>
     void ScrollToEnd()
     {
         if (_view.Count == 0) return;
+
+        var inner = FindScrollViewer(LogList);
+        if (inner is not null)
+        {
+            inner.ScrollToEnd();
+            return;
+        }
+
+        // 模板还没套上（极早期调用）时退回旧做法，至少能滚到
         LogList.ScrollIntoView(_view[^1]);
+    }
+
+    static ScrollViewer? FindScrollViewer(DependencyObject root)
+    {
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is ScrollViewer viewer) return viewer;
+            if (FindScrollViewer(child) is { } deeper) return deeper;
+        }
+        return null;
     }
 
     // ————————————————————— 工具按钮 —————————————————————

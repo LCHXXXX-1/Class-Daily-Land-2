@@ -1,4 +1,4 @@
-<UserControl x:Class="ClassDailyLand2.App.Views.Pages.HomeworkPage"
+﻿<UserControl x:Class="ClassDailyLand2.App.Views.Pages.HomeworkPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls">
@@ -45,7 +45,7 @@
         </fl:SettingGroup>
 
         <fl:SettingGroup Title="测试" Icon="{StaticResource Icon.Sync}" TileColor="#FF8661C5"
-                         Note="开始测试会先备份作业、设置与课表，再往 schedule.json 写 4 节测试课（每节 10 秒上课 + 10 秒课间，课程名：自习、自习、数学自习、自习；引擎显示成 自习(1)、自习(2)、数学自习、自习(3)）。作业区：第 1/2/3/4 节下课分别有 2/3/5/5 个科目交；同一科目的多条作业错开到不同节次（语文 3 条分别在第 1/2/3 节交），每一条到点只扫它自己那一行，行尾显示「时间 + 自习(1)」。约 80 秒后自动结束，或点「中断测试」提前结束；两种结束方式都会把作业、设置与课表恢复成测试前">>
+                         Note="开始测试会先备份作业、设置与课表，再往 schedule.json 写 4 节测试课（每节 10 秒上课 + 10 秒课间，课程名：自习、自习、数学自习、自习；引擎显示成 自习(1)、自习(2)、数学自习、自习(3)）。作业区：第 1/2/3/4 节下课分别有 2/3/5/5 个科目交；同一科目的多条作业错开到不同节次（语文 3 条分别在第 1/2/3 节交），每一条到点只扫它自己那一行，行尾显示「时间 + 自习(1)」。约 80 秒后自动结束，或点「中断测试」提前结束；两种结束方式都会把作业、设置与课表恢复成测试前">
             <fl:SettingRow Title="提交时段自检" Hint="开始后按钮变「测试中」：灵动岛按 自习(1) → 自习(2) → 数学自习 依次上课/下课；同一节下课的多个科目会同时置顶，并按科目名排序；作业行尾显示「时间 + 自习(1)」。测试期间不能切换设置页面">
                 <StackPanel Orientation="Horizontal">
                     <Button x:Name="DueTestButton" Content="开始测试"

@@ -18,6 +18,7 @@ public class DialogPanel : Border
     readonly TextBlock _title = new();
     readonly TextBlock _subtitle = new();
     readonly ScrollViewer _scroll;
+    readonly Border _foot;
 
     public SettingsViewModel Vm { get; }
     protected AppController Ctx => Vm.Ctx;
@@ -55,6 +56,7 @@ public class DialogPanel : Border
         _scroll.Content = Body;
 
         var foot = new Border { Style = (Style)Application.Current.Resources["EdFoot"]! };
+        _foot = foot;
         Footer.Orientation = Orientation.Horizontal;
         Footer.HorizontalAlignment = HorizontalAlignment.Right;
         foot.Child = Footer;
@@ -108,6 +110,37 @@ public class DialogPanel : Border
     }
 
     public void Close() => DialogLauncher.Close(this);
+
+    /// <summary>
+    /// 把这张浮层面板当成一个**平级设置页**用（顶栏给它一个自己的标签）。
+    ///
+    /// 和浮层的区别有三处，都是"页"这个语境要求的：
+    ///   ① 铺满：浮层是固定宽度的居中卡片，页要撑满内容列、高度不限（外层 ScrollCur 负责滚）；
+    ///   ② 去掉卡片外观：页本身已经有内容区底色和内边距，再套一层圆角+描边+阴影会很重；
+    ///   ③ 收起「关闭 / 取消」：页里没有浮层可关，按钮留着点了没反应。
+    ///      每个面板真正要做的事（新增假期 / 保存 …）都还在。
+    /// </summary>
+    public void HostAsPage()
+    {
+        HorizontalAlignment = HorizontalAlignment.Stretch;
+        VerticalAlignment = VerticalAlignment.Stretch;
+        Width = double.NaN;
+        MaxHeight = double.PositiveInfinity;
+        Margin = new Thickness(0);
+
+        // 清掉 EdPanel 那套卡片外观（圆角 / 描边 / 底色 / 阴影）
+        Style = null;
+
+        foreach (var button in Footer.Children.OfType<Button>())
+        {
+            if (button.Content is "关闭" or "取消")
+                button.Visibility = Visibility.Collapsed;
+        }
+
+        // 按钮全收起了（值日生名单 / 状态测试就只有一个「关闭」）→ 整条底栏一起收起
+        if (Footer.Children.OfType<Button>().All(b => b.Visibility != Visibility.Visible))
+            _foot.Visibility = Visibility.Collapsed;
+    }
 
     // ————————————————————— 常用小构件 —————————————————————
 
