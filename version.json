@@ -2,7 +2,7 @@
   "stable": {
     "version": "1.8.3",
     "release_date": "2026-11-14",
-    "download_url": "https://github.com/LCHXXXX-1/Class-Daily-Land-2/releases/download/Version/Class-Daily-Land-2-1.8.3.zip",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.3.zip",
     "sha256": "64d26568c1ce3efb2c34bce97dea57f81f8dd8682441450e74582a06a35c6272",
     "changelog": [
       "设置中心「个性化」页重做：主题 / 设置中心背景 / 班级日常背景 / 液态玻璃 四组，材质改为四选一",
