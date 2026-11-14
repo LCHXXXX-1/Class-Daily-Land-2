@@ -185,7 +185,10 @@ public static class UpdateEnvironment
             // 只能手工加引号 —— 路径里有中文和空格（"Class Daily Land 2"）是常态。
             info.UseShellExecute = true;
             info.Verb = "runas";
-            info.Arguments = string.Join(' ', arguments.Select(a => $"{a.Name} \"{a.Value}\""));
+            // ★ 每个值都按 Windows 命令行规则转义：value 来自 version.json 的
+            //   download_url（只验过 http/https 前缀），里面塞一个 " 就能提前闭合引号，
+            //   把 `--target/--exe` 之类的额外参数注入进 runas 命令行。
+            info.Arguments = string.Join(' ', arguments.Select(a => $"{a.Name} {QuoteArg(a.Value)}"));
         }
         else
         {
@@ -202,6 +205,40 @@ public static class UpdateEnvironment
 
         using var process = Process.Start(info);
         return process?.Id;
+    }
+
+    /// <summary>
+    /// 按 Windows 命令行规则给单个参数值加引号（提权路径用，ArgumentList 那条路不需要）。
+    ///
+    /// <para>规则（与 CommandLineToArgvW 一致）：值里的 <c>"</c> 写成 <c>\"</c>，
+    /// 它前面的反斜杠翻倍；结尾的反斜杠在闭合引号前也要翻倍。
+    /// 不转义的话 <c>--url http://x/a" --target C:\evil --exe x.exe "</c> 会被解析成
+    /// 多个参数 —— 这就是提权命令行注入的入口。</para>
+    /// </summary>
+    static string QuoteArg(string value)
+    {
+        var v = value ?? "";
+        var sb = new System.Text.StringBuilder(v.Length + 2);
+        sb.Append('"');
+        var pendingBackslashes = 0;
+        foreach (var ch in v)
+        {
+            if (ch == '\\') { pendingBackslashes++; continue; }
+            if (ch == '"')
+            {
+                sb.Append('\\', pendingBackslashes * 2 + 1);
+                sb.Append('"');
+            }
+            else
+            {
+                sb.Append('\\', pendingBackslashes);
+                sb.Append(ch);
+            }
+            pendingBackslashes = 0;
+        }
+        sb.Append('\\', pendingBackslashes * 2);
+        sb.Append('"');
+        return sb.ToString();
     }
 
     /// <summary>把主程序的 <c>app.log</c> 追加一行（更新前/后给用户留痕）。</summary>

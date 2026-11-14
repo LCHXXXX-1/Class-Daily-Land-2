@@ -89,11 +89,18 @@ public sealed class UpdateService
             return Status;
         }
 
+        // 声明提到 try 外面：finally 要统一收尾观察它（下面有解释）
+        Task<string?>? prepareTask = null;
+
         try
         {
+            // 顺手清上次换出来的独立临时更新器目录（CDL_UpdateTemp-xxxx，只有固定目录
+            // 被占用时才会生成，之后没人清）—— 启动时的静默检查也会走到这里。
+            CleanupStalePreparedDirs();
+
             // 用户主动检查时：网络请求与"把 Update\ 整目录复制到 %Temp%"并行做。
             // 两边都完成才亮出「立即更新」，这样点下去只是启动 temp 里的副本 —— 界面秒开。
-            var prepareTask = silent ? null : PrepareUpdaterAsync(ct);
+            prepareTask = silent ? null : PrepareUpdaterAsync(ct);
 
             if (!silent) SetStatus(UpdateStage.Checking, "正在检查更新…", clear: true);
 
@@ -186,6 +193,19 @@ public sealed class UpdateService
         }
         finally
         {
+            // ★ prepareTask 只在"有更新"分支被 await：无更新 / 拉取失败 / 中途抛异常时
+            //   它可能被取消成 Faulted，却没有任何人观察 —— 未观察的取消任务在调试器里
+            //   会炸、日志里也查不到。这里补一次观察（只记日志，不影响返回值）。
+            if (prepareTask is not null)
+            {
+                _ = prepareTask.ContinueWith(
+                    t => _log?.Invoke("更新器预复制失败：" +
+                                      (t.Exception?.GetBaseException().Message ?? "未知原因")),
+                    CancellationToken.None,
+                    TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+            }
+
             Interlocked.Exchange(ref _inFlight, 0);
         }
     }
@@ -462,6 +482,31 @@ public sealed class UpdateService
     }
 
     /// <summary>
+    /// 清掉过期的"独立临时更新器目录"（<c>CDL_UpdateTemp-xxxx</c>）。
+    ///
+    /// <para>固定目录 <c>CDL_UpdateTemp</c> 每次预复制都会 ForceResetDirectory，
+    /// 但因为被占用而临时换出来的带后缀目录谁都不管 —— 跨会话只增不减。
+    /// 24 小时这个阈值很保守：正在跑的更新器绝不会用到前一天复制出来的目录。</para>
+    /// </summary>
+    void CleanupStalePreparedDirs()
+    {
+        try
+        {
+            var root = Path.Combine(Path.GetTempPath(), PreparedUpdaterFolderName);
+            var parent = Path.GetDirectoryName(root);
+            if (string.IsNullOrEmpty(parent) || !Directory.Exists(parent)) return;
+
+            foreach (var dir in Directory.EnumerateDirectories(parent, PreparedUpdaterFolderName + "-*"))
+            {
+                if ((DateTime.Now - Directory.GetLastWriteTime(dir)).TotalHours < 24) continue;
+                try { Directory.Delete(dir, recursive: true); }
+                catch { /* 还被占用就下次检查时再试 */ }
+            }
+        }
+        catch { /* 清理失败绝不能影响检查更新本身 */ }
+    }
+
+    /// <summary>
     /// 强制清空目标目录：先整目录删除，失败就逐个文件（去掉只读属性）再删；
     /// 最后无论如何都保证目录存在，让后面的覆盖复制至少有落点。
     /// </summary>
@@ -633,11 +678,21 @@ public sealed class UpdateService
         var workDir = Path.Combine(Path.GetTempPath(), "ClassDailyLand2.Update", jobId);
         Directory.CreateDirectory(workDir);
 
-        // 1) 更新器复制到 temp（避开"替换时锁住自己"）
+        // ★ 慢路径上任何一步失败都要把这次的任务目录删掉：原来只有更新器跑成功才用得上
+        //   它，中途失败（复制更新器 / 写 job.json / 用户在 UAC 上点了否 / 起不来）
+        //   就原地留一个目录 —— %Temp%\ClassDailyLand2.Update 只增不减。
+        UpdateLaunchResult FailSlow(string message)
+        {
+            try { Directory.Delete(workDir, recursive: true); }
+            catch { /* 可能被占用或已被更新器接管：删不掉就留着，别盖住真正的错误提示 */ }
+            return UpdateLaunchResult.Fail(message);
+        }
+
+        // 1) 更新器复制到 temp（避开「替换时锁住自己」）
         var updaterExe = UpdateEnvironment.StageUpdater(
             UpdateEnvironment.InstallDir, workDir, out var stageError);
         if (updaterExe is null)
-            return UpdateLaunchResult.Fail(stageError ?? "更新器准备失败");
+            return FailSlow(stageError ?? "更新器准备失败");
 
         // 2) 补下载兜底地址：另一源的 version.json 里可能写的是 GitHub 的包地址
         var download = offer.DownloadUrl;
@@ -709,7 +764,7 @@ public sealed class UpdateService
         }
         catch (Exception ex)
         {
-            return UpdateLaunchResult.Fail("写更新任务失败：" + ex.Message);
+            return FailSlow("写更新任务失败：" + ex.Message);
         }
 
         // 4) 启动（装在 Program Files 时要提权）
@@ -723,14 +778,14 @@ public sealed class UpdateService
         }
         catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
         {
-            return UpdateLaunchResult.Fail("已取消（用户拒绝了管理员授权）");
+            return FailSlow("已取消（用户拒绝了管理员授权）");
         }
         catch (Exception ex)
         {
-            return UpdateLaunchResult.Fail("启动更新器失败：" + ex.Message);
+            return FailSlow("启动更新器失败：" + ex.Message);
         }
 
-        if (pid is null) return UpdateLaunchResult.Fail("更新器未能启动");
+        if (pid is null) return FailSlow("更新器未能启动");
 
         _log?.Invoke($"更新已开始（目标 {offer.Version}），更新器 PID {pid}，任务文件 {jobPath}");
         UpdateEnvironment.AppendAppLog(Path.Combine(_paths.Root, "app.log"),

@@ -86,7 +86,41 @@ public static class UpdateSources
                     continue;
                 }
 
-                var bytes = await response.Content.ReadAsByteArrayAsync(deadline.Token).ConfigureAwait(false);
+                // ★ 响应体要有上限：version.json 正常只有几 KB，2MB 已经非常宽。
+                //   原来 ReadAsByteArrayAsync 不设限 —— 更新源被劫持 / 中间人塞一个
+                //   几百 MB 的"版本文件"就能把内存撑爆（包下载有 64MB 校验，这里没有）。
+                const long maxBytes = 2 * 1024 * 1024;
+                if (response.Content.Headers.ContentLength is > maxBytes)
+                {
+                    Logger.Current?.Warn($"[更新] {name} 响应头声明 {response.Content.Headers.ContentLength} 字节，超过 {maxBytes} 上限");
+                    errors.Add($"{name}：响应过大");
+                    continue;
+                }
+
+                byte[] bytes;
+                await using (var body = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false))
+                using (var buffer = new MemoryStream())
+                {
+                    var chunk = new byte[8192];
+                    long total = 0;
+                    var tooLarge = false;
+                    while (true)
+                    {
+                        var read = await body.ReadAsync(chunk, deadline.Token).ConfigureAwait(false);
+                        if (read <= 0) break;
+                        total += read;
+                        if (total > maxBytes) { tooLarge = true; break; }
+                        buffer.Write(chunk, 0, read);
+                    }
+                    if (tooLarge)
+                    {
+                        Logger.Current?.Warn($"[更新] {name} 响应超过 {maxBytes} 字节上限，丢弃");
+                        errors.Add($"{name}：响应过大");
+                        continue;
+                    }
+                    bytes = buffer.ToArray();
+                }
+
                 Logger.Current?.Http("GET", url, (int)response.StatusCode, watch.ElapsedMilliseconds, bytes.LongLength, "更新源");
                 var text = DecodeBody(bytes);
 
