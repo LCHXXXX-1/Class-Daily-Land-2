@@ -1,4 +1,4 @@
-<UserControl x:Class="ClassDailyLand2.App.Views.Pages.PluginsPage"
+﻿<UserControl x:Class="ClassDailyLand2.App.Views.Pages.PluginsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:fl="clr-namespace:ClassDailyLand2.App.Controls">
@@ -94,7 +94,7 @@
             </fl:SettingGroup>
 
             <TextBlock Style="{StaticResource CaptionText}" Margin="4,12,0,0"
-                       Text="「立即同步」绕过本地缓存重新拉索引（主源 Gitee，失败自动换 GitHub）。安装包会做 sha256 校验并核对包内清单。" />
+                       Text="「立即同步」绕过本地缓存重新拉索引（主源 GitHub，失败自动换 Gitee）。安装包会做 sha256 校验并核对包内清单。" />
             <TextBlock x:Name="MarketSummary" Style="{StaticResource CaptionText}" Margin="4,4,0,0" />
         </StackPanel>
     </StackPanel>

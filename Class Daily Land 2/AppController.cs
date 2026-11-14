@@ -1371,8 +1371,16 @@ public sealed class AppController
 
     public void OpenRollCall()
     {
+        // 已经开着就只激活：连点会叠出两个点名窗，而且下面那句 Closed 回调
+        // 原来不校验实例 —— 先关旧窗会把新窗的引用清空，之后隐藏/状态管理全部失联。
+        if (_rollCall is { IsVisible: true })
+        {
+            _rollCall.Activate();
+            return;
+        }
+
         var win = new RollCallWindow(Duty.Names) { Owner = Main?.IsVisible == true ? Main : null };
-        win.Closed += (_, _) => _rollCall = null;
+        win.Closed += (_, _) => { if (ReferenceEquals(_rollCall, win)) _rollCall = null; };
         _rollCall = win;
         win.Show();
         win.Activate();
@@ -1463,18 +1471,60 @@ public sealed class AppController
     /// 更新器启动后的隐藏处理：只藏起可见窗口，不退出进程、不 Shutdown、不 Dispose 托盘。
     /// 更新器会在真正替换文件前强杀主程序；这里提前退出反而会让文件句柄/进程关系失控。
     /// </summary>
+    /// <summary>HideForUpdater 藏起来的窗口（更新取消 / 更新器退出后要原样放回来）。</summary>
+    readonly List<Window> _hiddenForUpdater = new();
+
     public void HideForUpdater()
     {
         _updateLaunched = true;
+        _hiddenForUpdater.Clear();
+
+        void HideTracked(Window? window)
+        {
+            if (window is null || !window.IsVisible) return;
+            try
+            {
+                window.Hide();
+                _hiddenForUpdater.Add(window);
+            }
+            catch { /* 单个窗口藏不起来不影响整体 */ }
+        }
 
         try { Panels?.Collapse(); } catch (Exception ex) { Log?.Warn("隐藏下拉面板失败：" + ex.Message); }
-        try { _settingsWindow?.Hide(); } catch { }
-        try { _homeworkEditor?.Hide(); } catch { }
-        try { _rollCall?.Hide(); } catch { }
-        try { _mediaCard?.Hide(); } catch { }
-        try { SubIsland?.Hide(); } catch { }
-        try { Island?.Hide(); } catch { }
-        try { Main?.Hide(); } catch { }
+        HideTracked(_settingsWindow);
+        HideTracked(_homeworkEditor);
+        HideTracked(_rollCall);
+        HideTracked(_mediaCard);
+        HideTracked(SubIsland);
+        HideTracked(Island);
+        HideTracked(Main);
+    }
+
+    /// <summary>
+    /// 把 HideForUpdater 藏掉的窗口放回来。
+    ///
+    /// 原来只藏不放：更新器被取消 / 中途崩了，锁存是解了，但用户面前一片空白，
+    /// 只能去托盘菜单一个个找回；作业编辑器还是 ShowDialog，藏起来后模态回环仍在跑，
+    /// 再点「编辑作业」只会去 Activate 一个隐藏窗口 —— 表现为"按钮彻底没反应"。
+    /// </summary>
+    public void RestoreAfterUpdater()
+    {
+        if (_hiddenForUpdater.Count == 0) return;
+
+        foreach (var window in _hiddenForUpdater.ToList())
+        {
+            try
+            {
+                if (!window.IsVisible) window.Show();
+            }
+            catch (Exception ex)
+            {
+                Log?.Warn("恢复窗口失败：" + ex.Message);
+            }
+        }
+
+        _hiddenForUpdater.Clear();
+        Log?.Info("[更新] 已恢复更新期间隐藏的窗口");
     }
 
     int _autoUpdateCheckStarted;
@@ -1614,6 +1664,12 @@ public sealed class AppController
             //   本会话之后再点「立即更新 / 重新安装」全部被静默忽略（用户以为按钮坏了）。
             _updateLaunched = false;
             Log?.Warn("[更新] 没拿到更新器 PID，跳过进程监视，直接解除更新锁存");
+            try
+            {
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                    new Action(RestoreAfterUpdater));
+            }
+            catch { /* 同上 */ }
             return;
         }
 
@@ -1634,6 +1690,14 @@ public sealed class AppController
 
             _updateLaunched = false;
             Log?.Info("[更新] 更新器进程已结束，解除更新锁存");
+
+            // 后台线程不能直接动窗口：切回 UI 线程再把藏起来的窗口放出来
+            try
+            {
+                System.Windows.Application.Current?.Dispatcher.BeginInvoke(
+                    new Action(RestoreAfterUpdater));
+            }
+            catch { /* 退出过程中可能已经没有 Application 了 */ }
         });
     }
 

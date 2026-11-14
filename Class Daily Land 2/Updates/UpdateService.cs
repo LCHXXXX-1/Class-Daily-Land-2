@@ -588,14 +588,19 @@ public sealed class UpdateService
         // ★ 快速路径的启动参数只有「下载地址 / sha256 / 安装目录 / exe 名」四个，
         //   资源包和备用下载地址都带不过去。原来无条件走快速路径，导致
         //   ① 资源包永远装不上（下次照样提示有资源包更新）；② 主源挂了不会用备用地址。
-        //   所以：有资源包待装、或需要备用地址时，老老实实走 job.json 路径。
+        //   所以：有资源包待装、或 offer 里带着**另一个**备用地址时，老老实实走 job.json 路径。
+        //
+        //   ★ 判断的是「有没有额外备用地址要带」，不是「缺不缺备用地址」。
+        //     上一版写反了（IsNullOrWhiteSpace 为 true 才算需要），而 BuildOffer 目前恒传 ""，
+        //     条件恒成立 → 快速路径整段变成死代码，预复制白做，每次「立即更新」都多等一下网络。
         var pendingResources = Status.Resources is { } pendingRes &&
                                pendingRes.Version > SemVer.ParseOrZero(_settings.Str("resources_version"));
-        var needsFallback = string.IsNullOrWhiteSpace(offer.DownloadUrlFallback) ||
-                            string.Equals(offer.DownloadUrlFallback, offer.DownloadUrl, StringComparison.OrdinalIgnoreCase);
+        var hasSeparateFallback = !string.IsNullOrWhiteSpace(offer.DownloadUrlFallback) &&
+                                  !string.Equals(offer.DownloadUrlFallback, offer.DownloadUrl,
+                                                 StringComparison.OrdinalIgnoreCase);
 
         var preparedExe = _preparedUpdaterExe;
-        if (preparedExe is not null && File.Exists(preparedExe) && !pendingResources && !needsFallback)
+        if (preparedExe is not null && File.Exists(preparedExe) && !pendingResources && !hasSeparateFallback)
         {
             var elevate = !UpdateEnvironment.IsElevated &&
                           !UpdateEnvironment.IsDirectoryWritable(UpdateEnvironment.InstallDir, out _);

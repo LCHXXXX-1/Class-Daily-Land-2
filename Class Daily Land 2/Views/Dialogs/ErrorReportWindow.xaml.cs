@@ -529,7 +529,6 @@ public partial class ErrorReportWindow : Window
                 : ns.Contains(".Plugins", StringComparison.Ordinal) ? "插件系统"
                 : ns.Contains(".Updates", StringComparison.Ordinal) ? "更新"
                 : ns.Contains(".Managers", StringComparison.Ordinal) ? "数据管理"
-                : ns.Contains(".Market", StringComparison.Ordinal) ? "插件市场"
                 : ns.StartsWith("ClassDailyLand2.Core", StringComparison.Ordinal) ? "核心"
                 : ns.StartsWith("ClassDailyLand2", StringComparison.Ordinal) ? "主程序"
                 : "外部";
