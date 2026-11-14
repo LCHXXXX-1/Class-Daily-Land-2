@@ -175,26 +175,42 @@ public sealed class WeatherService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            var (loc, error) = await WeatherLocator
-                .LocateAsync(msg => _log.Trace(msg)).ConfigureAwait(false);
-
-            // IP 三个源全挂 → 退回手选省市区查表（与手动模式同一口径）
-            var fallback = loc ?? WeatherLocator.FromCityTable(_province, _city, _district);
-
-            Post(() =>
+            // ★ fire-and-forget 也要接住异常：原来非预期异常（非 HTTP 错误的类型、
+            //   回调里抛的错）直接逃逸到线程池，既不写日志也不复位 _locating，
+            //   只能等 30 秒 Stuck 兜底 —— 定位链路会静默停摆半分钟且查无痕迹。
+            try
             {
-                _locating = false;
-                if (fallback is null)
+                var (loc, error) = await WeatherLocator
+                    .LocateAsync(msg => _log.Trace(msg)).ConfigureAwait(false);
+
+                // IP 三个源全挂 → 退回手选省市区查表（与手动模式同一口径）
+                var fallback = loc ?? WeatherLocator.FromCityTable(_province, _city, _district);
+
+                Post(() =>
                 {
-                    LastError = string.IsNullOrWhiteSpace(error) ? "定位失败" : error;
+                    _locating = false;
+                    if (fallback is null)
+                    {
+                        LastError = string.IsNullOrWhiteSpace(error) ? "定位失败" : error;
+                        _nextLocateTs = Now + RetryLocateSec;
+                        _log.Warn($"[天气] 定位失败，且手选省市也查不到坐标：{LastError}");
+                        return;
+                    }
+                    if (loc is null)
+                        _log.Warn($"[天气] IP 定位失败（{error}），已回退到手选省市查表");
+                    OnLocated(fallback);
+                });
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"[天气] 定位任务异常：{ex.GetType().Name}: {ex.Message}");
+                Post(() =>
+                {
+                    _locating = false;
+                    LastError = "定位失败";
                     _nextLocateTs = Now + RetryLocateSec;
-                    _log.Warn($"[天气] 定位失败，且手选省市也查不到坐标：{LastError}");
-                    return;
-                }
-                if (loc is null)
-                    _log.Warn($"[天气] IP 定位失败（{error}），已回退到手选省市查表");
-                OnLocated(fallback);
-            });
+                });
+            }
         });
     }
 
@@ -223,38 +239,53 @@ public sealed class WeatherService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            var (doc, error) = await WeatherHttp.FetchJsonAsync(url).ConfigureAwait(false);
-            if (doc is null)
+            // 同 StartLocate：异常不能静默逃逸，必须写日志并复位 _fetching，
+            // 否则要等 30 秒 Stuck 才恢复，且这半分钟为什么停摆查不到原因。
+            try
             {
+                var (doc, error) = await WeatherHttp.FetchJsonAsync(url).ConfigureAwait(false);
+                if (doc is null)
+                {
+                    Post(() =>
+                    {
+                        _fetching = false;
+                        LastError = error;
+                        _nextFetchTs = Now + RetryLocateSec;   // 失败退避，别每秒重试
+                        _log.Warn($"[天气] 拉取失败：{error}");
+                    });
+                    return;
+                }
+
+                WeatherSnapshot? snap;
+                using (doc) snap = WeatherClient.Parse(doc.RootElement, loc, Now);
+
                 Post(() =>
                 {
                     _fetching = false;
-                    LastError = error;
-                    _nextFetchTs = Now + RetryLocateSec;   // 失败退避，别每秒重试
-                    _log.Warn($"[天气] 拉取失败：{error}");
+                    if (snap is null)
+                    {
+                        LastError = "响应里没有 current 字段";
+                        _nextFetchTs = Now + RetryLocateSec;
+                        _log.Warn("[天气] 拉取成功但解析不出实况");
+                        return;
+                    }
+                    Snapshot = snap;
+                    LastError = "";
+                    _nextFetchTs = snap.FetchedTs + RefreshSec;
+                    _cacheDirty = true;
+                    _log.Trace($"[天气] 实况更新：{snap.TempText} {snap.Text}（{snap.Place}）");
                 });
-                return;
             }
-
-            WeatherSnapshot? snap;
-            using (doc) snap = WeatherClient.Parse(doc.RootElement, loc, Now);
-
-            Post(() =>
+            catch (Exception ex)
             {
-                _fetching = false;
-                if (snap is null)
+                _log.Warn($"[天气] 拉取任务异常：{ex.GetType().Name}: {ex.Message}");
+                Post(() =>
                 {
-                    LastError = "响应里没有 current 字段";
+                    _fetching = false;
+                    LastError = "天气拉取失败";
                     _nextFetchTs = Now + RetryLocateSec;
-                    _log.Warn("[天气] 拉取成功但解析不出实况");
-                    return;
-                }
-                Snapshot = snap;
-                LastError = "";
-                _nextFetchTs = snap.FetchedTs + RefreshSec;
-                _cacheDirty = true;
-                _log.Trace($"[天气] 实况更新：{snap.TempText} {snap.Text}（{snap.Place}）");
-            });
+                });
+            }
         });
     }
 

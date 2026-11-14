@@ -222,31 +222,49 @@ public sealed class ScheduleEngine
         Logger.Current?.Trace($"[课表计算] 今天共 {items.Count} 节有课，逐节比对时间窗");
 
         var advanceSec = Math.Max(0, advanceMinutes) * 60;
+
+        // 上课中状态的构造（今天开课的节次、以及昨天开课今天才下课的节次共用）
+        ScheduleStatus Ongoing(int idx, Period p, string c, DateTime winStart, DateTime winEnd, string sStr, string eStr)
+        {
+            var remain = ClampSec((int)(winEnd - now).TotalSeconds);
+            var duration = ClampSec((int)(winEnd - winStart).TotalSeconds);
+            Logger.Current?.Trace(
+                $"[课表计算] 命中上课中：第 {idx + 1} 节「{c}」（{sStr}~{eStr}），" +
+                $"有效窗 {winStart:HH:mm:ss}~{winEnd:HH:mm:ss}，剩余 {remain}s（{CeilMin(remain)} 分钟），时长 {duration}s");
+            return new ScheduleStatus(
+                StatusOngoing, c, p.Name, sStr, eStr,
+                UntilSec: 0, UntilMin: 0, AdvanceSec: advanceSec,
+                RemainSec: remain, RemainMin: CeilMin(remain),
+                DurationSec: duration, Index: idx, Name: null);
+        }
+
         foreach (var (index, period, course) in items)
         {
             var startSec = StartSec(period);
             var endSec = EndSec(period);
-            if (endSec < startSec) endSec += 86400;   // 跨午夜
-
-            var effStart = today.AddSeconds(startSec).AddSeconds(offsetSeconds).AddSeconds(-advanceSec);
-            var effEnd = today.AddSeconds(endSec).AddSeconds(offsetSeconds);
+            var crossesMidnight = endSec < startSec;
+            if (crossesMidnight) endSec += 86400;   // 跨午夜（22:00~00:30 → endSec 挪到次日）
 
             var startStr = TimeUtil.FormatSeconds(startSec);
             var endStr = TimeUtil.FormatSeconds(endSec);
 
-            if (now >= effStart && now <= effEnd)
+            // ★ 跨午夜的课在 00:00~下课这段时间仍属于"昨天那节"。
+            //   只按今天算的话，00:10 会对着今天 22:00 的同一节报「约 1300 分钟后」，
+            //   而人其实正在上课 —— 昨天开课、今天才下课的实例也要参与比对。
+            if (crossesMidnight)
             {
-                var remain = ClampSec((int)(effEnd - now).TotalSeconds);
-                var duration = ClampSec((int)(effEnd - effStart).TotalSeconds);
-                Logger.Current?.Trace(
-                    $"[课表计算] 命中上课中：第 {index + 1} 节「{course}」（{startStr}~{endStr}），" +
-                    $"有效窗 {effStart:HH:mm:ss}~{effEnd:HH:mm:ss}，剩余 {remain}s（{CeilMin(remain)} 分钟），时长 {duration}s");
-                return new ScheduleStatus(
-                    StatusOngoing, course, period.Name, startStr, endStr,
-                    UntilSec: 0, UntilMin: 0, AdvanceSec: advanceSec,
-                    RemainSec: remain, RemainMin: CeilMin(remain),
-                    DurationSec: duration, Index: index, Name: null);
+                var yBase = today.AddDays(-1);
+                var yStart = yBase.AddSeconds(startSec).AddSeconds(offsetSeconds).AddSeconds(-advanceSec);
+                var yEnd = yBase.AddSeconds(endSec).AddSeconds(offsetSeconds);
+                if (now >= yStart && now <= yEnd)
+                    return Ongoing(index, period, course, yStart, yEnd, startStr, endStr);
             }
+
+            var effStart = today.AddSeconds(startSec).AddSeconds(offsetSeconds).AddSeconds(-advanceSec);
+            var effEnd = today.AddSeconds(endSec).AddSeconds(offsetSeconds);
+
+            if (now >= effStart && now <= effEnd)
+                return Ongoing(index, period, course, effStart, effEnd, startStr, endStr);
 
             if (now < effStart)
             {

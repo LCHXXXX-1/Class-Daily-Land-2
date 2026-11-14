@@ -265,9 +265,13 @@ public sealed class MarketService
         MarketDownload download;
         try
         {
+            // ★ 这里**不能** ConfigureAwait(false)：后面 `_plugins.Install`（插件集合的
+            //   Clear/AddRange、插件 Initialize 可能开 WPF 窗口）和 OnInstalledPluginsChanged
+            //   （广播给界面刷新）都必须在 UI 线程上跑；UI 线程每秒 Tick() 还在枚举同一批
+            //   集合，落到线程池上就是 InvalidOperationException / 跨线程异常。
+            //   下载本身不阻塞 UI（await 让出），恢复时回到调用方的同步上下文即可。
             download = await MarketDownloader
-                .DownloadAsync(view.Entry, RawRoots, progress, ct)
-                .ConfigureAwait(false);
+                .DownloadAsync(view.Entry, RawRoots, progress, ct);
         }
         catch (OperationCanceledException)
         {

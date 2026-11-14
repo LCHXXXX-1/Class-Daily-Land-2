@@ -29,7 +29,12 @@ public static class AtomicJson
         var full = Path.GetFullPath(path);
         var dir = Path.GetDirectoryName(full)!;
         Directory.CreateDirectory(dir);
-        var tmp = full + ".tmp";
+        // ★ 临时名必须每次唯一：固定 ".tmp" 会被更新器 / 报错独立进程等共用，
+        //   两边同时写同一目标时，可能对别人**写到一半**的 tmp 执行 File.Replace ——
+        //   原子替换的"原子"只保证自己这次的句柄，不保证文件内容是谁写的。
+        //   进程号 + 随机串：同进程多次写不撞，跨进程也不撞。
+        var tmp = $"{full}.{Environment.ProcessId:x}-{Guid.NewGuid():N}.tmp";
+        CleanupStaleTmp(full, dir, tmp);
         var json = JsonSerializer.SerializeToUtf8Bytes(value, Options);
         var sw = System.Diagnostics.Stopwatch.StartNew();
         Logger.Current?.Trace($"[文件写] 开始 {full}（类型 {value.GetType().Name}，序列化 {json.Length} 字节）");
@@ -111,6 +116,28 @@ public static class AtomicJson
     static void TryDelete(string path)
     {
         try { File.Delete(path); } catch { /* 忽略 */ }
+    }
+
+    /// <summary>
+    /// 清掉上一次进程**写到一半崩溃**留下的同名残留 tmp。
+    /// 只删超过 10 分钟的：正常写盘毫秒级完成，正在被别的进程写的 tmp 绝不会这么老。
+    /// </summary>
+    static void CleanupStaleTmp(string full, string dir, string currentTmp)
+    {
+        try
+        {
+            var name = Path.GetFileName(full) + ".";
+            foreach (var file in Directory.EnumerateFiles(dir))
+            {
+                var leaf = Path.GetFileName(file);
+                if (string.Equals(file, currentTmp, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!leaf.StartsWith(name, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!leaf.EndsWith(".tmp", StringComparison.OrdinalIgnoreCase)) continue;
+                if ((DateTime.Now - File.GetLastWriteTime(file)).TotalMinutes < 10) continue;
+                TryDelete(file);
+            }
+        }
+        catch { /* 清残留失败不影响本次写盘 */ }
     }
 
     /// <summary>读并反序列化；文件不存在或损坏时返回 default 并把坏文件改名备份。</summary>

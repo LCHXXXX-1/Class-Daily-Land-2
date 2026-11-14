@@ -255,31 +255,45 @@ public sealed class DisasterService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            var (doc, error) = await DisasterSources.FetchJsonAsync(url).ConfigureAwait(false);
-            if (doc is null)
+            // ★ fire-and-forget 必须接异常：逃逸出去既不写日志也不复位 _iclInFlight，
+            //   只能等 30 秒 Stuck 兜底 —— 预警链路静默停摆且查无痕迹。
+            try
             {
-                _log.Warn($"[灾害] ICL 主源请求失败：{error}");
-                Post(() =>
+                var (doc, error) = await DisasterSources.FetchJsonAsync(url).ConfigureAwait(false);
+                if (doc is null)
                 {
-                    _icl.OnFail(error, Now);
-                    _iclInFlight = false;
-                });
-                return;
-            }
+                    _log.Warn($"[灾害] ICL 主源请求失败：{error}");
+                    Post(() =>
+                    {
+                        _icl.OnFail(error, Now);
+                        _iclInFlight = false;
+                    });
+                    return;
+                }
 
-            using (doc)
+                using (doc)
+                {
+                    var events = DisasterSources.ParseIclEvents(doc.RootElement);
+                    // 明细不在这儿打：每轮轮询都会把同一批事件原样推过来，5 秒一行足以把 app.log 冲爆。
+                    // 真正新增 / 更新的那几条由 IngestQuakes 用 MergeQuakes 已经算好却一直被丢掉的
+                    // changed 列表来记 —— 没变化时一个字都不写。
+                    _log.Trace($"[灾害] ICL 本轮解析出 {events.Count} 条事件");
+                    Post(() =>
+                    {
+                        _icl.OnOk(Now);
+                        _iclInFlight = false;
+                        _wolfxFailStreak = 0;
+                        IngestQuakes(events);
+                    });
+                }
+            }
+            catch (Exception ex)
             {
-                var events = DisasterSources.ParseIclEvents(doc.RootElement);
-                // 明细不在这儿打：每轮轮询都会把同一批事件原样推过来，5 秒一行足以把 app.log 冲爆。
-                // 真正新增 / 更新的那几条由 IngestQuakes 用 MergeQuakes 已经算好却一直被丢掉的
-                // changed 列表来记 —— 没变化时一个字都不写。
-                _log.Trace($"[灾害] ICL 本轮解析出 {events.Count} 条事件");
+                _log.Warn($"[灾害] ICL 轮询异常：{ex.GetType().Name}: {ex.Message}");
                 Post(() =>
                 {
-                    _icl.OnOk(Now);
+                    _icl.OnFail(ex.Message, Now);
                     _iclInFlight = false;
-                    _wolfxFailStreak = 0;
-                    IngestQuakes(events);
                 });
             }
         });
@@ -303,42 +317,57 @@ public sealed class DisasterService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            var all = new List<QuakeEvent>();
-            var errors = new List<string>();
-            foreach (var (key, url) in DisasterSources.WolfxEewUrls)
+            // ★ 四个端点原来是**串行** await（每个 10s 超时），最坏 40s > StuckInFlightSec(30s)：
+            //   ReclaimStuck 会把还在跑的这轮判死并复位 inFlight，接着又起一轮 ——
+            //   新旧两轮并发重叠，旧轮完成时 OnOk 还会把刚记的失败状态清掉（状态被旧结果倒灌）。
+            //   改成并行：总耗时 ≈ 单个端点的 10s 上限，稳稳落在判死阈值内。
+            try
             {
-                var (doc, error) = await DisasterSources.FetchJsonAsync(url).ConfigureAwait(false);
-                if (doc is null)
-                {
-                    errors.Add($"{key}: {error}");
-                    continue;
-                }
-                using (doc)
-                {
-                    all.AddRange(DisasterSources.ParseWolfxEvents(doc.RootElement, key));
-                }
-            }
+                var results = await Task.WhenAll(
+                    DisasterSources.WolfxEewUrls.Select(async kv =>
+                    {
+                        var (doc, error) = await DisasterSources.FetchJsonAsync(kv.Value).ConfigureAwait(false);
+                        if (doc is null)
+                            return (Events: (List<QuakeEvent>)new List<QuakeEvent>(), Error: (string?)$"{kv.Key}: {error}");
+                        using (doc)
+                            return (Events: DisasterSources.ParseWolfxEvents(doc.RootElement, kv.Key).ToList(),
+                                   Error: (string?)null);
+                    }));
 
-            if (all.Count == 0 && errors.Count == DisasterSources.WolfxEewUrls.Count)
-            {
-                _log.Warn($"[灾害] Wolfx 四个端点全部失败（连续第 {_wolfxFailStreak + 1} 次）：{string.Join("；", errors)}");
+                var all = results.SelectMany(r => r.Events).ToList();
+                var errors = results.Where(r => r.Error is not null).Select(r => r.Error!).ToList();
+
+                if (all.Count == 0 && errors.Count == DisasterSources.WolfxEewUrls.Count)
+                {
+                    _log.Warn($"[灾害] Wolfx 四个端点全部失败（连续第 {_wolfxFailStreak + 1} 次）：{string.Join("；", errors)}");
+                    Post(() =>
+                    {
+                        _wolfx.OnFail(string.Join("; ", errors), Now);
+                        _wolfxFailStreak++;
+                        _wolfxInFlight = false;
+                    });
+                    return;
+                }
+
                 Post(() =>
                 {
-                    _wolfx.OnFail(string.Join("; ", errors), Now);
+                    _wolfx.OnOk(Now);
+                    _wolfxInFlight = false;
+                    _wolfxFailStreak = 0;
+                    _log.Trace($"[灾害] Wolfx 本轮 {all.Count} 条事件（{errors.Count} 个端点失败）");
+                    IngestQuakes(all);
+                });
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"[灾害] Wolfx 轮询异常：{ex.GetType().Name}: {ex.Message}");
+                Post(() =>
+                {
+                    _wolfx.OnFail(ex.Message, Now);
                     _wolfxFailStreak++;
                     _wolfxInFlight = false;
                 });
-                return;
             }
-
-            Post(() =>
-            {
-                _wolfx.OnOk(Now);
-                _wolfxInFlight = false;
-                _wolfxFailStreak = 0;
-                _log.Trace($"[灾害] Wolfx 本轮 {all.Count} 条事件（{errors.Count} 个端点失败）");
-                IngestQuakes(all);
-            });
         });
     }
 
@@ -357,36 +386,48 @@ public sealed class DisasterService : IDisposable
 
         _ = Task.Run(async () =>
         {
-            var (doc, error) = await DisasterSources.FetchJsonAsync(url, DisasterSources.NmcHeaders)
-                .ConfigureAwait(false);
-            if (doc is null)
+            try
             {
-                Post(() =>
+                var (doc, error) = await DisasterSources.FetchJsonAsync(url, DisasterSources.NmcHeaders)
+                    .ConfigureAwait(false);
+                if (doc is null)
                 {
-                    _nmc.OnFail(error, Now);
-                    _nmcInFlight = false;
-                });
-                return;
-            }
-
-            using (doc)
-            {
-                var alerts = DisasterSources.ParseNmcAlerts(doc.RootElement, Province, strict: false);
-                foreach (var a in alerts)
-                    _log.Trace($"[灾害] 气象预警：{a.Title}（信号 {a.Signal}，等级 {a.Level}，地区 {a.County}，" +
-                               $"发布 {QuakeCalc.FmtClockHm(a.IssuedTs)}，uid={a.Uid}）");
-                _log.Trace($"[灾害] 中央气象台本轮 {alerts.Count} 条预警");
-                Post(() =>
-                {
-                    _nmc.OnOk(Now);
-                    _nmcInFlight = false;
-                    lock (_gate)
+                    Post(() =>
                     {
-                        var map = _weather.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
-                        foreach (var a in alerts) map[a.Uid] = a;
-                        _weather = DisasterSources.PruneWeather(map, Now);
-                        _cacheDirty = true;
-                    }
+                        _nmc.OnFail(error, Now);
+                        _nmcInFlight = false;
+                    });
+                    return;
+                }
+
+                using (doc)
+                {
+                    var alerts = DisasterSources.ParseNmcAlerts(doc.RootElement, Province, strict: false);
+                    foreach (var a in alerts)
+                        _log.Trace($"[灾害] 气象预警：{a.Title}（信号 {a.Signal}，等级 {a.Level}，地区 {a.County}，" +
+                                   $"发布 {QuakeCalc.FmtClockHm(a.IssuedTs)}，uid={a.Uid}）");
+                    _log.Trace($"[灾害] 中央气象台本轮 {alerts.Count} 条预警");
+                    Post(() =>
+                    {
+                        _nmc.OnOk(Now);
+                        _nmcInFlight = false;
+                        lock (_gate)
+                        {
+                            var map = _weather.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+                            foreach (var a in alerts) map[a.Uid] = a;
+                            _weather = DisasterSources.PruneWeather(map, Now);
+                            _cacheDirty = true;
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.Warn($"[灾害] 中央气象台轮询异常：{ex.GetType().Name}: {ex.Message}");
+                Post(() =>
+                {
+                    _nmc.OnFail(ex.Message, Now);
+                    _nmcInFlight = false;
                 });
             }
         });
@@ -445,25 +486,33 @@ public sealed class DisasterService : IDisposable
             var url = string.Format(DisasterSources.IclDetailUrl, ev.EventId);
             _ = Task.Run(async () =>
             {
-                var (doc, _) = await DisasterSources.FetchJsonAsync(url).ConfigureAwait(false);
-                if (doc is null)
+                try
                 {
-                    _log.Trace($"[灾害] 事件 {ev.Epicenter}（uid={ev.Uid}）的逐县详情请求失败");
-                    return;
-                }
-                using (doc)
-                {
-                    var counties = DisasterSources.ParseIclDetail(doc.RootElement);
-                    if (counties.Count == 0) return;
-                    _log.Trace($"[灾害] 事件 {ev.Epicenter} 收到 {counties.Count} 个县的逐县数据");
-                    Post(() =>
+                    var (doc, _) = await DisasterSources.FetchJsonAsync(url).ConfigureAwait(false);
+                    if (doc is null)
                     {
-                        lock (_gate)
+                        _log.Trace($"[灾害] 事件 {ev.Epicenter}（uid={ev.Uid}）的逐县详情请求失败");
+                        return;
+                    }
+                    using (doc)
+                    {
+                        var counties = DisasterSources.ParseIclDetail(doc.RootElement);
+                        if (counties.Count == 0) return;
+                        _log.Trace($"[灾害] 事件 {ev.Epicenter} 收到 {counties.Count} 个县的逐县数据");
+                        Post(() =>
                         {
-                            if (_quakes.TryGetValue(ev.Uid, out var old))
-                                _quakes[ev.Uid] = old with { Counties = counties };
-                        }
-                    });
+                            lock (_gate)
+                            {
+                                if (_quakes.TryGetValue(ev.Uid, out var old))
+                                    _quakes[ev.Uid] = old with { Counties = counties };
+                            }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // 只记日志：这条失败不影响主轮询，但不能让它静默逃逸
+                    _log.Trace($"[灾害] 逐县详情任务异常（{ev.Epicenter}）：{ex.GetType().Name}: {ex.Message}");
                 }
             });
         }
@@ -941,7 +990,21 @@ public sealed class DisasterService : IDisposable
 
         lock (_gate)
         {
+            // ★ 必须自己裁剪：直接 _quakes[uid]=ev 绕过了 PruneQuakes（240s 过期）
+            //   和 MergeQuakes 的 maxItems=8，数据源故障期间反复点「模拟预警」
+            //   事件库只增不减。
+            // 不走 MergeQuakes 是因为它会做 SameQuake 近似去重 —— 演练震中默认就放在
+            // 用户位置附近，万一真有条同量级地震，演练会把真实事件的 uid 顶掉，
+            // 之后 ClearDrill（按 "drill:" 前缀删）还删不掉它。
             _quakes[ev.Uid] = ev;
+            _quakes = DisasterSources.PruneQuakes(_quakes, Now);
+            if (_quakes.Count > 8)
+            {
+                var drop = _quakes.OrderBy(kv => kv.Value.OriginTs)
+                    .Take(_quakes.Count - 8).Select(kv => kv.Key).ToList();
+                foreach (var key in drop) _quakes.Remove(key);
+            }
+            _cacheDirty = true;
         }
         RefreshFocus(now);
 
@@ -996,7 +1059,11 @@ public sealed class DisasterService : IDisposable
 
         lock (_gate)
         {
-            _weather[ev.Uid] = ev;
+            // 同地震演练：走 PruneWeather（240s/一天过期裁剪），别直接塞字典
+            var map = _weather.ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+            map[ev.Uid] = ev;
+            _weather = DisasterSources.PruneWeather(map, Now);
+            _cacheDirty = true;
         }
         RefreshFocus(now);
 

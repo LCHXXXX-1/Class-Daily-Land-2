@@ -17,6 +17,9 @@ namespace ClassDailyLand2.Core;
 public sealed class Logger
 {
     static readonly object Sync = new();
+
+    /// <summary>只保护磁盘 app.log 的写入/截断/删除（与内存缓冲的 <see cref="Sync"/> 分开，见 <see cref="Write"/>）。</summary>
+    readonly object _ioLock = new();
     readonly string _path;
 
     /// <summary>当前进程的活动 Logger（AppController.Startup 时赋值）。</summary>
@@ -86,7 +89,11 @@ public sealed class Logger
         lock (Sync)
         {
             _recent.Clear();
+        }
 
+        // 文件操作走 _ioLock：别在别人写到一半时把 app.log 删了
+        lock (_ioLock)
+        {
             if (File.Exists(_path))
             {
                 try
@@ -291,6 +298,14 @@ public sealed class Logger
             line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} [{level}] {message}";
             _recent.Enqueue(line);
             while (_recent.Count > _capacity) _recent.Dequeue();
+        }
+
+        // ★ 磁盘写挪到独立的 _ioLock 里：原来 AppendAllText 和整读整写的截断检查
+        //   都压在全局 Sync 内，UI 线程每秒打几条 TRACE 时，日志页读 RecentLines、
+        //   ClearAll、别的线程记日志全都要陪着磁盘 IO 一起等。
+        //   行序仍由 _ioLock 保证（内存入队顺序与落盘顺序可能差一位，日志可接受）。
+        lock (_ioLock)
+        {
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
@@ -303,17 +318,48 @@ public sealed class Logger
                     _writesSinceRotate = 0;
                     var info = new FileInfo(_path);
                     if (info.Length > 512 * 1024)   // 超过 512KB 截断到尾部 64KB
-                    {
-                        var text = File.ReadAllText(_path);
-                        var keep = Math.Min(text.Length, 64 * 1024);
-                        File.WriteAllText(_path, text.Substring(text.Length - keep));
-                    }
+                        TruncateToTail(64 * 1024);
                 }
             }
             catch { /* 日志失败不能影响业务 */ }
         }
+
         try { LineAppended?.Invoke(line); }
         catch { /* 订阅方异常不能影响业务 */ }
+    }
+
+    /// <summary>
+    /// 把 app.log 截到尾部 <paramref name="keepBytes"/> 字节。
+    /// 只读尾部（原来 ReadAllText 会把整个 512KB 读进内存再整写），且保留 UTF-8 BOM：
+    /// 原来用无 BOM 的 WriteAllText，截断后文件头就没了 BOM，和追加写的编码约定不一致。
+    /// </summary>
+    void TruncateToTail(int keepBytes)
+    {
+        using var fs = new FileStream(_path, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+        if (fs.Length <= keepBytes) return;
+
+        var start = fs.Length - keepBytes;
+        fs.Seek(start, SeekOrigin.Begin);
+        var buf = new byte[fs.Length - start];
+        fs.ReadExactly(buf);
+
+        if (start > 0)
+        {
+            // 别把某个汉字/多字节字符从中间切开：跳到第一个换行之后
+            var nl = Array.IndexOf(buf, (byte)'\n');
+            if (nl >= 0 && nl + 1 < buf.Length) buf = buf[(nl + 1)..];
+        }
+
+        // 直接按字节拼 BOM + 尾部，不做 解码→再编码（会把切坏的序列替换成 ?）
+        var preamble = Encoding.UTF8.GetPreamble();
+        var output = new byte[preamble.Length + buf.Length];
+        preamble.CopyTo(output, 0);
+        buf.CopyTo(output, preamble.Length);
+
+        fs.Seek(0, SeekOrigin.Begin);
+        fs.Write(output);
+        fs.SetLength(output.Length);
+        fs.Flush(true);
     }
 }
 
