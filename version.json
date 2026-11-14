@@ -1,14 +1,16 @@
 {
   "stable": {
-    "version": "1.8.6",
+    "version": "1.8.7",
     "release_date": "2026-11-14",
-    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.6.zip",
-    "sha256": "f8354c4451fc29deb7d60f9466d1642e21f21575db4b82931d457303a3676977",
+    "download_url": "https://gitee.com/lchxxxx/class-daily-land-2/releases/download/Version/Class-Daily-Land-2-1.8.7.zip",
+    "sha256": "0f017349bdd3d35bcc34d8a9b6caaffcdbd09ba94861b1f3d416b03b6ad4d4f3",
     "changelog": [
-      "更新器改为「先解压到临时目录 → 关键文件校验 → 备份 → 替换 → 失败自动回滚」，不再先清空程序目录",
-      "安装包缺少主程序时直接中止，现有程序不动（不会再出现\"更新完打不开\"）",
-      "打包脚本加残包拦截：缺主程序 / 缺 Update\\Updater.exe 一律拒绝出包",
-      "修复 1.8.5 因打包残缺导致更新后程序目录被清空的问题"
+      "修复跨午夜课程在次日凌晨的上课状态与倒计时判定",
+      "多显示器下灵动岛、副岛与课表面板定位更准，修复任务栏在顶部时面板整体下移",
+      "更新器更稳：提权参数转义、失败残留清理、过期临时目录清扫、快速路径修复",
+      "天气与地震预警遇到网络异常不再卡住轮询，多源预警改为并行获取",
+      "插件市场与安装加固：索引响应上限、安装包解压校验、卸载路径防护与失败提示",
+      "修复若干窗口拖拽、自动滚动、重复刷新与高 DPI 缩放问题"
     ],
     "is_mandatory": false
   },
