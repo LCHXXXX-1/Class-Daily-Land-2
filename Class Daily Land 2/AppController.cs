@@ -416,7 +416,8 @@ public sealed class AppController
             if (dispatcher.CheckAccess()) Apply();
             else dispatcher.BeginInvoke(new Action(Apply));
         };
-        Duty.Changed += (_, _) => dispatcher.BeginInvoke(() => Main?.RefreshAll());
+        // 值日生的界面刷新由 MainBoardWindow.BindManagers 自己订阅（Duty.Changed → RefreshDuty）。
+        // 这里原来还挂了一句 Main?.RefreshAll()，两边同时订阅 = 一次变更刷两遍。
     }
 
     /// <summary>

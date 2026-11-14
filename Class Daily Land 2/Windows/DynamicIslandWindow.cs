@@ -122,7 +122,7 @@ public sealed partial class DynamicIslandWindow : Window
     bool _alertIsStart;
     string _alertText = "";
     bool _wakeupPending;
-    DispatcherTimer? _wakeStep;
+    DispatcherTimer? _wakeTimer;
     double _topMargin = 6;
     double _alertWidth = 300;
     int _alertHoldMs = 600;
@@ -309,23 +309,30 @@ public sealed partial class DynamicIslandWindow : Window
     /// <summary>唤醒动画：Hidden →(200ms)→ Mini →(60ms)→ Compact。</summary>
     public void StartWakeup(bool animate)
     {
-        _wakeStep?.Stop();
-        _wakeStep = null;
+        // ★ t1（200ms 起步）和 t2（逐格）都必须挂在同一个字段上：
+        //   原来只有 t2 记进 _wakeStep，t1 是局部变量 —— 唤醒进行中再调一次本方法，
+        //   停不掉旧 t1，两只 t1 各自孵出一只 t2，第二只把 _wakeStep 覆盖掉后
+        //   第一只就成了没人管的定时器，动画状态机直接错乱。
+        _wakeTimer?.Stop();
+        _wakeTimer = null;
 
         if (!animate) { _wakeupPending = false; SetState(IslandState.Compact); return; }
         _wakeupPending = true;
         SetState(IslandState.Mini);
         var t1 = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        _wakeTimer = t1;
         t1.Tick += (_, _) =>
         {
             t1.Stop();
+            if (!ReferenceEquals(_wakeTimer, t1)) return;   // 已被更新的一次唤醒作废
             if (!_wakeupPending) return;
             var t2 = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(StepGapMs) };
-            _wakeStep = t2;
+            _wakeTimer = t2;
             t2.Tick += (_, _) =>
             {
                 t2.Stop();
-                _wakeStep = null;
+                if (!ReferenceEquals(_wakeTimer, t2)) return;
+                _wakeTimer = null;
                 _wakeupPending = false;
                 SetState(IslandState.Compact);
             };
@@ -350,8 +357,10 @@ public sealed partial class DynamicIslandWindow : Window
     (double w, double h, double x, double y) GeometryFor(IslandState st)
     {
         var input = _input;
-        var work = WindowUtil.WorkAreaDip();
-        var center = WindowUtil.FullAreaDip().Width / 2;
+        var work = WindowUtil.WorkAreaDip(this);
+        // 居中基准 = 工作区中心（原来用全屏宽的一半，任务栏在左/右时会和按工作区
+        // 定位的下拉面板错开半个任务栏宽，面板还可能压到任务栏底下）
+        var center = work.Left + work.Width / 2;
         double w = st switch
         {
             IslandState.Mini or IslandState.Hidden => MiniW,

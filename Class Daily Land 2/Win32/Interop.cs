@@ -130,6 +130,51 @@ internal static class Interop
         public uint dwFlags;
     }
 
+    // ——— 显示器工作区（多显示器定位用） ———
+
+    /// <summary>系统 DPI 缩放（物理像素 / WPF DIP），进程内取一次就缓存。</summary>
+    static double _systemDpiScale;
+
+    static double SystemDpiScale()
+    {
+        if (_systemDpiScale > 0) return _systemDpiScale;
+        try
+        {
+            // WPF 的 DIP 与 Win32 物理像素之间就是这个比例：
+            // SystemParameters.PrimaryScreenWidth 是 WPF 自己换算好的 DIP，
+            // GetSystemMetrics(0) 是同一件事的物理像素，两者相除 = WPF 用的那把尺。
+            var dip = SystemParameters.PrimaryScreenWidth;
+            var px = GetSystemMetrics(0);
+            _systemDpiScale = dip > 1 && px > 1 ? px / dip : 1.0;
+        }
+        catch { _systemDpiScale = 1.0; }
+        return _systemDpiScale;
+    }
+
+    /// <summary>
+    /// 取 <paramref name="hwnd"/> 所在显示器的**工作区**（已排除任务栏，物理像素）
+    /// 与换算成 WPF DIP 要用的缩放系数。
+    ///
+    /// <para>★ 主显示器之外的屏也走这里：原来所有窗口几何都读 SystemParameters.WorkArea /
+    /// PrimaryScreenWidth，多显示器下主窗、灵动岛、下拉面板会全部钉死在主屏上。</para>
+    /// </summary>
+    public static bool TryGetWorkArea(IntPtr hwnd, out RECT work, out double scale)
+    {
+        work = default;
+        scale = SystemDpiScale();
+        try
+        {
+            if (hwnd == IntPtr.Zero) return false;
+            var hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            if (hMon == IntPtr.Zero) return false;
+            var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfo(hMon, ref mi)) return false;
+            work = mi.rcWork;
+            return true;
+        }
+        catch { return false; }
+    }
+
     // ————————————————————— 扩展样式 —————————————————————
 
     static IntPtr GetExStyle(IntPtr hwnd) =>
@@ -145,12 +190,19 @@ internal static class Interop
     /// 让窗口不抢焦点、不出现在 Alt-Tab（灵动岛 / 副岛必须）。
     /// 需在窗口 SourceInitialized 之后调用。
     /// </summary>
-    public static void MakeToolWindowNoActivate(Window window, bool hideFromAltTab = true)
+    /// <param name="layered">
+    /// 是否顺手叠上 WS_EX_LAYERED。带淡入淡出（Opacity&lt;1）的窗口必须有它，否则
+    /// Opacity 动画直接不生效；但**用云母/亚克力背板的窗口必须没有它** —— 分层窗口
+    /// 会让 DWM 背板失效（主窗自己就写着"Opacity 不能小于 1，否则云母失效"），
+    /// 这种窗口的不透明度需求由 WPF 在真正需要时自己加，不用我们预先叠上。
+    /// </param>
+    public static void MakeToolWindowNoActivate(Window window, bool hideFromAltTab = true, bool layered = true)
     {
         var hwnd = new WindowInteropHelper(window).Handle;
         if (hwnd == IntPtr.Zero) return;
         var style = GetExStyle(hwnd).ToInt64();
-        style |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW | WS_EX_LAYERED;
+        style |= WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW;
+        if (layered) style |= WS_EX_LAYERED;
         style &= ~WS_EX_APPWINDOW;
         if (hideFromAltTab) style |= WS_EX_DLGMODALFRAME;   // 双保险：不显示任务栏按钮
         style &= ~WS_EX_WINDOWEDGE;

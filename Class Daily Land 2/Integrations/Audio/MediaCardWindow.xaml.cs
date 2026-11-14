@@ -58,7 +58,7 @@ public sealed partial class MediaCardWindow : Window
     {
         Update(media);
 
-        var work = WindowUtil.WorkAreaDip();
+        var work = WindowUtil.WorkAreaDip(this);
         var left = Math.Round(Math.Min(anchorRight - Width, work.Right - Width - 8));
         var top = Math.Round(anchorBottom + 6);
         Left = Math.Max(work.Left + 8, left);

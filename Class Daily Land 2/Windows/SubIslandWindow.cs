@@ -88,6 +88,13 @@ public sealed partial class SubIslandWindow : Window
             Interop.MakeToolWindowNoActivate(this);
             _pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
         };
+        // ★ DPI 只在 SourceInitialized 取一次是不够的：窗口拖到另一台缩放不同的显示器上，
+        //   量宽用的 PixelsPerDip 还是旧值 → 展开宽度算错（文字被裁或留一大截空白）。
+        DpiChanged += (_, _) =>
+        {
+            _pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+            if (_expanded) TargetFollow(_tgtX - Gap, _tgtY);   // 重新量宽
+        };
         Palette.Changed += OnPaletteChanged;
         // 同主岛：静态事件必须成对退订，否则窗口重建时整棵可视树被钉死
         Closed += (_, _) => Palette.Changed -= OnPaletteChanged;
@@ -164,7 +171,7 @@ public sealed partial class SubIslandWindow : Window
 
     void TargetFollow(double mainRight, double mainTop)
     {
-        var work = WindowUtil.WorkAreaDip();
+        var work = WindowUtil.WorkAreaDip(this);
         var w = _expanded
             ? Math.Clamp(MeasureContentWidth(), MinExpandedW, MaxExpandedW)
             : CollapsedW;
@@ -285,8 +292,9 @@ public sealed partial class SubIslandWindow : Window
         _collapseAt = expanded && CollapseSec > 0
             ? DateTime.Now.AddSeconds(CollapseSec)
             : DateTime.MinValue;
+        // TargetFollow 末尾自己会 BeginAnim：这里再调一次等于把刚起的动画又重启一遍
+        // （同一目标从当前位置重新起跳，视觉上是抖一下）
         TargetFollow(_tgtX - Gap, _tgtY);
-        BeginAnim();
     }
 
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)

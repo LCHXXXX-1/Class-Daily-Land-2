@@ -242,6 +242,20 @@ public sealed class MainBoardWindow : Window
         _scrollTimer.Interval = TimeSpan.FromMilliseconds(1200);
         _scrollTimer.Tick += (_, _) => StepScroll();
 
+        // ★ 关窗 = 隐藏（OnClosing 取消），OnClosed 永远不会来 —— 所以定时器要跟着
+        //   可见性走：藏起来就停（StepScroll 里的 !IsVisible 只是兜底，定时器本身
+        //   还在每 1.2s 空跑一遍），再显示出来按设置重新起。
+        IsVisibleChanged += (_, _) =>
+        {
+            // 只起停定时器，不走 UpdateScrollEnabled：那个分支在关闭自动滚动时会把
+            // 列表滚回顶部，藏一下再打开就把用户停的位置弄丢了。
+            if (IsVisible)
+            {
+                if (_autoScroll && !_scrollTimer.IsEnabled) _scrollTimer.Start();
+            }
+            else _scrollTimer.Stop();
+        };
+
         ApplyTheme();
         Palette.Changed += OnPaletteChanged;
         // OnClosing 里无条件 e.Cancel=true，Closed 永远不会来；这里仍然挂上，
@@ -249,7 +263,8 @@ public sealed class MainBoardWindow : Window
         Closed += (_, _) => Palette.Changed -= OnPaletteChanged;
         SourceInitialized += (_, _) =>
         {
-            Interop.MakeToolWindowNoActivate(this, hideFromAltTab: false);
+            // layered: false —— 主窗走云母/亚克力背板，叠了 WS_EX_LAYERED 背板就废了
+            Interop.MakeToolWindowNoActivate(this, hideFromAltTab: false, layered: false);
             DisableDwmBorder();
             Dispatcher.BeginInvoke(Reposition, DispatcherPriority.Loaded);
         };
@@ -261,13 +276,26 @@ public sealed class MainBoardWindow : Window
 
     public void BindManagers(HomeworkManager homework, StudentOnDuty duty)
     {
+        // 幂等：重复绑定先把上一对订阅退掉，否则每次调用都多挂一个闭包（刷两遍起步）
+        if (_boundHomework is not null) _boundHomework.Changed -= OnHomeworkChanged;
+        if (_boundDuty is not null) _boundDuty.Changed -= OnDutyChanged;
+
         _homework = homework;
         _duty = duty;
-        homework.Changed += (_, _) => Dispatcher.BeginInvoke(RefreshHomework);
-        duty.Changed += (_, _) => Dispatcher.BeginInvoke(RefreshDuty);
+        _boundHomework = homework;
+        _boundDuty = duty;
+
+        homework.Changed += OnHomeworkChanged;
+        duty.Changed += OnDutyChanged;
         RefreshDuty();
         RefreshHomework();
     }
+
+    HomeworkManager? _boundHomework;
+    StudentOnDuty? _boundDuty;
+
+    void OnHomeworkChanged(object? s, EventArgs e) => Dispatcher.BeginInvoke(new Action(RefreshHomework));
+    void OnDutyChanged(object? s, EventArgs e) => Dispatcher.BeginInvoke(new Action(RefreshDuty));
 
     /// <summary>数据变化后的整体刷新（值日生/出勤由 Manager 事件触发）。</summary>
     public void RefreshAll()
@@ -358,13 +386,13 @@ public sealed class MainBoardWindow : Window
 
             var layoutWidth = ActualWidth > 0
                 ? ActualWidth
-                : (Width > 0 ? Width : WindowUtil.WorkAreaDip().Width * _widthRatio);
+                : (Width > 0 ? Width : WindowUtil.WorkAreaDip(this).Width * _widthRatio);
             var contentWidth = Math.Max(120, layoutWidth - PadX * 2);
             _homeworkPinned.Measure(new Size(contentWidth, double.PositiveInfinity));
 
             // 置顶作业堆到当前机器屏幕工作区的 2/3 或更高：不再钉住，整块一起滚。
             // 用 SystemParameters.WorkArea（DIP，已排除任务栏），换分辨率 / 缩放 / 任务栏高度都能自适应。
-            var tooTall = _homeworkPinned.DesiredSize.Height >= WindowUtil.WorkAreaDip().Height * 2.0 / 3.0;
+            var tooTall = _homeworkPinned.DesiredSize.Height >= WindowUtil.WorkAreaDip(this).Height * 2.0 / 3.0;
             if (tooTall)
             {
                 // 把已经渲染好的置顶行整体搬到滚动区（保留行与正在跑的动画）
@@ -1138,7 +1166,7 @@ public sealed class MainBoardWindow : Window
     /// </summary>
     public void Reposition()
     {
-        var work = WindowUtil.WorkAreaDip();
+        var work = WindowUtil.WorkAreaDip(this);
         var width = Math.Max(190, Math.Round(work.Width * _widthRatio));
         Width = width;
 
@@ -1743,6 +1771,9 @@ public sealed class MainBoardWindow : Window
         if (_dragStart is null) return;
         var dy = e.GetPosition(this).Y - _dragStart.Value.Y;
         if (Math.Abs(dy) < 3) return;
+        // ★ 真正开始拖了就抓鼠标：不在窗口内松开时收不到 MouseUp，
+        //   _dragStart 会一直残留 —— 之后鼠标只是划过窗口就会把作业列表拽着滚。
+        if (!IsMouseCaptured) CaptureMouse();
         PauseAutoScroll();
         ClassDailyLand2.App.Views.GpuAccel.BeginMotion(_homeworkPanel);
         _homeworkScroll.ScrollToVerticalOffset(_dragOffset - dy);
@@ -1752,6 +1783,7 @@ public sealed class MainBoardWindow : Window
     {
         base.OnPreviewMouseLeftButtonUp(e);
         _dragStart = null;
+        if (IsMouseCaptured) ReleaseMouseCapture();
 
         // 长按已经弹过菜单：吞掉触屏提升出来的这次点击，别顺手当成单击
         if (_holdFired)
@@ -1759,6 +1791,21 @@ public sealed class MainBoardWindow : Window
             _holdFired = false;
             e.Handled = true;
         }
+    }
+
+    protected override void OnMouseLeave(MouseEventArgs e)
+    {
+        base.OnMouseLeave(e);
+        // 还没拖起来（没到 3px 阈值、未捕获）就移出窗口：这次按下作废，
+        // 否则残留的起点会让下次划过窗口时突然跳滚。
+        if (_dragStart is not null && !IsMouseCaptured) _dragStart = null;
+    }
+
+    protected override void OnLostMouseCapture(MouseEventArgs e)
+    {
+        base.OnLostMouseCapture(e);
+        // 捕获被系统/别的元素抢走：拖拽同步终止，别留下"半截"状态
+        _dragStart = null;
     }
 
     /// <summary>手动滚动后让自动滚动让位 4 秒（原版 MANUAL_SCROLL_HOLD_MS）。</summary>

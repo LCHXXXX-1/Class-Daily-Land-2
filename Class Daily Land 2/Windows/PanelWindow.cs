@@ -214,7 +214,7 @@ public sealed class IslandPanelHost
         if (specs.Count == 0) { _open = false; island.SetPanelWidth(0); return; }
 
         // 总宽若超过屏幕 80% 则收窄/丢弃（对齐原版 MAX_TOTAL_RATIO）
-        var work = WindowUtil.WorkAreaDip();
+        var work = WindowUtil.WorkAreaDip(_ctx.Island);
         var maxTotal = work.Width * 0.8;
         var total = specs.Sum(s => s.Width) + PanelGap * (specs.Count - 1);
         for (var i = specs.Count - 1; i > 0 && total > maxTotal; i--)
@@ -223,8 +223,11 @@ public sealed class IslandPanelHost
             specs.RemoveAt(i);
         }
 
-        var startX = Math.Round((work.Width - total) / 2);
-        var yTop = Math.Round(work.Top + island.TopDip + island.HeightDip + PanelGap);
+        // 与主岛同一套基准：工作区左边界 + 工作区宽居中（岛的 x 也是这么算的）
+        var startX = Math.Round(work.Left + (work.Width - total) / 2);
+        // ★ TopDip（岛的 _tgtY）里**已经含了 work.Top**（GeometryFor 是 work.Top + 上边距），
+        //   这里再加一次就是任务栏在顶部时面板整体下移一个任务栏高。
+        var yTop = Math.Round(island.TopDip + island.HeightDip + PanelGap);
 
         // 主岛宽度跟随下方所有面板的总宽，展开时平滑拉长
         island.SetPanelWidth(total);
@@ -395,7 +398,7 @@ public sealed class IslandPanelHost
             lines.Add("今天没有课");
         }
 
-        var work = WindowUtil.WorkAreaDip();
+        var work = WindowUtil.WorkAreaDip(_ctx.Island);
         var maxH = work.Height * MaxHeightRatio;
         var height = Math.Min(20 + lines.Count * LineHeight + 14, maxH);
         yield return new PanelSpec(SchedulePanelWidth, height, lines);
