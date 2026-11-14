@@ -1644,6 +1644,12 @@ public partial class PluginsPage : UserControl, ISettingsPageTabs
                 message);
             if (ok) Refresh();
         }
+        catch (Exception ex)
+        {
+            // ★ InstallAsync 内部若抛异常（磁盘满、权限、下载中断…），finally 只会把按钮
+            //   复位，用户看到的是"点了没反应"。这里兜住并明确提示失败原因。
+            DialogLauncher.Toast(this, InfoBarSeverity.Error, "安装失败", ex.Message);
+        }
         finally
         {
             _installing = false;

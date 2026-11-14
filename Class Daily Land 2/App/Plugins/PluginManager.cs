@@ -236,6 +236,12 @@ public sealed class PluginManager
             Append(pkg.Id, $"加载失败：{Describe(ex)}");
 
             try { context.Unload(); } catch { /* 卸载失败也无所谓，反正是坏插件 */ }
+
+            // ★ 和正常卸载一样催一次 GC：失败的插件 ALC 若不回收，dll 句柄还占着，
+            //   用户紧接着"覆盖安装 / 重装"就会 Access denied（表现为重装失败）。
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
         }
     }
 
