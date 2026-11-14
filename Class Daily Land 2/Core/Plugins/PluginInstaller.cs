@@ -172,10 +172,28 @@ public static class PluginInstaller
             return InstallOutcome.Fail("没有指定插件 id。");
 
         var id = pluginId.Trim();
-        if (id.Contains('/') || id.Contains('\\') || id.Contains(".."))
+        if (id.Contains('/') || id.Contains('\\') || id.Contains("..") ||
+            Path.IsPathRooted(id) || (id.Length >= 2 && id[1] == ':'))
             return InstallOutcome.Fail($"插件 id「{id}」不合法。");
 
-        var target = Path.Combine(pluginsRoot, id);
+        // ★ Path.Combine 的坑：第二参数是"盘符相对路径"（C:xxx）或以 \ 开头时，
+        //   它会**直接返回第二参数**，target 就脱离 pluginsRoot 了 —— 下面的递归删除
+        //   会删到别的目录去。除了上面的写法拦截，再用规范化后的路径复核一次。
+        string target;
+        try
+        {
+            target = Path.GetFullPath(Path.Combine(pluginsRoot, id));
+        }
+        catch (Exception ex)
+        {
+            return InstallOutcome.Fail($"插件 id「{id}」不合法：{ex.Message}");
+        }
+
+        var rootPrefix = Path.GetFullPath(pluginsRoot)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            + Path.DirectorySeparatorChar;
+        if (!target.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase))
+            return InstallOutcome.Fail($"插件 id「{id}」指向了插件目录之外，已拒绝。");
         if (!Directory.Exists(target))
         {
             Logger.Current?.Warn($"[插件卸载] 目录不存在，无需卸载：{target}");
@@ -288,7 +306,8 @@ public static class PluginInstaller
         try
         {
             using var zip = ZipFile.OpenRead(packagePath);
-            long total = 0;
+            long declaredTotal = 0;   // 压缩包自报的大小（快速拒绝用）
+            long total = 0;           // 真实写入的字节数（最终预算以它为准）
             var count = 0;
 
             foreach (var entry in zip.Entries)
@@ -315,15 +334,40 @@ public static class PluginInstaller
                     continue;
                 }
 
-                total += entry.Length;
-                if (total > MaxTotalBytes)
+                // entry.Length 是 zip **自报**的：改一下头部就能声明 1MB、实际解出几 GB。
+                // 先拿声明值做一次快速拒绝（诚实的包到这就够了），预算最终以真实写入为准。
+                declaredTotal += entry.Length;
+                if (declaredTotal > MaxTotalBytes)
                 {
                     error = "包解压后超过 64 MB，已拒绝安装。";
                     return null;
                 }
 
                 Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
-                entry.ExtractToFile(dest, overwrite: true);
+
+                // ★ 边解边数**实际写进磁盘**的字节数：声明值和真实值可以不一致，
+                //   只信声明 = 解压炸弹能绕过 64MB 限制把磁盘写满。
+                var overBudget = false;
+                using (var src = entry.Open())
+                using (var dst = new FileStream(dest, FileMode.Create, FileAccess.Write))
+                {
+                    var buffer = new byte[8192];
+                    while (true)
+                    {
+                        var read = src.Read(buffer, 0, buffer.Length);
+                        if (read <= 0) break;
+                        total += read;
+                        if (total > MaxTotalBytes) { overBudget = true; break; }
+                        dst.Write(buffer, 0, read);
+                    }
+                }
+
+                if (overBudget)
+                {
+                    try { File.Delete(dest); } catch { /* 交给外层 sandbox 整体清理 */ }
+                    error = "包解压后超过 64 MB（实际内容与压缩包声明不符），已拒绝安装。";
+                    return null;
+                }
             }
             return sandbox;
         }

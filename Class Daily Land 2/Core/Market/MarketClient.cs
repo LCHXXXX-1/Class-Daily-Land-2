@@ -94,7 +94,39 @@ public static class MarketClient
                         break;
                     }
 
-                    var bytes = await response.Content.ReadAsByteArrayAsync(deadline.Token).ConfigureAwait(false);
+                    // ★ 索引响应也要有上限（安装包下载有 64MB 校验，索引原来没有）：
+                    //   索引正常只有几十 KB，1MB 已经很宽 —— 被劫持的源塞一个几百 MB
+                    //   的 index.json 就能把内存撑爆。
+                    const long maxBytes = 1024 * 1024;
+                    if (response.Content.Headers.ContentLength is > maxBytes)
+                    {
+                        errors.Add($"{name}：响应过大");
+                        break;
+                    }
+
+                    byte[] bytes;
+                    await using (var body = await response.Content.ReadAsStreamAsync(deadline.Token).ConfigureAwait(false))
+                    using (var buffer = new MemoryStream())
+                    {
+                        var chunk = new byte[8192];
+                        long total = 0;
+                        var tooLarge = false;
+                        while (true)
+                        {
+                            var read = await body.ReadAsync(chunk, deadline.Token).ConfigureAwait(false);
+                            if (read <= 0) break;
+                            total += read;
+                            if (total > maxBytes) { tooLarge = true; break; }
+                            buffer.Write(chunk, 0, read);
+                        }
+                        if (tooLarge)
+                        {
+                            errors.Add($"{name}：响应超过 1MB 上限");
+                            break;
+                        }
+                        bytes = buffer.ToArray();
+                    }
+
                     var text = DecodeBody(bytes);
                     if (string.IsNullOrWhiteSpace(text))
                     {
